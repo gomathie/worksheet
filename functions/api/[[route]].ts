@@ -290,6 +290,9 @@ async function deleteEmployee(
     .bind(id)
     .first()
   if (!existing) throw new ApiError(404, 'Employee not found')
+  if (id === admin.id) {
+    throw new ApiError(400, 'You cannot deactivate your own account')
+  }
   await env.DB.prepare('UPDATE employees SET active = 0 WHERE id = ?').bind(id).run()
   await audit(env, admin.id, 'delete_employee', id)
   return json({ ok: true })
@@ -333,6 +336,7 @@ interface EntryBody {
 
 async function createEntry(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
+  requireRight(user, 'edit_entries')
   const body = await readJson<EntryBody>(request)
 
   // Employees may only log their own time; admins may log for anyone.
@@ -382,6 +386,7 @@ async function loadOwnedEntry(
   id: string,
 ): Promise<{ user: Employee; entry: EntryRow }> {
   const user = await requireUser(request, env)
+  requireRight(user, 'edit_entries')
   const entry = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
     .first<EntryRow>()
@@ -477,7 +482,12 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
 }
 
 async function monthlyReport(request: Request, env: Env): Promise<Response> {
-  await requireAdmin(request, env)
+  // Dashboard and Monthly Report both read this endpoint; either right unlocks it.
+  const user = await requireUser(request, env)
+  const rights = parseRights(user)
+  if (!rights.view_dashboard && !rights.view_reports) {
+    throw new ApiError(403, 'You do not have permission for this')
+  }
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
 
@@ -523,7 +533,6 @@ async function route(request: Request, env: Env): Promise<Response> {
   const method = request.method
 
   if (path === '/api/auth/login' && method === 'POST') return handleLogin(request, env)
-  if (path === '/api/auth/verify' && method === 'POST') return handleVerify(request, env)
   if (path === '/api/auth/logout' && method === 'POST') return handleLogout(request, env)
 
   if (path === '/api/me' && method === 'GET') {
@@ -533,7 +542,9 @@ async function route(request: Request, env: Env): Promise<Response> {
       id: user.id,
       name: user.name,
       email: user.email,
+      username: user.username,
       role: user.role,
+      rights: parseRights(user),
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
     })
   }

@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { api } from '../api'
-import type { Me } from '../types'
+import type { Me, Rights } from '../types'
+
+const NO_RIGHTS: Rights = {
+  edit_entries: false,
+  view_dashboard: false,
+  view_reports: false,
+}
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -9,21 +15,15 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAdmin: (s) => s.user?.role === 'admin',
+    rights: (s): Rights => s.user?.rights ?? NO_RIGHTS,
   },
   actions: {
     async fetchMe() {
       this.user = await api<Me | null>('/api/me')
       this.loaded = true
     },
-    async login(email: string): Promise<string | undefined> {
-      const res = await api<{ ok: boolean; code?: string }>('/api/auth/login', {
-        method: 'POST',
-        json: { email },
-      })
-      return res.code
-    },
-    async verify(email: string, code: string) {
-      await api('/api/auth/verify', { method: 'POST', json: { email, code } })
+    async login(username: string, password: string) {
+      await api('/api/auth/login', { method: 'POST', json: { username, password } })
       await this.fetchMe()
     },
     async logout() {

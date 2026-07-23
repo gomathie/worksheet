@@ -3,7 +3,7 @@
 Ledger is a single-page, single-file web app (`timesheet-tracker.html`) for tracking a small team's. Now move to vue js
 daily work hours, "classifications," and "QAP" (quality assurance points/items), and turning those
 into a points-based remuneration report. There is no build step, backend, or database — the entire
-app is one HTML file with inline CSS and vanilla JS. and vue
+app is one HTML file with inline CSS and vanilla JS.
 
 It has four tabs: **Time Entry**, **Dashboard**, **Monthly Report**, and **Settings**.
 

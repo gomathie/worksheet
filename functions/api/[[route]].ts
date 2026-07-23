@@ -100,42 +100,114 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
 
 // ----------------------------------------------------------- employee routes
 
+// Never expose password_hash; return rights parsed into an object.
+function publicEmployee(e: Employee) {
+  return {
+    id: e.id,
+    name: e.name,
+    email: e.email,
+    username: e.username,
+    role: e.role,
+    rights: parseRights(e),
+    has_password: e.password_hash ? 1 : 0,
+    active: e.active,
+    created_at: e.created_at,
+  }
+}
+
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,31}$/
+
+function normalizeUsername(value: unknown): string | null {
+  const username = String(value ?? '').trim().toLowerCase()
+  if (!username) return null
+  if (!USERNAME_RE.test(username)) {
+    throw new ApiError(
+      400,
+      'username must be 3-32 chars: letters, digits, dot, dash, underscore',
+    )
+  }
+  return username
+}
+
+function assertPassword(value: unknown): string {
+  const password = String(value ?? '')
+  if (password.length < 8) {
+    throw new ApiError(400, 'password must be at least 8 characters')
+  }
+  return password
+}
+
+function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): string {
+  return JSON.stringify({
+    edit_entries: Boolean(raw?.edit_entries ?? fallback.edit_entries),
+    view_dashboard: Boolean(raw?.view_dashboard ?? fallback.view_dashboard),
+    view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
+  })
+}
+
+interface EmployeeBody {
+  name?: string
+  email?: string | null
+  username?: string | null
+  password?: string
+  role?: string
+  rights?: Partial<Rights>
+  active?: number | boolean
+}
+
 async function listEmployees(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   if (user.role === 'admin') {
     const { results } = await env.DB.prepare(
-      'SELECT id, name, email, role, active, created_at FROM employees ORDER BY name',
+      'SELECT * FROM employees ORDER BY name',
     ).all<Employee>()
-    return json(results)
+    return json(results.map(publicEmployee))
   }
   // Employees only need names for display of their own data.
-  return json([{ id: user.id, name: user.name, email: user.email, role: user.role, active: 1 }])
+  return json([publicEmployee(user)])
 }
 
 async function createEmployee(request: Request, env: Env): Promise<Response> {
   const admin = await requireAdmin(request, env)
-  const body = await readJson<{ name?: string; email?: string; role?: string }>(request)
+  const body = await readJson<EmployeeBody>(request)
   const name = (body.name ?? '').trim()
   const email = (body.email ?? '').trim().toLowerCase() || null
   const role = body.role === 'admin' ? 'admin' : 'employee'
   if (!name) throw new ApiError(400, 'name is required')
 
+  const username = normalizeUsername(body.username)
+  // A password only makes sense with a username; require one when set.
+  const passwordHash =
+    username !== null && body.password !== undefined && body.password !== ''
+      ? await hashPassword(assertPassword(body.password))
+      : null
+  if (username && !passwordHash) {
+    throw new ApiError(400, 'password is required when assigning a username')
+  }
+  const rights = rightsToJson(body.rights, {
+    edit_entries: true,
+    view_dashboard: false,
+    view_reports: false,
+  })
+
   const id = crypto.randomUUID()
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, name, email, role) VALUES (?, ?, ?, ?)',
+      'INSERT INTO employees (id, name, email, username, password_hash, role, rights) VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
-      .bind(id, name, email, role)
+      .bind(id, name, email, username, passwordHash, role, rights)
       .run()
   } catch (e) {
-    if (String(e).includes('UNIQUE')) throw new ApiError(409, 'Email already in use')
+    if (String(e).includes('UNIQUE')) {
+      throw new ApiError(409, 'Email or username already in use')
+    }
     throw e
   }
-  await audit(env, admin.id, 'create_employee', id, { name, email, role })
+  await audit(env, admin.id, 'create_employee', id, { name, email, username, role, rights })
   const created = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
     .bind(id)
     .first<Employee>()
-  return json(created, 201)
+  return json(publicEmployee(created!), 201)
 }
 
 async function patchEmployee(
@@ -149,18 +221,15 @@ async function patchEmployee(
     .first<Employee>()
   if (!existing) throw new ApiError(404, 'Employee not found')
 
-  const body = await readJson<{
-    name?: string
-    email?: string | null
-    role?: string
-    active?: number | boolean
-  }>(request)
+  const body = await readJson<EmployeeBody>(request)
   const name = body.name !== undefined ? String(body.name).trim() : existing.name
   if (!name) throw new ApiError(400, 'name cannot be empty')
   const email =
     body.email !== undefined
       ? String(body.email ?? '').trim().toLowerCase() || null
       : existing.email
+  const username =
+    body.username !== undefined ? normalizeUsername(body.username) : existing.username
   const role =
     body.role !== undefined
       ? body.role === 'admin'
@@ -169,22 +238,46 @@ async function patchEmployee(
       : existing.role
   const active =
     body.active !== undefined ? (body.active ? 1 : 0) : existing.active
+  // Empty/absent password means "keep the current one".
+  const passwordHash =
+    body.password !== undefined && body.password !== ''
+      ? await hashPassword(assertPassword(body.password))
+      : existing.password_hash
+  const rights =
+    body.rights !== undefined
+      ? rightsToJson(body.rights, parseRights(existing))
+      : existing.rights
+
+  // Admins cannot demote or deactivate themselves — avoids locking everyone out.
+  if (existing.id === admin.id && (role !== 'admin' || !active)) {
+    throw new ApiError(400, 'You cannot demote or deactivate your own account')
+  }
 
   try {
     await env.DB.prepare(
-      'UPDATE employees SET name = ?, email = ?, role = ?, active = ? WHERE id = ?',
+      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, active = ? WHERE id = ?',
     )
-      .bind(name, email, role, active, id)
+      .bind(name, email, username, passwordHash, role, rights, active, id)
       .run()
   } catch (e) {
-    if (String(e).includes('UNIQUE')) throw new ApiError(409, 'Email already in use')
+    if (String(e).includes('UNIQUE')) {
+      throw new ApiError(409, 'Email or username already in use')
+    }
     throw e
   }
-  await audit(env, admin.id, 'update_employee', id, { name, email, role, active })
+  await audit(env, admin.id, 'update_employee', id, {
+    name,
+    email,
+    username,
+    role,
+    rights,
+    active,
+    password_changed: passwordHash !== existing.password_hash,
+  })
   const updated = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
     .bind(id)
     .first<Employee>()
-  return json(updated)
+  return json(publicEmployee(updated!))
 }
 
 async function deleteEmployee(

@@ -1,6 +1,6 @@
 # Ledger — What This App Does
 
-Ledger is a single-page, single-file web app (`timesheet-tracker.html`) for tracking a small team's
+Ledger is a single-page, single-file web app (`timesheet-tracker.html`) for tracking a small team's. Now move to vue js
 daily work hours, "classifications," and "QAP" (quality assurance points/items), and turning those
 into a points-based remuneration report. There is no build step, backend, or database — the entire
 app is one HTML file with inline CSS and vanilla JS.
@@ -11,7 +11,7 @@ It has four tabs: **Time Entry**, **Dashboard**, **Monthly Report**, and **Setti
 
 - All data (employees, entries, settings) is read/written through a `window.storage` key/value API
   (`storeGet` / `storeSet`), not a real database.
-- The header explicitly notes: *"Data is shared across everyone using this tool link"* — anyone with
+- The header explicitly notes: _"Data is shared across everyone using this tool link"_ — anyone with
   the link sees and edits the same shared data. There is no login, no roles, and no per-user
   permissions — everyone effectively has admin access.
 - Data persists as three keys: `employees`, `entries`, `settings`.

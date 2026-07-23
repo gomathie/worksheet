@@ -1,0 +1,33 @@
+{
+  "name": "ledger",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && wrangler pages dev dist",
+    "dev:web": "vite",
+    "build": "vue-tsc -b && vite build",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply ledger-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply ledger-db --remote",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name ledger"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.9",
+    "pinia": "^3.0.2",
+    "vue": "^3.5.13",
+    "vue-chartjs": "^5.3.2",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250620.0",
+    "@tailwindcss/vite": "^4.1.10",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "tailwindcss": "^4.1.10",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^2.2.10",
+    "wrangler": "^4.20.0"
+  }
+}

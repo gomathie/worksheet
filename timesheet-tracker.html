@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger &mdash; Timesheet &amp; QAP Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F6F4EE;
+    --panel:#FFFFFF;
+    --ink:#1E2124;
+    --muted:#7C7F87;
+    --border:#E2DFD5;
+    --teal:#0F5C4C;
+    --teal-soft:#E4EFEC;
+    --amber:#C98A2C;
+    --amber-soft:#F7EDDC;
+    --red:#B23A2E;
+    --red-soft:#F8E7E4;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;}
+  body{-webkit-font-smoothing:antialiased;}
+  h1,h2,h3,.display{font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:0.02em;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  #app{max-width:1180px;margin:0 auto;padding:0 20px 60px;}
+
+  /* header */
+  header.top{padding:28px 0 18px;border-bottom:2px solid var(--ink);display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .mark{width:38px;height:38px;border:2px solid var(--ink);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed';font-weight:700;font-size:15px;transform:rotate(-6deg);}
+  .brand h1{font-size:30px;margin:0;text-transform:uppercase;line-height:1;}
+  .brand .sub{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-top:2px;}
+
+  nav.tabs{display:flex;gap:6px;margin:18px 0 26px;flex-wrap:wrap;}
+  nav.tabs button{
+    font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:0.06em;
+    background:none;border:2px solid var(--ink);color:var(--ink);padding:8px 18px;border-radius:999px;cursor:pointer;
+  }
+  nav.tabs button.active{background:var(--ink);color:var(--bg);}
+  nav.tabs button:hover:not(.active){background:var(--teal-soft);}
+
+  section.tab{display:none;}
+  section.tab.active{display:block;}
+
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:22px;}
+  .panel h2{font-size:22px;margin:0 0 4px;text-transform:uppercase;}
+  .panel .hint{color:var(--muted);font-size:13px;margin:0 0 18px;}
+
+  .grid-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;align-items:end;}
+  label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);margin-bottom:5px;}
+  input,select,textarea{
+    width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:14px;background:#FCFBF8;color:var(--ink);
+  }
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  textarea{font-family:'Inter',sans-serif;resize:vertical;min-height:38px;}
+
+  .btn{
+    font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:0.05em;
+    border:2px solid var(--ink);background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:6px;cursor:pointer;
+  }
+  .btn.secondary{background:none;color:var(--ink);}
+  .btn.danger{background:var(--red);border-color:var(--red);color:#fff;}
+  .btn.small{padding:5px 12px;font-size:13px;border-width:1.5px;}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+  .row-inline{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+  th{font-family:'Barlow Condensed';font-weight:600;text-transform:uppercase;letter-spacing:0.04em;font-size:12.5px;color:var(--muted);}
+  td.num, th.num{font-family:'IBM Plex Mono',monospace;text-align:right;}
+  tbody tr:hover{background:#FAF9F5;}
+  .table-wrap{overflow-x:auto;}
+
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-family:'IBM Plex Mono';}
+  .pill.teal{background:var(--teal-soft);color:var(--teal);}
+  .pill.amber{background:var(--amber-soft);color:var(--amber);}
+
+  /* dashboard cards */
+  .stamp-hero{display:flex;align-items:center;gap:28px;flex-wrap:wrap;margin-bottom:24px;}
+  .stamp{
+    width:150px;height:150px;border-radius:50%;border:4px double var(--teal);color:var(--teal);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-8deg);
+    font-family:'Barlow Condensed';text-transform:uppercase;flex-shrink:0;background:var(--teal-soft);
+  }
+  .stamp .big{font-size:34px;font-weight:700;line-height:1;font-family:'IBM Plex Mono';}
+  .stamp .lbl{font-size:11px;letter-spacing:0.08em;margin-top:4px;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;flex:1;}
+  .card{border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:#FCFBF8;}
+  .card .v{font-family:'IBM Plex Mono';font-size:24px;font-weight:600;}
+  .card .l{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;}
+  .card.amber .v{color:var(--amber);}
+  .card.teal .v{color:var(--teal);}
+
+  .chart{display:flex;gap:6px;align-items:flex-end;height:150px;overflow-x:auto;padding:10px 4px 0;border-bottom:1.5px solid var(--ink);}
+  .chart .daycol{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:22px;}
+  .chart .bars{display:flex;gap:2px;align-items:flex-end;height:120px;}
+  .chart .bar{width:8px;border-radius:2px 2px 0 0;}
+  .chart .bar.c{background:var(--teal);}
+  .chart .bar.q{background:var(--amber);}
+  .chart .daynum{font-size:10px;color:var(--muted);font-family:'IBM Plex Mono';}
+  .legend{display:flex;gap:18px;margin-top:8px;font-size:12.5px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend .dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
+  .dot.c{background:var(--teal);}
+  .dot.q{background:var(--amber);}
+
+  .empty{color:var(--muted);font-style:italic;padding:20px 0;text-align:center;}
+
+  @media print{
+    nav.tabs, .no-print, header .sub{display:none !important;}
+    body{background:#fff;}
+    .panel{border:none;padding:0;}
+    section.tab{display:none !important;}
+    section.tab.print-active{display:block !important;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <div class="brand">
+      <div class="mark">TS</div>
+      <div>
+        <h1>Ledger</h1>
+        <div class="sub">Timesheet &middot; Classification &amp; QAP Tracker</div>
+      </div>
+    </div>
+    <div class="sub" style="text-align:right;">Data is shared across everyone using this tool link.</div>
+  </header>
+
+  <nav class="tabs no-print">
+    <button data-tab="entry" class="active">Time Entry</button>
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="report">Monthly Report</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+
+  <!-- ================= TIME ENTRY TAB ================= -->
+  <section class="tab active" id="tab-entry">
+
+    <div class="panel">
+      <h2>Team</h2>
+      <p class="hint">Add each employee once. They'll then appear in the entry form below.</p>
+      <div class="row-inline">
+        <div style="flex:1;min-width:180px;">
+          <label>New employee name</label>
+          <input type="text" id="newEmployeeName" placeholder="e.g. Ama Boateng" style="font-family:'Inter';">
+        </div>
+        <button class="btn" id="addEmployeeBtn">Add employee</button>
+      </div>
+      <div id="employeeChips" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
+    <div class="panel">
+      <h2 id="entryFormTitle">Log a day</h2>
+      <p class="hint">Start / end time auto-calculates hours worked. Classifications and QAP are counts for that day.</p>
+      <form id="entryForm">
+        <div class="grid-form">
+          <div>
+            <label>Employee</label>
+            <select id="f_employee" required></select>
+          </div>
+          <div>
+            <label>Date</label>
+            <input type="date" id="f_date" required>
+          </div>
+          <div>
+            <label>Time start</label>
+            <input type="time" id="f_start" required>
+          </div>
+          <div>
+            <label>Time end</label>
+            <input type="time" id="f_end" required>
+          </div>
+          <div>
+            <label>Hours worked</label>
+            <input type="text" id="f_hours" class="mono" readonly value="0.00">
+          </div>
+          <div>
+            <label>Classifications</label>
+            <input type="number" id="f_class" min="0" value="0" required>
+          </div>
+          <div>
+            <label>QAP</label>
+            <input type="number" id="f_qap" min="0" value="0" required>
+          </div>
+        </div>
+        <div style="margin-top:14px;">
+          <label>Notes (optional)</label>
+          <textarea id="f_notes" rows="2" placeholder="Anything worth flagging about this day..."></textarea>
+        </div>
+        <div class="row-inline" style="margin-top:16px;">
+          <button type="submit" class="btn" id="entrySubmitBtn">Save entry</button>
+          <button type="button" class="btn secondary" id="entryCancelBtn" style="display:none;">Cancel edit</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Logged entries</h2>
+      <div class="row-inline" style="margin-bottom:14px;">
+        <div>
+          <label>Filter by month</label>
+          <input type="month" id="entryFilterMonth">
+        </div>
+        <div>
+          <label>Filter by employee</label>
+          <select id="entryFilterEmployee"><option value="">All employees</option></select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Employee</th><th>Start</th><th>End</th>
+            <th class="num">Hours</th><th class="num">Class.</th><th class="num">QAP</th><th class="num">Points</th>
+            <th>Notes</th><th class="no-print">Actions</th>
+          </tr></thead>
+          <tbody id="entriesBody"></tbody>
+        </table>
+      </div>
+      <div id="entriesEmpty" class="empty" style="display:none;">No entries logged yet.</div>
+    </div>
+  </section>
+
+  <!-- ================= DASHBOARD TAB ================= -->
+  <section class="tab" id="tab-dashboard">
+    <div class="panel">
+      <div class="row-inline" style="justify-content:space-between;">
+        <h2 style="margin:0;">Monthly Dashboard</h2>
+        <div>
+          <label>Month</label>
+          <input type="month" id="dashMonth">
+        </div>
+      </div>
+      <div class="stamp-hero" style="margin-top:20px;">
+        <div class="stamp">
+          <div class="big" id="stampHours">0.0</div>
+          <div class="lbl">Hours logged</div>
+        </div>
+        <div class="cards">
+          <div class="card teal"><div class="v" id="cardClass">0</div><div class="l">Classifications</div></div>
+          <div class="card teal"><div class="v" id="cardQap">0</div><div class="l">QAP items</div></div>
+          <div class="card amber"><div class="v" id="cardPoints">0</div><div class="l">Total points</div></div>
+          <div class="card amber"><div class="v" id="cardRemun">$0.00</div><div class="l">Est. remuneration</div></div>
+        </div>
+      </div>
+
+      <h3>Classifications &amp; QAP per day</h3>
+      <div class="chart" id="dailyChart"></div>
+      <div class="legend"><span><i class="dot c"></i>Classifications</span><span><i class="dot q"></i>QAP</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Per-person summary</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Employee</th><th class="num">Days worked</th><th class="num">Hours</th>
+            <th class="num">Classifications</th><th class="num">QAP</th><th class="num">Points</th><th class="num">Est. remuneration</th>
+          </tr></thead>
+          <tbody id="dashPersonBody"></tbody>
+        </table>
+      </div>
+      <div id="dashEmpty" class="empty" style="display:none;">No entries for this month yet.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Daily detail, per person</h2>
+      <p class="hint">Classifications and QAP for each person, each day this month.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Employee</th><th class="num">Hours</th><th class="num">Classifications</th><th class="num">QAP</th></tr></thead>
+          <tbody id="dashDailyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= REPORT TAB ================= -->
+  <section class="tab" id="tab-report">
+    <div class="panel no-print">
+      <div class="row-inline" style="justify-content:space-between;">
+        <div>
+          <label>Report month</label>
+          <input type="month" id="reportMonth">
+        </div>
+        <button class="btn" id="printReportBtn">Print / Save as PDF</button>
+      </div>
+    </div>
+    <div class="panel" id="reportPanel">
+      <h2 id="reportTitle">Monthly Performance &amp; Remuneration Report</h2>
+      <p class="hint" id="reportSubtitle"></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Employee</th><th class="num">Days</th><th class="num">Hours</th>
+            <th class="num">Classifications</th><th class="num">QAP</th><th class="num">Points</th><th class="num">Remuneration</th>
+          </tr></thead>
+          <tbody id="reportBody"></tbody>
+          <tfoot id="reportFoot"></tfoot>
+        </table>
+      </div>
+      <h3 style="margin-top:26px;">Daily detail</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Employee</th><th class="num">Hours</th><th class="num">Classifications</th><th class="num">QAP</th></tr></thead>
+          <tbody id="reportDailyBody"></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:18px;" id="reportRateNote"></p>
+    </div>
+  </section>
+
+  <!-- ================= SETTINGS TAB ================= -->
+  <section class="tab" id="tab-settings">
+    <div class="panel">
+      <h2>Remuneration settings</h2>
+      <p class="hint">Set how classifications and QAP items convert to points, and how much a point is worth. These apply to all past and future entries &mdash; change them any time.</p>
+      <div class="grid-form" style="max-width:640px;">
+        <div>
+          <label>Points per classification</label>
+          <input type="number" id="s_classPoints" step="0.01" min="0">
+        </div>
+        <div>
+          <label>Points per QAP item</label>
+          <input type="number" id="s_qapPoints" step="0.01" min="0">
+        </div>
+        <div>
+          <label>Currency symbol</label>
+          <input type="text" id="s_currency" maxlength="3" style="font-family:'Inter';">
+        </div>
+        <div>
+          <label>Value per point</label>
+          <input type="number" id="s_pointValue" step="0.01" min="0">
+        </div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn" id="saveSettingsBtn">Save settings</button>
+        <span id="settingsSavedMsg" style="color:var(--teal);margin-left:12px;font-size:13px;display:none;">Saved.</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  const DEFAULT_SETTINGS = { classPoints: 1, qapPoints: 1, pointValue: 1, currency: '$' };
+  let employees = [];
+  let entries = [];
+  let settings = { ...DEFAULT_SETTINGS };
+  let editingId = null;
+
+  // ---------- storage helpers ----------
+  async function storeGet(key, fallback){
+    try{
+      const r = await window.storage.get(key, true);
+      if(!r) return fallback;
+      return JSON.parse(r.value);
+    }catch(e){
+      return fallback;
+    }
+  }
+  async function storeSet(key, value){
+    try{
+      const r = await window.storage.set(key, JSON.stringify(value), true);
+      if(!r) console.error('Storage set returned null for', key);
+    }catch(e){
+      console.error('Storage error for', key, e);
+      alert('Something went wrong saving your data. Please try again.');
+    }
+  }
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function currentMonthStr(){
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+  function fmtMoney(n){ return settings.currency + n.toFixed(2); }
+  function calcHours(start, end){
+    if(!start || !end) return 0;
+    const [sh,sm] = start.split(':').map(Number);
+    const [eh,em] = end.split(':').map(Number);
+    let diff = (eh*60+em) - (sh*60+sm);
+    if(diff <= 0) diff += 24*60;
+    return +(diff/60).toFixed(2);
+  }
+  function pointsFor(entry){
+    return entry.classifications * settings.classPoints + entry.qap * settings.qapPoints;
+  }
+  function remunFor(entry){
+    return pointsFor(entry) * settings.pointValue;
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- tabs ----------
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('section.tab').forEach(s=>s.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab==='dashboard') renderDashboard();
+      if(btn.dataset.tab==='report') renderReport();
+    });
+  });
+
+  // ---------- employees ----------
+  function renderEmployeeChips(){
+    const wrap = document.getElementById('employeeChips');
+    if(employees.length===0){
+      wrap.innerHTML = '<span class="hint" style="margin:0;">No employees added yet.</span>';
+      return;
+    }
+    wrap.innerHTML = employees.map(e => `
+      <span class="pill teal" style="display:inline-flex;align-items:center;gap:8px;font-family:'Inter';">
+        ${escapeHtml(e.name)}
+        <button data-remove-emp="${e.id}" style="border:none;background:none;color:var(--red);cursor:pointer;font-weight:700;">&times;</button>
+      </span>
+    `).join('');
+    wrap.querySelectorAll('[data-remove-emp]').forEach(b=>{
+      b.addEventListener('click', async ()=>{
+        const id = b.dataset.removeEmp;
+        const hasEntries = entries.some(e=>e.employeeId===id);
+        if(hasEntries && !confirm('This employee has logged entries. Remove them from the team list anyway? Existing entries are kept.')) return;
+        employees = employees.filter(e=>e.id!==id);
+        await storeSet('employees', employees);
+        renderEmployeeChips(); populateEmployeeSelects();
+      });
+    });
+  }
+
+  function populateEmployeeSelects(){
+    const opts = '<option value="">Select employee</option>' + employees.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+    document.getElementById('f_employee').innerHTML = opts;
+    document.getElementById('entryFilterEmployee').innerHTML = '<option value="">All employees</option>' + employees.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+  }
+
+  document.getElementById('addEmployeeBtn').addEventListener('click', async ()=>{
+    const input = document.getElementById('newEmployeeName');
+    const name = input.value.trim();
+    if(!name) return;
+    if(employees.some(e=>e.name.toLowerCase()===name.toLowerCase())){ alert('That employee is already on the list.'); return; }
+    employees.push({ id: uid(), name });
+    await storeSet('employees', employees);
+    input.value='';
+    renderEmployeeChips(); populateEmployeeSelects();
+  });
+
+  // ---------- entry form ----------
+  const fEmployee = document.getElementById('f_employee');
+  const fDate = document.getElementById('f_date');
+  const fStart = document.getElementById('f_start');
+  const fEnd = document.getElementById('f_end');
+  const fHours = document.getElementById('f_hours');
+  const fClass = document.getElementById('f_class');
+  const fQap = document.getElementById('f_qap');
+  const fNotes = document.getElementById('f_notes');
+
+  function updateHoursPreview(){
+    fHours.value = calcHours(fStart.value, fEnd.value).toFixed(2);
+  }
+  fStart.addEventListener('input', updateHoursPreview);
+  fEnd.addEventListener('input', updateHoursPreview);
+
+  fDate.valueAsDate = new Date();
+
+  document.getElementById('entryForm').addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    const employeeId = fEmployee.value;
+    if(!employeeId){ alert('Please select an employee.'); return; }
+    const emp = employees.find(e=>e.id===employeeId);
+    const hours = calcHours(fStart.value, fEnd.value);
+    const entryData = {
+      employeeId, employeeName: emp ? emp.name : 'Unknown',
+      date: fDate.value, timeStart: fStart.value, timeEnd: fEnd.value,
+      hours, classifications: Number(fClass.value)||0, qap: Number(fQap.value)||0,
+      notes: fNotes.value.trim()
+    };
+    if(editingId){
+      const idx = entries.findIndex(e=>e.id===editingId);
+      if(idx>-1) entries[idx] = { ...entries[idx], ...entryData };
+      editingId = null;
+      document.getElementById('entrySubmitBtn').textContent = 'Save entry';
+      document.getElementById('entryCancelBtn').style.display = 'none';
+      document.getElementById('entryFormTitle').textContent = 'Log a day';
+    } else {
+      entries.push({ id: uid(), ...entryData });
+    }
+    await storeSet('entries', entries);
+    document.getElementById('entryForm').reset();
+    fDate.valueAsDate = new Date();
+    updateHoursPreview();
+    renderEntriesTable();
+  });
+
+  document.getElementById('entryCancelBtn').addEventListener('click', ()=>{
+    editingId = null;
+    document.getElementById('entryForm').reset();
+    fDate.valueAsDate = new Date();
+    updateHoursPreview();
+    document.getElementById('entrySubmitBtn').textContent = 'Save entry';
+    document.getElementById('entryCancelBtn').style.display = 'none';
+    document.getElementById('entryFormTitle').textContent = 'Log a day';
+  });
+
+  function startEdit(id){
+    const e = entries.find(x=>x.id===id);
+    if(!e) return;
+    editingId = id;
+    fEmployee.value = e.employeeId;
+    fDate.value = e.date;
+    fStart.value = e.timeStart;
+    fEnd.value = e.timeEnd;
+    fClass.value = e.classifications;
+    fQap.value = e.qap;
+    fNotes.value = e.notes || '';
+    updateHoursPreview();
+    document.getElementById('entrySubmitBtn').textContent = 'Update entry';
+    document.getElementById('entryCancelBtn').style.display = 'inline-block';
+    document.getElementById('entryFormTitle').textContent = 'Edit entry';
+    document.getElementById('tab-entry').scrollIntoView({behavior:'smooth'});
+  }
+
+  async function deleteEntry(id){
+    if(!confirm('Delete this entry? This cannot be undone.')) return;
+    entries = entries.filter(e=>e.id!==id);
+    await storeSet('entries', entries);
+    renderEntriesTable();
+  }
+
+  // ---------- entries table ----------
+  document.getElementById('entryFilterMonth').addEventListener('input', renderEntriesTable);
+  document.getElementById('entryFilterEmployee').addEventListener('change', renderEntriesTable);
+
+  function renderEntriesTable(){
+    const monthFilter = document.getElementById('entryFilterMonth').value;
+    const empFilter = document.getElementById('entryFilterEmployee').value;
+    let list = [...entries];
+    if(monthFilter) list = list.filter(e=>e.date.startsWith(monthFilter));
+    if(empFilter) list = list.filter(e=>e.employeeId===empFilter);
+    list.sort((a,b)=> (a.date+a.timeStart) < (b.date+b.timeStart) ? 1 : -1);
+
+    const body = document.getElementById('entriesBody');
+    document.getElementById('entriesEmpty').style.display = list.length ? 'none':'block';
+    body.innerHTML = list.map(e=>`
+      <tr>
+        <td class="mono">${e.date}</td>
+        <td>${escapeHtml(e.employeeName)}</td>
+        <td class="mono">${e.timeStart}</td>
+        <td class="mono">${e.timeEnd}</td>
+        <td class="num">${e.hours.toFixed(2)}</td>
+        <td class="num">${e.classifications}</td>
+        <td class="num">${e.qap}</td>
+        <td class="num">${pointsFor(e).toFixed(2)}</td>
+        <td>${escapeHtml(e.notes||'')}</td>
+        <td class="no-print">
+          <button class="btn small secondary" data-edit="${e.id}">Edit</button>
+          <button class="btn small danger" data-del="${e.id}">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+    body.querySelectorAll('[data-edit]').forEach(b=>b.addEventListener('click', ()=>startEdit(b.dataset.edit)));
+    body.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click', ()=>deleteEntry(b.dataset.del)));
+  }
+
+  // ---------- aggregation ----------
+  function monthEntries(monthStr){
+    return entries.filter(e=>e.date.startsWith(monthStr));
+  }
+
+  function perPersonSummary(monthStr){
+    const list = monthEntries(monthStr);
+    const map = {};
+    list.forEach(e=>{
+      if(!map[e.employeeId]) map[e.employeeId] = { name: e.employeeName, days: new Set(), hours:0, classifications:0, qap:0 };
+      const m = map[e.employeeId];
+      m.days.add(e.date);
+      m.hours += e.hours;
+      m.classifications += e.classifications;
+      m.qap += e.qap;
+    });
+    return Object.values(map).map(m=>{
+      const points = m.classifications*settings.classPoints + m.qap*settings.qapPoints;
+      return { name:m.name, days:m.days.size, hours:m.hours, classifications:m.classifications, qap:m.qap, points, remun: points*settings.pointValue };
+    }).sort((a,b)=> b.points - a.points);
+  }
+
+  // ---------- dashboard ----------
+  const dashMonthInput = document.getElementById('dashMonth');
+  dashMonthInput.value = currentMonthStr();
+  dashMonthInput.addEventListener('input', renderDashboard);
+
+  function renderDashboard(){
+    const monthStr = dashMonthInput.value || currentMonthStr();
+    const list = monthEntries(monthStr);
+    const totals = list.reduce((a,e)=>{
+      a.hours += e.hours; a.classifications += e.classifications; a.qap += e.qap; return a;
+    }, {hours:0, classifications:0, qap:0});
+    const points = totals.classifications*settings.classPoints + totals.qap*settings.qapPoints;
+    const remun = points*settings.pointValue;
+
+    document.getElementById('stampHours').textContent = totals.hours.toFixed(1);
+    document.getElementById('cardClass').textContent = totals.classifications;
+    document.getElementById('cardQap').textContent = totals.qap;
+    document.getElementById('cardPoints').textContent = points.toFixed(1);
+    document.getElementById('cardRemun').textContent = fmtMoney(remun);
+
+    // chart
+    const [y,m] = monthStr.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const perDay = {};
+    for(let d=1; d<=daysInMonth; d++) perDay[d] = {c:0,q:0};
+    list.forEach(e=>{
+      const day = Number(e.date.split('-')[2]);
+      if(perDay[day]){ perDay[day].c += e.classifications; perDay[day].q += e.qap; }
+    });
+    const maxVal = Math.max(1, ...Object.values(perDay).map(v=>Math.max(v.c,v.q)));
+    const chart = document.getElementById('dailyChart');
+    chart.innerHTML = Object.entries(perDay).map(([day,v])=>`
+      <div class="daycol">
+        <div class="bars">
+          <div class="bar c" style="height:${Math.max(2,(v.c/maxVal)*120)}px" title="Day ${day}: ${v.c} classifications"></div>
+          <div class="bar q" style="height:${Math.max(2,(v.q/maxVal)*120)}px" title="Day ${day}: ${v.q} QAP"></div>
+        </div>
+        <div class="daynum">${day}</div>
+      </div>
+    `).join('');
+
+    // per-person
+    const persons = perPersonSummary(monthStr);
+    const pbody = document.getElementById('dashPersonBody');
+    document.getElementById('dashEmpty').style.display = persons.length ? 'none' : 'block';
+    pbody.innerHTML = persons.map(p=>`
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td class="num">${p.days}</td>
+        <td class="num">${p.hours.toFixed(2)}</td>
+        <td class="num">${p.classifications}</td>
+        <td class="num">${p.qap}</td>
+        <td class="num">${p.points.toFixed(2)}</td>
+        <td class="num">${fmtMoney(p.remun)}</td>
+      </tr>
+    `).join('');
+
+    // daily detail per person
+    const sortedList = [...list].sort((a,b)=> a.date === b.date ? a.employeeName.localeCompare(b.employeeName) : (a.date < b.date ? -1:1));
+    document.getElementById('dashDailyBody').innerHTML = sortedList.map(e=>`
+      <tr>
+        <td class="mono">${e.date}</td>
+        <td>${escapeHtml(e.employeeName)}</td>
+        <td class="num">${e.hours.toFixed(2)}</td>
+        <td class="num">${e.classifications}</td>
+        <td class="num">${e.qap}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" class="empty">No entries for this month yet.</td></tr>';
+  }
+
+  // ---------- report ----------
+  const reportMonthInput = document.getElementById('reportMonth');
+  reportMonthInput.value = currentMonthStr();
+  reportMonthInput.addEventListener('input', renderReport);
+  document.getElementById('printReportBtn').addEventListener('click', ()=>{
+    document.querySelectorAll('section.tab').forEach(s=>s.classList.remove('print-active'));
+    document.getElementById('tab-report').classList.add('print-active');
+    window.print();
+  });
+
+  function renderReport(){
+    const monthStr = reportMonthInput.value || currentMonthStr();
+    const [y,m] = monthStr.split('-');
+    const monthName = new Date(Number(y), Number(m)-1, 1).toLocaleString('default', { month:'long', year:'numeric' });
+    document.getElementById('reportSubtitle').textContent = monthName;
+    document.getElementById('reportTitle').innerHTML = 'Monthly Performance &amp; Remuneration Report';
+
+    const persons = perPersonSummary(monthStr);
+    const body = document.getElementById('reportBody');
+    body.innerHTML = persons.map(p=>`
+      <tr>
+        <td>${escapeHtml(p.name)}</td>
+        <td class="num">${p.days}</td>
+        <td class="num">${p.hours.toFixed(2)}</td>
+        <td class="num">${p.classifications}</td>
+        <td class="num">${p.qap}</td>
+        <td class="num">${p.points.toFixed(2)}</td>
+        <td class="num">${fmtMoney(p.remun)}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="7" class="empty">No entries for this month.</td></tr>';
+
+    const gt = persons.reduce((a,p)=>{ a.days+=p.days; a.hours+=p.hours; a.classifications+=p.classifications; a.qap+=p.qap; a.points+=p.points; a.remun+=p.remun; return a; }, {days:0,hours:0,classifications:0,qap:0,points:0,remun:0});
+    document.getElementById('reportFoot').innerHTML = `
+      <tr style="font-weight:700;border-top:2px solid var(--ink);">
+        <td>Total</td>
+        <td class="num">${gt.days}</td>
+        <td class="num">${gt.hours.toFixed(2)}</td>
+        <td class="num">${gt.classifications}</td>
+        <td class="num">${gt.qap}</td>
+        <td class="num">${gt.points.toFixed(2)}</td>
+        <td class="num">${fmtMoney(gt.remun)}</td>
+      </tr>`;
+
+    const list = monthEntries(monthStr).sort((a,b)=> a.date === b.date ? a.employeeName.localeCompare(b.employeeName) : (a.date < b.date ? -1:1));
+    document.getElementById('reportDailyBody').innerHTML = list.map(e=>`
+      <tr>
+        <td class="mono">${e.date}</td>
+        <td>${escapeHtml(e.employeeName)}</td>
+        <td class="num">${e.hours.toFixed(2)}</td>
+        <td class="num">${e.classifications}</td>
+        <td class="num">${e.qap}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="5" class="empty">No entries for this month.</td></tr>';
+
+    document.getElementById('reportRateNote').textContent =
+      `Rates applied: ${settings.classPoints} point(s) per classification, ${settings.qapPoints} point(s) per QAP item, ${fmtMoney(settings.pointValue)} per point. Generated ${new Date().toLocaleDateString()}.`;
+  }
+
+  // ---------- settings ----------
+  function populateSettingsForm(){
+    document.getElementById('s_classPoints').value = settings.classPoints;
+    document.getElementById('s_qapPoints').value = settings.qapPoints;
+    document.getElementById('s_currency').value = settings.currency;
+    document.getElementById('s_pointValue').value = settings.pointValue;
+  }
+  document.getElementById('saveSettingsBtn').addEventListener('click', async ()=>{
+    settings.classPoints = Number(document.getElementById('s_classPoints').value)||0;
+    settings.qapPoints = Number(document.getElementById('s_qapPoints').value)||0;
+    settings.currency = document.getElementById('s_currency').value || '$';
+    settings.pointValue = Number(document.getElementById('s_pointValue').value)||0;
+    await storeSet('settings', settings);
+    const msg = document.getElementById('settingsSavedMsg');
+    msg.style.display='inline';
+    setTimeout(()=>msg.style.display='none', 2000);
+    renderEntriesTable(); renderDashboard(); renderReport();
+  });
+
+  // ---------- init ----------
+  async function init(){
+    employees = await storeGet('employees', []);
+    entries = await storeGet('entries', []);
+    settings = await storeGet('settings', { ...DEFAULT_SETTINGS });
+    document.getElementById('entryFilterMonth').value = currentMonthStr();
+    populateEmployeeSelects();
+    renderEmployeeChips();
+    populateSettingsForm();
+    updateHoursPreview();
+    renderEntriesTable();
+    renderDashboard();
+    renderReport();
+  }
+  init();
+})();
+</script>
+</body>
+</html>

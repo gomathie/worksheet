@@ -8,7 +8,10 @@ export interface Employee {
   id: string
   name: string
   email: string | null
+  username: string | null
+  password_hash: string | null
   role: 'admin' | 'employee'
+  rights: string // JSON — see Rights in auth.ts
   active: number
   created_at: string
 }

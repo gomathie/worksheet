@@ -3,7 +3,6 @@ import { ApiError, getCookie } from './http'
 
 export const SESSION_COOKIE = 'ledger_session'
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30 // 30 days
-export const CODE_TTL_MINUTES = 10
 
 export function sessionCookie(token: string, maxAge: number): string {
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`
@@ -14,10 +13,104 @@ export function randomToken(bytes = 32): string {
   return [...buf].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-export function randomCode(): string {
-  const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000
-  return n.toString().padStart(6, '0')
+// ------------------------------------------------------------------ passwords
+
+const PBKDF2_ITERATIONS = 100_000
+
+async function pbkdf2(
+  password: string,
+  salt: Uint8Array,
+  iterations: number,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  )
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations },
+    key,
+    256,
+  )
+  return new Uint8Array(bits)
 }
+
+function toHex(buf: Uint8Array): string {
+  return [...buf].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+function fromHex(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const hash = await pbkdf2(password, salt, PBKDF2_ITERATIONS)
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${toHex(salt)}$${toHex(hash)}`
+}
+
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<boolean> {
+  const [scheme, iterStr, saltHex, hashHex] = stored.split('$')
+  const iterations = Number(iterStr)
+  if (scheme !== 'pbkdf2' || !Number.isInteger(iterations) || iterations < 1) {
+    return false
+  }
+  const hash = await pbkdf2(password, fromHex(saltHex), iterations)
+  const expected = fromHex(hashHex)
+  if (hash.length !== expected.length) return false
+  let diff = 0
+  for (let i = 0; i < hash.length; i++) diff |= hash[i] ^ expected[i]
+  return diff === 0
+}
+
+// -------------------------------------------------------------------- rights
+
+export interface Rights {
+  edit_entries: boolean
+  view_dashboard: boolean
+  view_reports: boolean
+}
+
+export const DEFAULT_RIGHTS: Rights = {
+  edit_entries: true,
+  view_dashboard: false,
+  view_reports: false,
+}
+
+const ALL_RIGHTS: Rights = {
+  edit_entries: true,
+  view_dashboard: true,
+  view_reports: true,
+}
+
+export function parseRights(employee: Employee): Rights {
+  if (employee.role === 'admin') return { ...ALL_RIGHTS }
+  try {
+    const raw = JSON.parse(employee.rights || '{}') as Partial<Rights>
+    return {
+      edit_entries: Boolean(raw.edit_entries ?? true),
+      view_dashboard: Boolean(raw.view_dashboard),
+      view_reports: Boolean(raw.view_reports),
+    }
+  } catch {
+    return { ...DEFAULT_RIGHTS }
+  }
+}
+
+export function requireRight(user: Employee, right: keyof Rights): void {
+  if (!parseRights(user)[right]) {
+    throw new ApiError(403, 'You do not have permission for this')
+  }
+}
+
+// ------------------------------------------------------------------- session
 
 export async function currentUser(
   request: Request,

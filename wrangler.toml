@@ -12,11 +12,11 @@ TEAM_TZ = "Africa/Accra"
 [[d1_databases]]
 binding = "DB"
 database_name = "ledger-db"
-database_id = "REPLACE_WITH_D1_ID"
+database_id = "76d95171-eb36-446a-9853-e022547397ea"
 
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "REPLACE_WITH_KV_ID"
+id = "7d711a1014234ceca37d94c4ccec91da"
 
 # Preview environment (Pages preview deployments) gets its own database,
 # created with `wrangler d1 create ledger-db-preview`.
@@ -28,8 +28,8 @@ TEAM_TZ = "Africa/Accra"
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "ledger-db-preview"
-database_id = "REPLACE_WITH_PREVIEW_D1_ID"
+database_id = "f4f9ca94-f418-47f4-a191-457c8f7e03bf"
 
 [[env.preview.kv_namespaces]]
 binding = "SESSIONS"
-id = "REPLACE_WITH_PREVIEW_KV_ID"
+id = "684d82e9405f411ab027ec4338d27c34"

@@ -1,0 +1,35 @@
+# Ledger — Cloudflare Pages project (static Vue build + Pages Functions API)
+name = "ledger"
+compatibility_date = "2026-07-01"
+pages_build_output_dir = "dist"
+
+[vars]
+TEAM_TZ = "Africa/Accra"
+
+# Production bindings.
+# After `wrangler d1 create ledger-db` and `wrangler kv namespace create SESSIONS`,
+# paste the generated ids below (see README "Deploy").
+[[d1_databases]]
+binding = "DB"
+database_name = "ledger-db"
+database_id = "REPLACE_WITH_D1_ID"
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "REPLACE_WITH_KV_ID"
+
+# Preview environment (Pages preview deployments) gets its own database,
+# created with `wrangler d1 create ledger-db-preview`.
+[env.preview]
+
+[env.preview.vars]
+TEAM_TZ = "Africa/Accra"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "ledger-db-preview"
+database_id = "REPLACE_WITH_PREVIEW_D1_ID"
+
+[[env.preview.kv_namespaces]]
+binding = "SESSIONS"
+id = "REPLACE_WITH_PREVIEW_KV_ID"

@@ -1,16 +1,19 @@
 import type { Employee, EntryRow, Env } from '../../server/env'
 import { ApiError, json, readJson, todayInTz } from '../../server/http'
 import {
-  CODE_TTL_MINUTES,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
   audit,
   currentUser,
-  randomCode,
+  hashPassword,
+  parseRights,
   randomToken,
   requireAdmin,
+  requireRight,
   requireUser,
   sessionCookie,
+  verifyPassword,
+  type Rights,
 } from '../../server/auth'
 import { loadSettings, saveSettings } from '../../server/settings'
 import { aggregateMonthly, computeHours, parseTime } from '../../shared/logic'
@@ -53,58 +56,28 @@ function validateEntryInput(body: {
 // ---------------------------------------------------------------- auth routes
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
-  const { email } = await readJson<{ email?: string }>(request)
-  const normalized = (email ?? '').trim().toLowerCase()
-  if (!normalized) throw new ApiError(400, 'email is required')
-
-  const employee = await env.DB.prepare(
-    'SELECT * FROM employees WHERE lower(email) = ? AND active = 1',
-  )
-    .bind(normalized)
-    .first<Employee>()
-  // Do not reveal whether the email exists.
-  if (!employee) return json({ ok: true })
-
-  const code = randomCode()
-  const expires = new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString()
-  await env.DB.prepare('DELETE FROM login_codes WHERE email = ?')
-    .bind(normalized)
-    .run()
-  await env.DB.prepare(
-    'INSERT INTO login_codes (email, code, expires_at) VALUES (?, ?, ?)',
-  )
-    .bind(normalized, code, expires)
-    .run()
-
-  // No email provider on the free tier: the code is returned directly and the
-  // login screen displays it. Swap for an email send when a provider exists.
-  return json({ ok: true, code })
-}
-
-async function handleVerify(request: Request, env: Env): Promise<Response> {
-  const { email, code } = await readJson<{ email?: string; code?: string }>(request)
-  const normalized = (email ?? '').trim().toLowerCase()
-  if (!normalized || !code) throw new ApiError(400, 'email and code are required')
-
-  const row = await env.DB.prepare(
-    'SELECT code, expires_at FROM login_codes WHERE email = ? ORDER BY created_at DESC LIMIT 1',
-  )
-    .bind(normalized)
-    .first<{ code: string; expires_at: string }>()
-  if (!row || row.code !== code.trim() || row.expires_at < new Date().toISOString()) {
-    throw new ApiError(401, 'Invalid or expired code')
+  const { username, password } = await readJson<{
+    username?: string
+    password?: string
+  }>(request)
+  const normalized = (username ?? '').trim().toLowerCase()
+  if (!normalized || !password) {
+    throw new ApiError(400, 'username and password are required')
   }
 
   const employee = await env.DB.prepare(
-    'SELECT * FROM employees WHERE lower(email) = ? AND active = 1',
+    'SELECT * FROM employees WHERE lower(username) = ? AND active = 1',
   )
     .bind(normalized)
     .first<Employee>()
-  if (!employee) throw new ApiError(401, 'Invalid or expired code')
-
-  await env.DB.prepare('DELETE FROM login_codes WHERE email = ?')
-    .bind(normalized)
-    .run()
+  // Uniform error: do not reveal whether the username exists.
+  if (
+    !employee ||
+    !employee.password_hash ||
+    !(await verifyPassword(password, employee.password_hash))
+  ) {
+    throw new ApiError(401, 'Invalid username or password')
+  }
 
   const token = randomToken()
   await env.SESSIONS.put(

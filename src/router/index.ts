@@ -15,13 +15,13 @@ const router = createRouter({
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('../views/DashboardView.vue'),
-      meta: { auth: true, admin: true },
+      meta: { auth: true, right: 'view_dashboard' },
     },
     {
       path: '/report',
       name: 'report',
       component: () => import('../views/ReportView.vue'),
-      meta: { auth: true, admin: true },
+      meta: { auth: true, right: 'view_reports' },
     },
     {
       path: '/employees',
@@ -49,6 +49,12 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.auth && !auth.user) return { name: 'login' }
   if (to.meta.admin && !auth.isAdmin) return { name: 'entries' }
+  if (
+    to.meta.right &&
+    !auth.rights[to.meta.right as keyof typeof auth.rights]
+  ) {
+    return { name: 'entries' }
+  }
   if (to.name === 'login' && auth.user) return { name: 'entries' }
   return true
 })

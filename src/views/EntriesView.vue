@@ -110,7 +110,7 @@ async function remove(entry: Entry) {
 
 <template>
   <div>
-    <div class="panel mb-6">
+    <div v-if="auth.rights.edit_entries" class="panel mb-6">
       <h2 class="display mb-4 text-2xl">
         {{ editingId ? 'Edit entry' : 'Log time' }}
       </h2>
@@ -253,7 +253,7 @@ async function remove(entry: Entry) {
               <th class="num">Classif.</th>
               <th class="num">QAP</th>
               <th>Notes</th>
-              <th></th>
+              <th v-if="auth.rights.edit_entries"></th>
             </tr>
           </thead>
           <tbody>
@@ -268,7 +268,7 @@ async function remove(entry: Entry) {
               <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
                 {{ e.notes }}
               </td>
-              <td class="whitespace-nowrap">
+              <td v-if="auth.rights.edit_entries" class="whitespace-nowrap">
                 <button class="btn btn-sm mr-1" @click="startEdit(e)">Edit</button>
                 <button class="btn btn-sm btn-danger" @click="remove(e)">Del</button>
               </td>

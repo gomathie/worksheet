@@ -6,31 +6,16 @@ import { useAuthStore } from '../stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 
-const email = ref('')
-const code = ref('')
-const issuedCode = ref<string | null>(null)
-const stage = ref<'email' | 'code'>('email')
+const username = ref('')
+const password = ref('')
 const error = ref('')
 const busy = ref(false)
 
-async function requestCode() {
+async function signIn() {
   error.value = ''
   busy.value = true
   try {
-    issuedCode.value = (await auth.login(email.value)) ?? null
-    stage.value = 'code'
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Something went wrong'
-  } finally {
-    busy.value = false
-  }
-}
-
-async function verify() {
-  error.value = ''
-  busy.value = true
-  try {
-    await auth.verify(email.value, code.value)
+    await auth.login(username.value, password.value)
     router.push({ name: 'entries' })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
@@ -45,55 +30,33 @@ async function verify() {
     <div class="panel">
       <h2 class="display mb-1 text-2xl">Sign in</h2>
       <p class="mb-5 text-sm text-muted">
-        Enter your work email to receive a one-time sign-in code.
+        Use the username and password assigned by your administrator.
       </p>
 
-      <form v-if="stage === 'email'" @submit.prevent="requestCode">
-        <label class="field-label" for="email">Email</label>
+      <form @submit.prevent="signIn">
+        <label class="field-label" for="username">Username</label>
         <input
-          id="email"
-          v-model="email"
-          type="email"
+          id="username"
+          v-model="username"
           required
-          autocomplete="email"
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
           class="field-input mb-4"
-          placeholder="you@company.com"
+          placeholder="username"
         />
-        <button class="btn btn-solid w-full" :disabled="busy">
-          {{ busy ? 'Sending…' : 'Send code' }}
-        </button>
-      </form>
-
-      <form v-else @submit.prevent="verify">
-        <p
-          v-if="issuedCode"
-          class="mono mb-4 rounded-lg border border-amber bg-amber-soft p-3 text-sm"
-        >
-          Your one-time code: <strong class="text-base">{{ issuedCode }}</strong
-          ><br />
-          <span class="text-xs text-muted"
-            >(shown here because email delivery isn't configured yet)</span
-          >
-        </p>
-        <label class="field-label" for="code">6-digit code</label>
+        <label class="field-label" for="password">Password</label>
         <input
-          id="code"
-          v-model="code"
-          inputmode="numeric"
-          pattern="\d{6}"
+          id="password"
+          v-model="password"
+          type="password"
           required
-          class="field-input mono mb-4 text-center text-lg tracking-[0.4em]"
-          placeholder="••••••"
+          autocomplete="current-password"
+          class="field-input mb-4"
+          placeholder="••••••••"
         />
         <button class="btn btn-solid w-full" :disabled="busy">
-          {{ busy ? 'Verifying…' : 'Sign in' }}
-        </button>
-        <button
-          type="button"
-          class="btn mt-2 w-full"
-          @click="stage = 'email'; code = ''"
-        >
-          Use a different email
+          {{ busy ? 'Signing in…' : 'Sign in' }}
         </button>
       </form>
 

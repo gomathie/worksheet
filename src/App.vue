@@ -43,13 +43,21 @@ async function signOut() {
       <RouterLink :to="{ name: 'entries' }" class="btn" active-class="btn-solid"
         >Time Entry</RouterLink
       >
+      <RouterLink
+        v-if="auth.rights.view_dashboard"
+        :to="{ name: 'dashboard' }"
+        class="btn"
+        active-class="btn-solid"
+        >Dashboard</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.view_reports"
+        :to="{ name: 'report' }"
+        class="btn"
+        active-class="btn-solid"
+        >Monthly Report</RouterLink
+      >
       <template v-if="auth.isAdmin">
-        <RouterLink :to="{ name: 'dashboard' }" class="btn" active-class="btn-solid"
-          >Dashboard</RouterLink
-        >
-        <RouterLink :to="{ name: 'report' }" class="btn" active-class="btn-solid"
-          >Monthly Report</RouterLink
-        >
         <RouterLink :to="{ name: 'employees' }" class="btn" active-class="btn-solid"
           >Employees</RouterLink
         >

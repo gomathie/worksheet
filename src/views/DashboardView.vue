@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
@@ -10,6 +10,16 @@ const auth = useAuthStore()
 const month = ref(auth.user!.today.slice(0, 7))
 const report = ref<ReportPayload | null>(null)
 const error = ref('')
+
+// Types to show as columns/series: active ones, plus any inactive type that
+// still has units logged this month.
+const visibleTypes = computed(() => {
+  const r = report.value
+  if (!r) return []
+  return r.work_types.filter(
+    (w) => w.active === undefined || w.active || (r.totals.units[w.id] ?? 0) > 0,
+  )
+})
 
 async function load() {
   error.value = ''
@@ -48,13 +58,11 @@ const money = (n: number) =>
           <span class="text-sm tracking-widest">Hours</span>
         </div>
         <div class="grid flex-1 grid-cols-2 gap-4 md:grid-cols-4">
-          <div class="panel">
-            <p class="field-label">Classifications</p>
-            <p class="mono text-3xl font-semibold">{{ report.totals.classifications }}</p>
-          </div>
-          <div class="panel">
-            <p class="field-label">QAP</p>
-            <p class="mono text-3xl font-semibold">{{ report.totals.qap }}</p>
+          <div v-for="wt in visibleTypes" :key="wt.id" class="panel">
+            <p class="field-label">{{ wt.name }}</p>
+            <p class="mono text-3xl font-semibold">
+              {{ report.totals.units[wt.id] ?? 0 }}
+            </p>
           </div>
           <template v-if="report.scope === 'full'">
             <div class="panel">
@@ -94,8 +102,9 @@ const money = (n: number) =>
                 <th>Employee</th>
                 <th class="num">Days</th>
                 <th class="num">Hours</th>
-                <th class="num">Classif.</th>
-                <th class="num">QAP</th>
+                <th v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ wt.name }}
+                </th>
                 <template v-if="report.scope === 'full'">
                   <th class="num">Points</th>
                   <th class="num">Base</th>
@@ -110,8 +119,9 @@ const money = (n: number) =>
                 <td>{{ p.name }}</td>
                 <td class="num">{{ p.days_worked }}</td>
                 <td class="num">{{ p.hours.toFixed(2) }}</td>
-                <td class="num">{{ p.classifications }}</td>
-                <td class="num">{{ p.qap }}</td>
+                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ p.units[wt.id] ?? 0 }}
+                </td>
                 <template v-if="report.scope === 'full'">
                   <td class="num">{{ p.points }}</td>
                   <td class="num">{{ money(p.remuneration ?? 0) }}</td>
@@ -121,7 +131,10 @@ const money = (n: number) =>
                 </template>
               </tr>
               <tr v-if="report.per_person.length === 0">
-                <td :colspan="report.scope === 'full' ? 10 : 5" class="py-6 text-center text-muted">
+                <td
+                  :colspan="3 + visibleTypes.length + (report.scope === 'full' ? 5 : 0)"
+                  class="py-6 text-center text-muted"
+                >
                   No activity this month.
                 </td>
               </tr>
@@ -131,8 +144,12 @@ const money = (n: number) =>
       </div>
 
       <div class="panel mb-6">
-        <h3 class="display mb-1 text-xl">Classifications &amp; QAP by day</h3>
-        <DailyBarChart :month="month" :daily="report.daily_totals" />
+        <h3 class="display mb-1 text-xl">Work by day</h3>
+        <DailyBarChart
+          :month="month"
+          :daily="report.daily_totals"
+          :work-types="visibleTypes"
+        />
       </div>
 
       <div class="panel">
@@ -144,8 +161,9 @@ const money = (n: number) =>
                 <th>Date</th>
                 <th>Employee</th>
                 <th class="num">Hours</th>
-                <th class="num">Classif.</th>
-                <th class="num">QAP</th>
+                <th v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ wt.name }}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -153,11 +171,12 @@ const money = (n: number) =>
                 <td class="mono whitespace-nowrap">{{ row.date }}</td>
                 <td>{{ row.employee_name }}</td>
                 <td class="num">{{ row.hours.toFixed(2) }}</td>
-                <td class="num">{{ row.classifications }}</td>
-                <td class="num">{{ row.qap }}</td>
+                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ row.units[wt.id] ?? 0 }}
+                </td>
               </tr>
               <tr v-if="report.daily_detail.length === 0">
-                <td colspan="5" class="py-6 text-center text-muted">
+                <td :colspan="3 + visibleTypes.length" class="py-6 text-center text-muted">
                   No entries this month.
                 </td>
               </tr>

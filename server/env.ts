@@ -16,6 +16,21 @@ export interface Employee {
   created_at: string
 }
 
+export interface WorkTypeRow {
+  id: string
+  name: string
+  points_per_unit: number
+  active: number
+  position: number
+  created_at: string
+}
+
+export interface EntryItemRow {
+  entry_id: string
+  work_type_id: string
+  units: number
+}
+
 export interface AdjustmentRow {
   id: string
   employee_id: string

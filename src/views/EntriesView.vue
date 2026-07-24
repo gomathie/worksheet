@@ -3,11 +3,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { computeHours } from '../../shared/logic'
 import { useAuthStore } from '../stores/auth'
-import type { Employee, Entry } from '../types'
+import type { Employee, Entry, WorkTypeInfo } from '../types'
 
 const auth = useAuthStore()
 
 const employees = ref<Employee[]>([])
+const workTypes = ref<WorkTypeInfo[]>([])
 const entries = ref<Entry[]>([])
 const month = ref('')
 const filterEmployee = ref('')
@@ -20,8 +21,7 @@ const form = ref({
   work_date: '',
   time_start: '09:00',
   time_end: '17:00',
-  classifications: 0,
-  qap: 0,
+  units: {} as Record<string, number>,
   notes: '',
 })
 
@@ -34,6 +34,20 @@ const hoursPreview = computed(() => {
 })
 
 const activeEmployees = computed(() => employees.value.filter((e) => e.active))
+const activeTypes = computed(() =>
+  workTypes.value.filter((w) => w.active === undefined || w.active),
+)
+
+// Only the work types assigned to the employee being logged for.
+const formTypes = computed(() => {
+  if (!auth.isAdmin) {
+    const mine = new Set(auth.user!.work_types.map((w) => w.id))
+    return activeTypes.value.filter((w) => mine.has(w.id))
+  }
+  const target = employees.value.find((e) => e.id === form.value.employee_id)
+  const assigned = new Set(target?.work_type_ids ?? [])
+  return activeTypes.value.filter((w) => assigned.has(w.id))
+})
 
 async function loadEntries() {
   const params = new URLSearchParams({ month: month.value })
@@ -48,7 +62,10 @@ onMounted(async () => {
   month.value = today.slice(0, 7)
   form.value.work_date = today
   form.value.employee_id = auth.user!.id
-  employees.value = await api<Employee[]>('/api/employees')
+  ;[employees.value, workTypes.value] = await Promise.all([
+    api<Employee[]>('/api/employees'),
+    api<WorkTypeInfo[]>('/api/work-types'),
+  ])
   await loadEntries()
 })
 
@@ -61,8 +78,7 @@ function resetForm() {
     work_date: auth.user!.today,
     time_start: '09:00',
     time_end: '17:00',
-    classifications: 0,
-    qap: 0,
+    units: {},
     notes: '',
   }
 }
@@ -74,8 +90,7 @@ function startEdit(entry: Entry) {
     work_date: entry.work_date,
     time_start: entry.time_start,
     time_end: entry.time_end,
-    classifications: entry.classifications,
-    qap: entry.qap,
+    units: { ...entry.units },
     notes: entry.notes ?? '',
   }
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -85,7 +100,20 @@ async function submit() {
   error.value = ''
   busy.value = true
   try {
-    const payload = { ...form.value, notes: form.value.notes || null }
+    // Only send units for types the target employee is assigned.
+    const allowed = new Set(formTypes.value.map((w) => w.id))
+    const items: Record<string, number> = {}
+    for (const [id, n] of Object.entries(form.value.units)) {
+      if (allowed.has(id) && n > 0) items[id] = n
+    }
+    const payload = {
+      employee_id: form.value.employee_id,
+      work_date: form.value.work_date,
+      time_start: form.value.time_start,
+      time_end: form.value.time_end,
+      items,
+      notes: form.value.notes || null,
+    }
     if (editingId.value) {
       await api(`/api/entries/${editingId.value}`, { method: 'PATCH', json: payload })
     } else {
@@ -106,6 +134,14 @@ async function remove(entry: Entry) {
   if (editingId.value === entry.id) resetForm()
   await loadEntries()
 }
+
+const showActions = computed(
+  () => auth.rights.edit_entries || auth.rights.delete_entries,
+)
+const tableColspan = computed(
+  () =>
+    (auth.isAdmin ? 6 : 5) + activeTypes.value.length + (showActions.value ? 1 : 0),
+)
 </script>
 
 <template>
@@ -168,31 +204,25 @@ async function remove(entry: Entry) {
             tabindex="-1"
           />
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="field-label" for="cls">Classif.</label>
+        <div class="col-span-2 grid grid-cols-2 gap-4 md:col-span-4 md:grid-cols-4">
+          <div v-for="wt in formTypes" :key="wt.id">
+            <label class="field-label" :for="`wt-${wt.id}`">{{ wt.name }}</label>
             <input
-              id="cls"
-              v-model.number="form.classifications"
+              :id="`wt-${wt.id}`"
+              v-model.number="form.units[wt.id]"
               type="number"
               min="0"
               step="1"
-              required
               class="field-input mono"
+              placeholder="0"
             />
           </div>
-          <div>
-            <label class="field-label" for="qap">QAP</label>
-            <input
-              id="qap"
-              v-model.number="form.qap"
-              type="number"
-              min="0"
-              step="1"
-              required
-              class="field-input mono"
-            />
-          </div>
+          <p
+            v-if="formTypes.length === 0"
+            class="col-span-full self-center text-sm text-muted"
+          >
+            No countable work types assigned — only hours and notes are recorded.
+          </p>
         </div>
         <div class="col-span-2 md:col-span-4">
           <label class="field-label" for="notes">Notes (optional)</label>
@@ -250,10 +280,9 @@ async function remove(entry: Entry) {
               <th class="num">Start</th>
               <th class="num">End</th>
               <th class="num">Hours</th>
-              <th class="num">Classif.</th>
-              <th class="num">QAP</th>
+              <th v-for="wt in activeTypes" :key="wt.id" class="num">{{ wt.name }}</th>
               <th>Notes</th>
-              <th v-if="auth.rights.edit_entries || auth.rights.delete_entries"></th>
+              <th v-if="showActions"></th>
             </tr>
           </thead>
           <tbody>
@@ -263,15 +292,13 @@ async function remove(entry: Entry) {
               <td class="num">{{ e.time_start }}</td>
               <td class="num">{{ e.time_end }}</td>
               <td class="num">{{ e.hours.toFixed(2) }}</td>
-              <td class="num">{{ e.classifications }}</td>
-              <td class="num">{{ e.qap }}</td>
+              <td v-for="wt in activeTypes" :key="wt.id" class="num">
+                {{ e.units[wt.id] ?? 0 }}
+              </td>
               <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
                 {{ e.notes }}
               </td>
-              <td
-                v-if="auth.rights.edit_entries || auth.rights.delete_entries"
-                class="whitespace-nowrap"
-              >
+              <td v-if="showActions" class="whitespace-nowrap">
                 <button
                   v-if="auth.rights.edit_entries"
                   class="btn btn-sm mr-1"
@@ -289,10 +316,7 @@ async function remove(entry: Entry) {
               </td>
             </tr>
             <tr v-if="entries.length === 0">
-              <td
-                :colspan="(auth.isAdmin ? 8 : 7) + (auth.rights.edit_entries || auth.rights.delete_entries ? 1 : 0)"
-                class="py-6 text-center text-muted"
-              >
+              <td :colspan="tableColspan" class="py-6 text-center text-muted">
                 No entries for this month yet.
               </td>
             </tr>

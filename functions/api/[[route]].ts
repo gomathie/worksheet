@@ -1,4 +1,12 @@
-import type { AdjustmentRow, Employee, EntryRow, Env, PaymentRow } from '../../server/env'
+import type {
+  AdjustmentRow,
+  Employee,
+  EntryItemRow,
+  EntryRow,
+  Env,
+  PaymentRow,
+  WorkTypeRow,
+} from '../../server/env'
 import { ApiError, json, readJson, todayInTz } from '../../server/http'
 import {
   SESSION_COOKIE,
@@ -104,10 +112,124 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) })
 }
 
+// ---------------------------------------------------------- work type routes
+
+async function listWorkTypes(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM work_types ORDER BY position, created_at',
+  ).all<WorkTypeRow>()
+  if (user.role === 'admin') return json(results)
+  // Rates are money-sensitive; non-admins only need names for forms/labels.
+  return json(results.filter((w) => w.active).map((w) => ({ id: w.id, name: w.name })))
+}
+
+function assertPointsPerUnit(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) {
+    throw new ApiError(400, 'points_per_unit must be a number ≥ 0')
+  }
+  return n
+}
+
+async function createWorkType(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{ name?: string; points_per_unit?: number }>(request)
+  const name = (body.name ?? '').trim().slice(0, 60)
+  if (!name) throw new ApiError(400, 'name is required')
+  const rate = assertPointsPerUnit(body.points_per_unit ?? 1)
+
+  const id = crypto.randomUUID()
+  await env.DB.prepare(
+    'INSERT INTO work_types (id, name, points_per_unit, position) VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM work_types))',
+  )
+    .bind(id, name, rate)
+    .run()
+  await audit(env, admin.id, 'create_work_type', id, { name, points_per_unit: rate })
+  const created = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')
+    .bind(id)
+    .first<WorkTypeRow>()
+  return json(created, 201)
+}
+
+async function patchWorkType(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const existing = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')
+    .bind(id)
+    .first<WorkTypeRow>()
+  if (!existing) throw new ApiError(404, 'Work type not found')
+
+  const body = await readJson<{
+    name?: string
+    points_per_unit?: number
+    active?: number | boolean
+  }>(request)
+  const name =
+    body.name !== undefined ? String(body.name).trim().slice(0, 60) : existing.name
+  if (!name) throw new ApiError(400, 'name cannot be empty')
+  const rate =
+    body.points_per_unit !== undefined
+      ? assertPointsPerUnit(body.points_per_unit)
+      : existing.points_per_unit
+  const active = body.active !== undefined ? (body.active ? 1 : 0) : existing.active
+
+  await env.DB.prepare(
+    'UPDATE work_types SET name = ?, points_per_unit = ?, active = ? WHERE id = ?',
+  )
+    .bind(name, rate, active, id)
+    .run()
+  await audit(env, admin.id, 'update_work_type', id, { name, points_per_unit: rate, active })
+  const updated = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')
+    .bind(id)
+    .first<WorkTypeRow>()
+  return json(updated)
+}
+
+// --------------------------------------------- per-employee work assignments
+
+async function assignedTypeIds(env: Env, employeeId: string): Promise<string[]> {
+  const { results } = await env.DB.prepare(
+    'SELECT work_type_id FROM employee_work_types WHERE employee_id = ?',
+  )
+    .bind(employeeId)
+    .all<{ work_type_id: string }>()
+  return results.map((r) => r.work_type_id)
+}
+
+async function setAssignedTypes(
+  env: Env,
+  employeeId: string,
+  ids: string[],
+): Promise<void> {
+  const { results } = await env.DB.prepare(
+    'SELECT id FROM work_types',
+  ).all<{ id: string }>()
+  const known = new Set(results.map((r) => r.id))
+  const unique = [...new Set(ids)]
+  for (const id of unique) {
+    if (!known.has(id)) throw new ApiError(400, `Unknown work type: ${id}`)
+  }
+  const statements = [
+    env.DB.prepare('DELETE FROM employee_work_types WHERE employee_id = ?').bind(
+      employeeId,
+    ),
+    ...unique.map((id) =>
+      env.DB.prepare(
+        'INSERT INTO employee_work_types (employee_id, work_type_id) VALUES (?, ?)',
+      ).bind(employeeId, id),
+    ),
+  ]
+  await env.DB.batch(statements)
+}
+
 // ----------------------------------------------------------- employee routes
 
 // Never expose password_hash; return rights parsed into an object.
-function publicEmployee(e: Employee) {
+function publicEmployee(e: Employee, workTypeIds: string[] = []) {
   return {
     id: e.id,
     name: e.name,
@@ -115,6 +237,7 @@ function publicEmployee(e: Employee) {
     username: e.username,
     role: e.role,
     rights: parseRights(e),
+    work_type_ids: workTypeIds,
     has_password: e.password_hash ? 1 : 0,
     active: e.active,
     created_at: e.created_at,
@@ -160,19 +283,30 @@ interface EmployeeBody {
   password?: string
   role?: string
   rights?: Partial<Rights>
+  work_type_ids?: string[]
   active?: number | boolean
 }
 
 async function listEmployees(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   if (user.role === 'admin') {
-    const { results } = await env.DB.prepare(
-      'SELECT * FROM employees ORDER BY name',
-    ).all<Employee>()
-    return json(results.map(publicEmployee))
+    const [{ results }, assignments] = await Promise.all([
+      env.DB.prepare('SELECT * FROM employees ORDER BY name').all<Employee>(),
+      env.DB.prepare('SELECT * FROM employee_work_types').all<{
+        employee_id: string
+        work_type_id: string
+      }>(),
+    ])
+    const byEmployee = new Map<string, string[]>()
+    for (const a of assignments.results) {
+      const list = byEmployee.get(a.employee_id) ?? []
+      list.push(a.work_type_id)
+      byEmployee.set(a.employee_id, list)
+    }
+    return json(results.map((e) => publicEmployee(e, byEmployee.get(e.id) ?? [])))
   }
   // Employees only need names for display of their own data.
-  return json([publicEmployee(user)])
+  return json([publicEmployee(user, await assignedTypeIds(env, user.id))])
 }
 
 async function createEmployee(request: Request, env: Env): Promise<Response> {
@@ -213,11 +347,31 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     }
     throw e
   }
-  await audit(env, admin.id, 'create_employee', id, { name, email, username, role, rights })
+  // Default: new employees may log every active work type unless the admin
+  // narrows it down.
+  let typeIds: string[]
+  if (body.work_type_ids !== undefined) {
+    typeIds = body.work_type_ids
+  } else {
+    const { results } = await env.DB.prepare(
+      'SELECT id FROM work_types WHERE active = 1',
+    ).all<{ id: string }>()
+    typeIds = results.map((r) => r.id)
+  }
+  await setAssignedTypes(env, id, typeIds)
+
+  await audit(env, admin.id, 'create_employee', id, {
+    name,
+    email,
+    username,
+    role,
+    rights,
+    work_type_ids: typeIds,
+  })
   const created = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
     .bind(id)
     .first<Employee>()
-  return json(publicEmployee(created!), 201)
+  return json(publicEmployee(created!, typeIds), 201)
 }
 
 async function patchEmployee(
@@ -275,6 +429,10 @@ async function patchEmployee(
     }
     throw e
   }
+  if (body.work_type_ids !== undefined) {
+    await setAssignedTypes(env, id, body.work_type_ids)
+  }
+
   await audit(env, admin.id, 'update_employee', id, {
     name,
     email,
@@ -282,12 +440,13 @@ async function patchEmployee(
     role,
     rights,
     active,
+    work_type_ids: body.work_type_ids,
     password_changed: passwordHash !== existing.password_hash,
   })
   const updated = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
     .bind(id)
     .first<Employee>()
-  return json(publicEmployee(updated!))
+  return json(publicEmployee(updated!, await assignedTypeIds(env, id)))
 }
 
 async function deleteEmployee(
@@ -310,6 +469,30 @@ async function deleteEmployee(
 
 // -------------------------------------------------------------- entry routes
 
+async function unitsByEntryId(
+  env: Env,
+  month: string,
+  employeeId?: string,
+): Promise<Map<string, Record<string, number>>> {
+  let sql =
+    'SELECT ei.entry_id, ei.work_type_id, ei.units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.work_date LIKE ?'
+  const binds: unknown[] = [`${month}-%`]
+  if (employeeId) {
+    sql += ' AND e.employee_id = ?'
+    binds.push(employeeId)
+  }
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds)
+    .all<EntryItemRow>()
+  const map = new Map<string, Record<string, number>>()
+  for (const it of results) {
+    const units = map.get(it.entry_id) ?? {}
+    units[it.work_type_id] = it.units
+    map.set(it.entry_id, units)
+  }
+  return map
+}
+
 async function listEntries(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const url = new URL(request.url)
@@ -319,19 +502,20 @@ async function listEntries(request: Request, env: Env): Promise<Response> {
   let sql =
     'SELECT e.*, emp.name AS employee_name FROM entries e JOIN employees emp ON emp.id = e.employee_id WHERE e.work_date LIKE ?'
   const binds: unknown[] = [`${month}-%`]
-  if (user.role !== 'admin') {
+  const scopeEmployee = user.role !== 'admin' ? user.id : employeeFilter || undefined
+  if (scopeEmployee) {
     sql += ' AND e.employee_id = ?'
-    binds.push(user.id)
-  } else if (employeeFilter) {
-    sql += ' AND e.employee_id = ?'
-    binds.push(employeeFilter)
+    binds.push(scopeEmployee)
   }
   sql += ' ORDER BY e.work_date DESC, e.time_start DESC'
 
-  const { results } = await env.DB.prepare(sql)
-    .bind(...binds)
-    .all<EntryRow & { employee_name: string }>()
-  return json(results)
+  const [{ results }, units] = await Promise.all([
+    env.DB.prepare(sql)
+      .bind(...binds)
+      .all<EntryRow & { employee_name: string }>(),
+    unitsByEntryId(env, month, scopeEmployee),
+  ])
+  return json(results.map((e) => ({ ...e, units: units.get(e.id) ?? {} })))
 }
 
 interface EntryBody {
@@ -339,9 +523,47 @@ interface EntryBody {
   work_date?: string
   time_start?: string
   time_end?: string
-  classifications?: number
-  qap?: number
+  items?: Record<string, number> // work_type_id -> units
   notes?: string | null
+}
+
+/** Validate logged units: integers ≥ 0, only for types assigned to the employee. */
+async function normalizeItems(
+  env: Env,
+  employeeId: string,
+  raw: Record<string, number> | undefined,
+): Promise<Record<string, number>> {
+  const items: Record<string, number> = {}
+  if (!raw) return items
+  const assigned = new Set(await assignedTypeIds(env, employeeId))
+  for (const [typeId, value] of Object.entries(raw)) {
+    const units = assertCount(value, 'units')
+    if (units === 0) continue
+    if (!assigned.has(typeId)) {
+      throw new ApiError(
+        400,
+        'This employee is not assigned that type of work',
+      )
+    }
+    items[typeId] = units
+  }
+  return items
+}
+
+async function writeEntryItems(
+  env: Env,
+  entryId: string,
+  items: Record<string, number>,
+): Promise<void> {
+  const statements = [
+    env.DB.prepare('DELETE FROM entry_items WHERE entry_id = ?').bind(entryId),
+    ...Object.entries(items).map(([typeId, units]) =>
+      env.DB.prepare(
+        'INSERT INTO entry_items (entry_id, work_type_id, units) VALUES (?, ?, ?)',
+      ).bind(entryId, typeId, units),
+    ),
+  ]
+  await env.DB.batch(statements)
 }
 
 async function createEntry(request: Request, env: Env): Promise<Response> {
@@ -362,14 +584,13 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
   }
 
   validateEntryInput(body)
-  const classifications = assertCount(body.classifications, 'classifications')
-  const qap = assertCount(body.qap, 'qap')
+  const items = await normalizeItems(env, employeeId, body.items)
   const hours = computeHours(body.time_start!, body.time_end!)
 
   const id = crypto.randomUUID()
   await env.DB.prepare(
-    `INSERT INTO entries (id, employee_id, work_date, time_start, time_end, hours, classifications, qap, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO entries (id, employee_id, work_date, time_start, time_end, hours, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -378,16 +599,15 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
       body.time_start,
       body.time_end,
       hours,
-      classifications,
-      qap,
       body.notes?.trim() || null,
     )
     .run()
+  await writeEntryItems(env, id, items)
   await audit(env, user.id, 'create_entry', id, { employee_id: employeeId })
   const created = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
     .first<EntryRow>()
-  return json(created, 201)
+  return json({ ...created, units: items }, 201)
 }
 
 async function loadOwnedEntry(
@@ -419,11 +639,6 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
     work_date: body.work_date ?? entry.work_date,
     time_start: body.time_start ?? entry.time_start,
     time_end: body.time_end ?? entry.time_end,
-    classifications:
-      body.classifications !== undefined
-        ? assertCount(body.classifications, 'classifications')
-        : entry.classifications,
-    qap: body.qap !== undefined ? assertCount(body.qap, 'qap') : entry.qap,
     notes: body.notes !== undefined ? body.notes?.trim() || null : entry.notes,
   }
   validateEntryInput(next)
@@ -431,7 +646,7 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
 
   await env.DB.prepare(
     `UPDATE entries SET employee_id = ?, work_date = ?, time_start = ?, time_end = ?,
-       hours = ?, classifications = ?, qap = ?, notes = ?, updated_at = datetime('now')
+       hours = ?, notes = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -440,17 +655,26 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
       next.time_start,
       next.time_end,
       hours,
-      next.classifications,
-      next.qap,
       next.notes,
       id,
     )
     .run()
+  if (body.items !== undefined) {
+    const items = await normalizeItems(env, next.employee_id, body.items)
+    await writeEntryItems(env, id, items)
+  }
   await audit(env, user.id, 'update_entry', id)
   const updated = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
     .first<EntryRow>()
-  return json(updated)
+  const { results: itemRows } = await env.DB.prepare(
+    'SELECT * FROM entry_items WHERE entry_id = ?',
+  )
+    .bind(id)
+    .all<EntryItemRow>()
+  const units: Record<string, number> = {}
+  for (const it of itemRows) units[it.work_type_id] = it.units
+  return json({ ...updated, units })
 }
 
 async function deleteEntry(request: Request, env: Env, id: string): Promise<Response> {
@@ -674,13 +898,23 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
 
-  const [settings, entriesRes, adjRes, payment] = await Promise.all([
+  const [settings, hoursRow, unitRows, wtRes, adjRes, payment] = await Promise.all([
     loadSettings(env),
     env.DB.prepare(
-      'SELECT SUM(classifications) AS classifications, SUM(qap) AS qap, SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ?',
+      'SELECT SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ?',
     )
       .bind(user.id, `${month}-%`)
-      .first<{ classifications: number | null; qap: number | null; hours: number | null }>(),
+      .first<{ hours: number | null }>(),
+    env.DB.prepare(
+      'SELECT ei.work_type_id, SUM(ei.units) AS units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date LIKE ? GROUP BY ei.work_type_id',
+    )
+      .bind(user.id, `${month}-%`)
+      .all<{ work_type_id: string; units: number }>(),
+    env.DB.prepare('SELECT id, name, points_per_unit FROM work_types').all<{
+      id: string
+      name: string
+      points_per_unit: number
+    }>(),
     env.DB.prepare(
       'SELECT * FROM adjustments WHERE employee_id = ? AND month = ? ORDER BY created_at DESC',
     )
@@ -691,9 +925,9 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
       .first<PaymentRow>(),
   ])
 
-  const classifications = entriesRes?.classifications ?? 0
-  const qap = entriesRes?.qap ?? 0
-  const points = computePoints(classifications, qap, settings)
+  const units: Record<string, number> = {}
+  for (const r of unitRows.results) units[r.work_type_id] = r.units
+  const points = computePoints(units, wtRes.results)
   const base = computeRemuneration(points, settings)
   const bonus = adjRes.results
     .filter((a) => a.type === 'bonus' && a.status === 'approved')
@@ -705,9 +939,9 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
   return json({
     month,
     currency: settings.currency,
-    hours: entriesRes?.hours ?? 0,
-    classifications,
-    qap,
+    hours: hoursRow?.hours ?? 0,
+    units,
+    work_types: wtRes.results.map((w) => ({ id: w.id, name: w.name })),
     points,
     base,
     bonus: Math.round(bonus * 100) / 100,
@@ -732,8 +966,6 @@ async function getSettings(request: Request, env: Env): Promise<Response> {
 async function putSettings(request: Request, env: Env): Promise<Response> {
   const admin = await requireAdmin(request, env)
   const body = await readJson<{
-    points_per_classification?: number
-    points_per_qap?: number
     point_value?: number
     currency?: string
   }>(request)
@@ -743,8 +975,6 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     return n
   }
   const next = {
-    points_per_classification: num(body.points_per_classification, 'points_per_classification'),
-    points_per_qap: num(body.points_per_qap, 'points_per_qap'),
     point_value: num(body.point_value, 'point_value'),
     currency: String(body.currency ?? '$').slice(0, 4) || '$',
   }
@@ -763,23 +993,26 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
 
-  const [settings, entriesRes, employeesRes, adjRes, payRes] = await Promise.all([
-    loadSettings(env),
-    env.DB.prepare(
-      'SELECT employee_id, work_date, hours, classifications, qap, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? ORDER BY work_date, time_start',
-    )
-      .bind(`${month}-%`)
-      .all<EntryRow>(),
-    env.DB.prepare('SELECT id, name FROM employees').all<{ id: string; name: string }>(),
-    env.DB.prepare(
-      "SELECT employee_id, type, amount FROM adjustments WHERE month = ? AND status = 'approved'",
-    )
-      .bind(month)
-      .all<{ employee_id: string; type: string; amount: number }>(),
-    env.DB.prepare('SELECT * FROM payments WHERE month = ?')
-      .bind(month)
-      .all<PaymentRow>(),
-  ])
+  const [settings, entriesRes, employeesRes, adjRes, payRes, wtRes, entryUnits] =
+    await Promise.all([
+      loadSettings(env),
+      env.DB.prepare(
+        'SELECT employee_id, work_date, hours, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? ORDER BY work_date, time_start',
+      )
+        .bind(`${month}-%`)
+        .all<EntryRow>(),
+      env.DB.prepare('SELECT id, name FROM employees').all<{ id: string; name: string }>(),
+      env.DB.prepare(
+        "SELECT employee_id, type, amount FROM adjustments WHERE month = ? AND status = 'approved'",
+      )
+        .bind(month)
+        .all<{ employee_id: string; type: string; amount: number }>(),
+      env.DB.prepare('SELECT * FROM payments WHERE month = ?')
+        .bind(month)
+        .all<PaymentRow>(),
+      env.DB.prepare('SELECT * FROM work_types ORDER BY position, created_at').all<WorkTypeRow>(),
+      unitsByEntryId(env, month),
+    ])
 
   const round2 = (n: number) => Math.round(n * 100) / 100
   const bonusBy = new Map<string, number>()
@@ -790,10 +1023,22 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   }
   const paymentBy = new Map(payRes.results.map((p) => [p.employee_id, p]))
 
+  const workTypes = wtRes.results.map((w) => ({
+    id: w.id,
+    name: w.name,
+    points_per_unit: w.points_per_unit,
+  }))
+  const entryLikes = entriesRes.results.map((e) => ({
+    employee_id: e.employee_id,
+    work_date: e.work_date,
+    hours: e.hours,
+    units: entryUnits.get(e.id) ?? {},
+  }))
   const report = aggregateMonthly(
     month,
-    entriesRes.results,
+    entryLikes,
     employeesRes.results,
+    workTypes,
     settings,
   )
   const names = new Map(employeesRes.results.map((e) => [e.id, e.name]))
@@ -804,8 +1049,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     time_start: e.time_start,
     time_end: e.time_end,
     hours: e.hours,
-    classifications: e.classifications,
-    qap: e.qap,
+    units: entryUnits.get(e.id) ?? {},
   }))
 
   if (user.role === 'admin') {
@@ -827,6 +1071,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     return json({
       ...report,
       scope: 'full',
+      work_types: wtRes.results,
       per_person,
       totals: {
         ...report.totals,
@@ -848,10 +1093,10 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   return json({
     month: report.month,
     scope: 'limited',
+    work_types: wtRes.results.map((w) => ({ id: w.id, name: w.name })),
     totals: {
       hours: report.totals.hours,
-      classifications: report.totals.classifications,
-      qap: report.totals.qap,
+      units: report.totals.units,
       days_worked: report.totals.days_worked,
     },
     per_person: report.per_person.map(
@@ -889,6 +1134,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/me' && method === 'GET') {
     const user = await currentUser(request, env)
     if (!user) return json(null)
+    const { results: myTypes } = await env.DB.prepare(
+      'SELECT wt.id, wt.name FROM employee_work_types ewt JOIN work_types wt ON wt.id = ewt.work_type_id WHERE ewt.employee_id = ? AND wt.active = 1 ORDER BY wt.position',
+    )
+      .bind(user.id)
+      .all<{ id: string; name: string }>()
     return json({
       id: user.id,
       name: user.name,
@@ -896,9 +1146,15 @@ async function route(request: Request, env: Env): Promise<Response> {
       username: user.username,
       role: user.role,
       rights: parseRights(user),
+      work_types: myTypes,
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
     })
   }
+
+  if (path === '/api/work-types' && method === 'GET') return listWorkTypes(request, env)
+  if (path === '/api/work-types' && method === 'POST') return createWorkType(request, env)
+  const wtMatch = /^\/api\/work-types\/([\w-]+)$/.exec(path)
+  if (wtMatch && method === 'PATCH') return patchWorkType(request, env, wtMatch[1])
 
   if (path === '/api/employees' && method === 'GET') return listEmployees(request, env)
   if (path === '/api/employees' && method === 'POST') return createEmployee(request, env)

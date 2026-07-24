@@ -10,6 +10,15 @@ export interface Rights {
   view_reports: boolean
 }
 
+export interface WorkTypeInfo {
+  id: string
+  name: string
+  // Admin-only fields; absent for regular employees.
+  points_per_unit?: number
+  active?: number
+  position?: number
+}
+
 export interface Me {
   id: string
   name: string
@@ -17,6 +26,7 @@ export interface Me {
   username: string | null
   role: 'admin' | 'employee'
   rights: Rights
+  work_types: WorkTypeInfo[]
   today: string
 }
 
@@ -27,6 +37,7 @@ export interface Employee {
   username: string | null
   role: 'admin' | 'employee'
   rights: Rights
+  work_type_ids: string[]
   has_password?: number
   active: number
   created_at?: string
@@ -40,8 +51,7 @@ export interface Entry {
   time_start: string
   time_end: string
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number>
   notes: string | null
 }
 
@@ -52,8 +62,7 @@ export interface DailyDetailRow {
   time_start: string
   time_end: string
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number>
 }
 
 // The API strips money fields for non-admin viewers ("limited" scope):
@@ -64,8 +73,7 @@ export interface ReportPerson {
   name: string
   days_worked: number
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number>
   points?: number
   remuneration?: number
   bonus?: number
@@ -78,10 +86,10 @@ export interface ReportPerson {
 export interface ReportPayload {
   month: string
   scope: 'full' | 'limited'
+  work_types: WorkTypeInfo[]
   totals: {
     hours: number
-    classifications: number
-    qap: number
+    units: Record<string, number>
     days_worked: number
     points?: number
     remuneration?: number
@@ -120,8 +128,8 @@ export interface MyRemuneration {
   month: string
   currency: string
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number>
+  work_types: WorkTypeInfo[]
   points: number
   base: number
   bonus: number

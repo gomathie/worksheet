@@ -42,17 +42,21 @@ const money = (n: number) =>
 
 const printPage = () => window.print()
 
+const visibleTypes = computed(() => {
+  const r = report.value
+  if (!r) return []
+  return r.work_types.filter(
+    (w) => w.active === undefined || w.active || (r.totals.units[w.id] ?? 0) > 0,
+  )
+})
+
 const rateNote = computed(() => {
-  const s = report.value?.settings
-  if (
-    !s ||
-    s.points_per_classification === undefined ||
-    s.points_per_qap === undefined ||
-    s.point_value === undefined
-  ) {
-    return ''
-  }
-  return `Rates applied: ${s.points_per_classification} point(s) per classification, ${s.points_per_qap} per QAP, ${s.currency}${s.point_value.toFixed(2)} per point.`
+  const r = report.value
+  if (!r || r.scope !== 'full' || r.settings.point_value === undefined) return ''
+  const parts = visibleTypes.value
+    .filter((w) => w.points_per_unit !== undefined)
+    .map((w) => `${w.name} ${w.points_per_unit} pt/unit`)
+  return `Rates applied: ${parts.join(', ')}; ${r.settings.currency}${r.settings.point_value.toFixed(2)} per point. Totals include bonuses and approved reimbursements.`
 })
 </script>
 
@@ -110,8 +114,9 @@ const rateNote = computed(() => {
                 <th>Employee</th>
                 <th class="num">Days worked</th>
                 <th class="num">Hours</th>
-                <th class="num">Classifications</th>
-                <th class="num">QAP</th>
+                <th v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ wt.name }}
+                </th>
                 <template v-if="report.scope === 'full'">
                   <th class="num">Points</th>
                   <th class="num">Base</th>
@@ -126,8 +131,9 @@ const rateNote = computed(() => {
                 <td>{{ p.name }}</td>
                 <td class="num">{{ p.days_worked }}</td>
                 <td class="num">{{ p.hours.toFixed(2) }}</td>
-                <td class="num">{{ p.classifications }}</td>
-                <td class="num">{{ p.qap }}</td>
+                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ p.units[wt.id] ?? 0 }}
+                </td>
                 <template v-if="report.scope === 'full'">
                   <td class="num">{{ p.points }}</td>
                   <td class="num">{{ money(p.remuneration ?? 0) }}</td>
@@ -140,8 +146,9 @@ const rateNote = computed(() => {
                 <td>Total</td>
                 <td class="num">{{ report.totals.days_worked }}</td>
                 <td class="num">{{ report.totals.hours.toFixed(2) }}</td>
-                <td class="num">{{ report.totals.classifications }}</td>
-                <td class="num">{{ report.totals.qap }}</td>
+                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ report.totals.units[wt.id] ?? 0 }}
+                </td>
                 <template v-if="report.scope === 'full'">
                   <td class="num">{{ report.totals.points }}</td>
                   <td class="num">{{ money(report.totals.remuneration ?? 0) }}</td>
@@ -166,8 +173,9 @@ const rateNote = computed(() => {
                 <th class="num">Start</th>
                 <th class="num">End</th>
                 <th class="num">Hours</th>
-                <th class="num">Classifications</th>
-                <th class="num">QAP</th>
+                <th v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ wt.name }}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -177,11 +185,12 @@ const rateNote = computed(() => {
                 <td class="num">{{ row.time_start }}</td>
                 <td class="num">{{ row.time_end }}</td>
                 <td class="num">{{ row.hours.toFixed(2) }}</td>
-                <td class="num">{{ row.classifications }}</td>
-                <td class="num">{{ row.qap }}</td>
+                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
+                  {{ row.units[wt.id] ?? 0 }}
+                </td>
               </tr>
               <tr v-if="report.daily_detail.length === 0">
-                <td colspan="7" class="py-6 text-center text-muted">
+                <td :colspan="5 + visibleTypes.length" class="py-6 text-center text-muted">
                   No entries this month.
                 </td>
               </tr>

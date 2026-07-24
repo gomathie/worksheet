@@ -1,73 +1,163 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
-import type { RateSettings } from '../types'
+import type { RateSettings, WorkTypeInfo } from '../types'
 
-const form = ref<RateSettings>({
-  points_per_classification: 1,
-  points_per_qap: 1,
-  point_value: 1,
-  currency: '$',
-})
+const form = ref<RateSettings>({ point_value: 1, currency: '$' })
+const workTypes = ref<WorkTypeInfo[]>([])
+const newType = ref({ name: '', points_per_unit: 1 })
 const error = ref('')
 const saved = ref(false)
 const busy = ref(false)
 
+async function loadTypes() {
+  workTypes.value = await api<WorkTypeInfo[]>('/api/work-types')
+}
+
 onMounted(async () => {
-  form.value = await api<RateSettings>('/api/settings')
+  ;[form.value] = await Promise.all([api<RateSettings>('/api/settings'), loadTypes()])
 })
 
-async function save() {
+async function run(fn: () => Promise<unknown>) {
   error.value = ''
-  saved.value = false
   busy.value = true
   try {
+    await fn()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    busy.value = false
+  }
+}
+
+function saveSettings() {
+  saved.value = false
+  return run(async () => {
     form.value = await api<RateSettings>('/api/settings', {
       method: 'PUT',
       json: form.value,
     })
     saved.value = true
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save settings'
-  } finally {
-    busy.value = false
-  }
+  })
+}
+
+function addType() {
+  return run(async () => {
+    await api('/api/work-types', { method: 'POST', json: newType.value })
+    newType.value = { name: '', points_per_unit: 1 }
+    await loadTypes()
+  })
+}
+
+function saveType(wt: WorkTypeInfo) {
+  return run(async () => {
+    await api(`/api/work-types/${wt.id}`, {
+      method: 'PATCH',
+      json: { name: wt.name, points_per_unit: wt.points_per_unit },
+    })
+    await loadTypes()
+  })
+}
+
+function toggleType(wt: WorkTypeInfo) {
+  return run(async () => {
+    await api(`/api/work-types/${wt.id}`, {
+      method: 'PATCH',
+      json: { active: wt.active ? 0 : 1 },
+    })
+    await loadTypes()
+  })
 }
 </script>
 
 <template>
-  <div class="max-w-xl">
+  <div class="max-w-3xl space-y-6">
     <div class="panel">
-      <h2 class="display mb-1 text-2xl">Rates &amp; currency</h2>
+      <h2 class="display mb-1 text-2xl">Work types &amp; points</h2>
       <p class="mb-5 text-sm text-muted">
-        These rates drive every points and remuneration figure on the dashboard and
-        reports.
+        Each work type is worth points per unit. Assign types to employees in the
+        Employees tab — employees can only log the types assigned to them.
+        Changing a rate recalculates every past and future figure.
       </p>
-      <form class="grid grid-cols-2 gap-4" @submit.prevent="save">
+
+      <div class="table-wrap mb-5">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="num">Points per unit</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="wt in workTypes" :key="wt.id" :class="{ 'opacity-50': !wt.active }">
+              <td>
+                <input v-model="wt.name" class="field-input !w-44" />
+              </td>
+              <td class="num">
+                <input
+                  v-model.number="wt.points_per_unit"
+                  type="number"
+                  min="0"
+                  step="any"
+                  class="field-input mono !w-24 text-right"
+                />
+              </td>
+              <td>{{ wt.active ? 'Active' : 'Inactive' }}</td>
+              <td class="whitespace-nowrap">
+                <button class="btn btn-sm mr-1" :disabled="busy" @click="saveType(wt)">
+                  Save
+                </button>
+                <button
+                  class="btn btn-sm"
+                  :class="wt.active ? 'btn-danger' : ''"
+                  :disabled="busy"
+                  @click="toggleType(wt)"
+                >
+                  {{ wt.active ? 'Deactivate' : 'Reactivate' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <form class="flex flex-wrap items-end gap-3" @submit.prevent="addType">
         <div>
-          <label class="field-label" for="ppc">Points per classification</label>
+          <label class="field-label" for="nt-name">New work type</label>
           <input
-            id="ppc"
-            v-model.number="form.points_per_classification"
+            id="nt-name"
+            v-model="newType.name"
+            required
+            maxlength="60"
+            class="field-input"
+            placeholder="e.g. Graphic design"
+          />
+        </div>
+        <div>
+          <label class="field-label" for="nt-rate">Points per unit</label>
+          <input
+            id="nt-rate"
+            v-model.number="newType.points_per_unit"
             type="number"
             min="0"
             step="any"
             required
-            class="field-input mono"
+            class="field-input mono !w-28"
           />
         </div>
-        <div>
-          <label class="field-label" for="ppq">Points per QAP</label>
-          <input
-            id="ppq"
-            v-model.number="form.points_per_qap"
-            type="number"
-            min="0"
-            step="any"
-            required
-            class="field-input mono"
-          />
-        </div>
+        <button class="btn btn-solid" :disabled="busy">Add work type</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Money &amp; currency</h2>
+      <p class="mb-5 text-sm text-muted">
+        Remuneration = points × value per point, plus bonuses and approved
+        reimbursements.
+      </p>
+      <form class="grid grid-cols-2 gap-4" @submit.prevent="saveSettings">
         <div>
           <label class="field-label" for="pv">Value per point</label>
           <input
@@ -97,9 +187,10 @@ async function save() {
           <span v-if="saved" class="ml-3 text-sm text-teal">Saved.</span>
         </div>
       </form>
-      <p v-if="error" class="mt-3 rounded-lg border border-red bg-red-soft p-3 text-sm text-red">
-        {{ error }}
-      </p>
     </div>
+
+    <p v-if="error" class="rounded-lg border border-red bg-red-soft p-3 text-sm text-red">
+      {{ error }}
+    </p>
   </div>
 </template>

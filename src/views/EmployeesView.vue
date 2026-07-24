@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
-import type { Employee } from '../types'
+import type { Employee, WorkTypeInfo } from '../types'
 
 const employees = ref<Employee[]>([])
+const workTypes = ref<WorkTypeInfo[]>([])
 const error = ref('')
 const busy = ref(false)
 const editingId = ref<string | null>(null)
+
+const activeTypes = computed(() =>
+  workTypes.value.filter((w) => w.active === undefined || w.active),
+)
 
 const blankRights = () => ({
   add_entries: true,
@@ -23,10 +28,14 @@ const form = ref({
   password: '',
   role: 'employee',
   rights: blankRights(),
+  work_type_ids: [] as string[],
 })
 
 async function load() {
-  employees.value = await api<Employee[]>('/api/employees')
+  ;[employees.value, workTypes.value] = await Promise.all([
+    api<Employee[]>('/api/employees'),
+    api<WorkTypeInfo[]>('/api/work-types'),
+  ])
 }
 onMounted(load)
 
@@ -39,6 +48,7 @@ function startEdit(e: Employee) {
     password: '',
     role: e.role,
     rights: { ...e.rights },
+    work_type_ids: [...e.work_type_ids],
   }
 }
 
@@ -51,6 +61,7 @@ function resetForm() {
     password: '',
     role: 'employee',
     rights: blankRights(),
+    work_type_ids: activeTypes.value.map((w) => w.id),
   }
 }
 
@@ -64,6 +75,7 @@ async function submit() {
       username: form.value.username || null,
       role: form.value.role,
       rights: form.value.rights,
+      work_type_ids: form.value.work_type_ids,
     }
     if (form.value.password) payload.password = form.value.password
     if (editingId.value) {
@@ -93,6 +105,13 @@ async function toggleActive(e: Employee) {
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to update'
   }
+}
+
+function workSummary(e: Employee): string {
+  const names = activeTypes.value
+    .filter((w) => e.work_type_ids.includes(w.id))
+    .map((w) => w.name)
+  return names.length ? names.join(', ') : 'Hours only'
 }
 
 function rightsSummary(e: Employee): string {
@@ -159,6 +178,24 @@ function rightsSummary(e: Employee): string {
           </div>
         </div>
 
+        <fieldset class="mt-4">
+          <legend class="field-label">Work they do (types they can log)</legend>
+          <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <label
+              v-for="wt in activeTypes"
+              :key="wt.id"
+              class="flex items-center gap-2"
+            >
+              <input v-model="form.work_type_ids" type="checkbox" :value="wt.id" />
+              {{ wt.name }}
+            </label>
+          </div>
+          <p class="mt-1 text-xs text-muted">
+            Untick everything for staff tracked by hours &amp; notes only (they earn
+            through bonuses/reimbursements). Manage the type list in Settings.
+          </p>
+        </fieldset>
+
         <fieldset class="mt-4" :disabled="form.role === 'admin'">
           <legend class="field-label">Rights</legend>
           <p v-if="form.role === 'admin'" class="mb-2 text-xs text-muted">
@@ -211,6 +248,7 @@ function rightsSummary(e: Employee): string {
               <th>Name</th>
               <th>Username</th>
               <th>Role</th>
+              <th>Work</th>
               <th>Rights</th>
               <th>Login</th>
               <th>Status</th>
@@ -231,6 +269,7 @@ function rightsSummary(e: Employee): string {
                   >{{ e.role }}</span
                 >
               </td>
+              <td class="text-xs">{{ workSummary(e) }}</td>
               <td class="text-xs">{{ rightsSummary(e) }}</td>
               <td class="text-xs">
                 {{ e.username && e.has_password ? 'Enabled' : 'No credentials' }}

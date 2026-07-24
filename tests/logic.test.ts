@@ -6,14 +6,15 @@ import {
   aggregateMonthly,
   parseTime,
   type RateSettings,
+  type WorkType,
 } from '../shared/logic'
 
-const rates: RateSettings = {
-  points_per_classification: 1,
-  points_per_qap: 1,
-  point_value: 1,
-  currency: '$',
-}
+const rates: RateSettings = { point_value: 1, currency: '$' }
+
+const workTypes: WorkType[] = [
+  { id: 'wt-classification', name: 'Classification', points_per_unit: 1 },
+  { id: 'wt-qap', name: 'QAP', points_per_unit: 1 },
+]
 
 describe('parseTime', () => {
   it('parses valid times', () => {
@@ -47,20 +48,27 @@ describe('computeHours', () => {
 })
 
 describe('points & remuneration', () => {
-  it('applies default 1/1/1 rates', () => {
-    expect(computePoints(3, 2, rates)).toBe(5)
+  it('applies 1-point-per-unit rates', () => {
+    expect(
+      computePoints({ 'wt-classification': 3, 'wt-qap': 2 }, workTypes),
+    ).toBe(5)
     expect(computeRemuneration(5, rates)).toBe(5)
   })
-  it('applies custom rates', () => {
-    const custom: RateSettings = {
-      points_per_classification: 2,
-      points_per_qap: 3,
-      point_value: 0.5,
-      currency: '₵',
-    }
-    const points = computePoints(4, 2, custom) // 8 + 6
-    expect(points).toBe(14)
-    expect(computeRemuneration(points, custom)).toBe(7)
+  it('applies custom per-type rates and point value', () => {
+    const custom: WorkType[] = [
+      { id: 'wt-classification', name: 'Classification', points_per_unit: 2 },
+      { id: 'wt-qap', name: 'QAP', points_per_unit: 3 },
+      { id: 'wt-design', name: 'Graphic design', points_per_unit: 5 },
+    ]
+    const points = computePoints(
+      { 'wt-classification': 4, 'wt-qap': 2, 'wt-design': 1 },
+      custom,
+    ) // 8 + 6 + 5
+    expect(points).toBe(19)
+    expect(computeRemuneration(points, { point_value: 0.5, currency: '₵' })).toBe(9.5)
+  })
+  it('ignores units for unknown work types', () => {
+    expect(computePoints({ ghost: 10 }, workTypes)).toBe(0)
   })
 })
 
@@ -70,19 +78,33 @@ describe('aggregateMonthly', () => {
     { id: 'b', name: 'Kojo' },
   ]
   const entries = [
-    { employee_id: 'a', work_date: '2026-07-01', hours: 8, classifications: 3, qap: 1 },
-    { employee_id: 'a', work_date: '2026-07-01', hours: 2, classifications: 1, qap: 0 },
-    { employee_id: 'a', work_date: '2026-07-02', hours: 7.5, classifications: 0, qap: 2 },
-    { employee_id: 'b', work_date: '2026-07-02', hours: 6, classifications: 5, qap: 0 },
+    {
+      employee_id: 'a',
+      work_date: '2026-07-01',
+      hours: 8,
+      units: { 'wt-classification': 3, 'wt-qap': 1 },
+    },
+    {
+      employee_id: 'a',
+      work_date: '2026-07-01',
+      hours: 2,
+      units: { 'wt-classification': 1 },
+    },
+    { employee_id: 'a', work_date: '2026-07-02', hours: 7.5, units: { 'wt-qap': 2 } },
+    {
+      employee_id: 'b',
+      work_date: '2026-07-02',
+      hours: 6,
+      units: { 'wt-classification': 5 },
+    },
   ]
 
   it('aggregates totals, per-person, and daily breakdowns', () => {
-    const r = aggregateMonthly('2026-07', entries, employees, rates)
+    const r = aggregateMonthly('2026-07', entries, employees, workTypes, rates)
 
     expect(r.totals).toEqual({
       hours: 23.5,
-      classifications: 9,
-      qap: 3,
+      units: { 'wt-classification': 9, 'wt-qap': 3 },
       points: 12,
       remuneration: 12,
       days_worked: 2,
@@ -94,31 +116,39 @@ describe('aggregateMonthly', () => {
       name: 'Ama',
       days_worked: 2, // two distinct dates despite three entries
       hours: 17.5,
-      classifications: 4,
-      qap: 3,
+      units: { 'wt-classification': 4, 'wt-qap': 3 },
       points: 7,
       remuneration: 7,
     })
 
     expect(r.daily_totals).toEqual([
-      { date: '2026-07-01', hours: 10, classifications: 4, qap: 1 },
-      { date: '2026-07-02', hours: 13.5, classifications: 5, qap: 2 },
+      {
+        date: '2026-07-01',
+        hours: 10,
+        units: { 'wt-classification': 4, 'wt-qap': 1 },
+      },
+      {
+        date: '2026-07-02',
+        hours: 13.5,
+        units: { 'wt-classification': 5, 'wt-qap': 2 },
+      },
     ])
   })
 
   it('applies point_value to remuneration in summaries', () => {
-    const custom: RateSettings = { ...rates, point_value: 2.5 }
-    const r = aggregateMonthly('2026-07', entries, employees, custom)
+    const r = aggregateMonthly('2026-07', entries, employees, workTypes, {
+      point_value: 2.5,
+      currency: '$',
+    })
     expect(r.totals.points).toBe(12)
     expect(r.totals.remuneration).toBe(30)
   })
 
   it('handles an empty month', () => {
-    const r = aggregateMonthly('2026-08', [], employees, rates)
+    const r = aggregateMonthly('2026-08', [], employees, workTypes, rates)
     expect(r.totals).toEqual({
       hours: 0,
-      classifications: 0,
-      qap: 0,
+      units: {},
       points: 0,
       remuneration: 0,
       days_worked: 0,

@@ -11,13 +11,18 @@ import {
   Tooltip,
 } from 'chart.js'
 import type { DailyTotal } from '../../shared/logic'
+import type { WorkTypeInfo } from '../types'
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
-const props = defineProps<{ month: string; daily: DailyTotal[] }>()
+const props = defineProps<{
+  month: string
+  daily: DailyTotal[]
+  workTypes: WorkTypeInfo[]
+}>()
 
-const TEAL = '#128F72'
-const AMBER = '#C9822C'
+// Teal and amber first (the original two series), then more distinct hues.
+const PALETTE = ['#128F72', '#C9822C', '#4C6FBF', '#B4548C', '#6B8F2A', '#8A6FD1']
 
 function daysInMonth(month: string): number {
   const [y, m] = month.split('-').map(Number)
@@ -28,34 +33,21 @@ const chartData = computed(() => {
   const n = daysInMonth(props.month)
   const byDate = new Map(props.daily.map((d) => [d.date, d]))
   const labels: string[] = []
-  const classifications: number[] = []
-  const qap: number[] = []
+  const dates: string[] = []
   for (let day = 1; day <= n; day++) {
-    const date = `${props.month}-${String(day).padStart(2, '0')}`
     labels.push(String(day))
-    classifications.push(byDate.get(date)?.classifications ?? 0)
-    qap.push(byDate.get(date)?.qap ?? 0)
+    dates.push(`${props.month}-${String(day).padStart(2, '0')}`)
   }
   return {
     labels,
-    datasets: [
-      {
-        label: 'Classifications',
-        data: classifications,
-        backgroundColor: TEAL,
-        borderRadius: 4,
-        borderSkipped: 'bottom' as const,
-        maxBarThickness: 14,
-      },
-      {
-        label: 'QAP',
-        data: qap,
-        backgroundColor: AMBER,
-        borderRadius: 4,
-        borderSkipped: 'bottom' as const,
-        maxBarThickness: 14,
-      },
-    ],
+    datasets: props.workTypes.map((wt, i) => ({
+      label: wt.name,
+      data: dates.map((date) => byDate.get(date)?.units[wt.id] ?? 0),
+      backgroundColor: PALETTE[i % PALETTE.length],
+      borderRadius: 4,
+      borderSkipped: 'bottom' as const,
+      maxBarThickness: 14,
+    })),
   }
 })
 

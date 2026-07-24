@@ -1,18 +1,21 @@
 // Pure calculation logic shared by the Worker API, the client, and tests.
 
 export interface RateSettings {
-  points_per_classification: number
-  points_per_qap: number
   point_value: number
   currency: string
+}
+
+export interface WorkType {
+  id: string
+  name: string
+  points_per_unit: number
 }
 
 export interface EntryLike {
   employee_id: string
   work_date: string // YYYY-MM-DD
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number> // work_type_id -> units logged
 }
 
 export interface EmployeeLike {
@@ -25,8 +28,7 @@ export interface PersonSummary {
   name: string
   days_worked: number
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number>
   points: number
   remuneration: number
 }
@@ -34,16 +36,14 @@ export interface PersonSummary {
 export interface DailyTotal {
   date: string
   hours: number
-  classifications: number
-  qap: number
+  units: Record<string, number>
 }
 
 export interface MonthlyReport {
   month: string
   totals: {
     hours: number
-    classifications: number
-    qap: number
+    units: Record<string, number>
     points: number
     remuneration: number
     days_worked: number
@@ -70,16 +70,26 @@ export function computeHours(start: string, end: string): number {
   return round2(diff / 60)
 }
 
+/** Points for a set of logged units at the given work-type rates. */
 export function computePoints(
-  classifications: number,
-  qap: number,
-  s: RateSettings,
+  units: Record<string, number>,
+  workTypes: WorkType[],
 ): number {
-  return classifications * s.points_per_classification + qap * s.points_per_qap
+  let points = 0
+  for (const wt of workTypes) {
+    points += (units[wt.id] ?? 0) * wt.points_per_unit
+  }
+  return round2(points)
 }
 
 export function computeRemuneration(points: number, s: RateSettings): number {
   return round2(points * s.point_value)
+}
+
+function addUnits(target: Record<string, number>, source: Record<string, number>) {
+  for (const [id, n] of Object.entries(source)) {
+    if (n) target[id] = (target[id] ?? 0) + n
+  }
 }
 
 /** Aggregate a month's entries into totals, per-person summaries, and daily totals. */
@@ -87,6 +97,7 @@ export function aggregateMonthly(
   month: string,
   entries: EntryLike[],
   employees: EmployeeLike[],
+  workTypes: WorkType[],
   settings: RateSettings,
 ): MonthlyReport {
   const names = new Map(employees.map((e) => [e.id, e.name]))
@@ -102,8 +113,7 @@ export function aggregateMonthly(
         name: names.get(e.employee_id) ?? 'Unknown',
         days_worked: 0,
         hours: 0,
-        classifications: 0,
-        qap: 0,
+        units: {},
         points: 0,
         remuneration: 0,
         dates: new Set(),
@@ -112,23 +122,21 @@ export function aggregateMonthly(
     }
     p.dates.add(e.work_date)
     p.hours = round2(p.hours + e.hours)
-    p.classifications += e.classifications
-    p.qap += e.qap
+    addUnits(p.units, e.units)
 
     let d = daily.get(e.work_date)
     if (!d) {
-      d = { date: e.work_date, hours: 0, classifications: 0, qap: 0 }
+      d = { date: e.work_date, hours: 0, units: {} }
       daily.set(e.work_date, d)
     }
     d.hours = round2(d.hours + e.hours)
-    d.classifications += e.classifications
-    d.qap += e.qap
+    addUnits(d.units, e.units)
     allDates.add(e.work_date)
   }
 
   const per_person: PersonSummary[] = [...perPerson.values()]
     .map(({ dates, ...p }) => {
-      const points = computePoints(p.classifications, p.qap, settings)
+      const points = computePoints(p.units, workTypes)
       return {
         ...p,
         days_worked: dates.size,
@@ -138,19 +146,21 @@ export function aggregateMonthly(
     })
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  const unitTotals: Record<string, number> = {}
   const totals = per_person.reduce(
-    (t, p) => ({
-      hours: round2(t.hours + p.hours),
-      classifications: t.classifications + p.classifications,
-      qap: t.qap + p.qap,
-      points: t.points + p.points,
-      remuneration: round2(t.remuneration + p.remuneration),
-      days_worked: t.days_worked,
-    }),
+    (t, p) => {
+      addUnits(unitTotals, p.units)
+      return {
+        hours: round2(t.hours + p.hours),
+        units: unitTotals,
+        points: round2(t.points + p.points),
+        remuneration: round2(t.remuneration + p.remuneration),
+        days_worked: t.days_worked,
+      }
+    },
     {
       hours: 0,
-      classifications: 0,
-      qap: 0,
+      units: unitTotals,
       points: 0,
       remuneration: 0,
       days_worked: allDates.size,

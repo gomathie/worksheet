@@ -23,9 +23,9 @@ async function signOut() {
           LG
         </div>
         <div>
-          <h1 class="display text-3xl leading-none">Ledger</h1>
+          <h1 class="display text-3xl leading-none">OPENSIGNAL Ledger</h1>
           <p class="mt-0.5 text-xs tracking-[0.12em] text-muted uppercase">
-            Timesheet &amp; QAP Tracker
+            Team Timesheet &amp; Tracker
           </p>
         </div>
       </div>

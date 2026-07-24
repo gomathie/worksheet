@@ -44,7 +44,14 @@ const printPage = () => window.print()
 
 const rateNote = computed(() => {
   const s = report.value?.settings
-  if (!s) return ''
+  if (
+    !s ||
+    s.points_per_classification === undefined ||
+    s.points_per_qap === undefined ||
+    s.point_value === undefined
+  ) {
+    return ''
+  }
   return `Rates applied: ${s.points_per_classification} point(s) per classification, ${s.points_per_qap} per QAP, ${s.currency}${s.point_value.toFixed(2)} per point.`
 })
 </script>
@@ -72,6 +79,21 @@ const rateNote = computed(() => {
         </p>
       </header>
 
+      <section
+        v-if="report.scope === 'limited' && report.my_summary"
+        class="print-block mb-8"
+      >
+        <div class="rounded-lg border border-teal bg-teal-soft p-4">
+          <p class="field-label">Amount due to you this month</p>
+          <p class="mono text-3xl font-semibold text-teal">
+            {{ money(report.my_summary.remuneration) }}
+          </p>
+          <p class="mt-1 text-xs text-muted">
+            Based on your {{ report.my_summary.points }} point(s) for {{ monthLabel }}.
+          </p>
+        </div>
+      </section>
+
       <section class="print-block mb-8">
         <h3 class="display mb-3 text-xl">Per-person summary</h3>
         <div class="table-wrap">
@@ -83,8 +105,10 @@ const rateNote = computed(() => {
                 <th class="num">Hours</th>
                 <th class="num">Classifications</th>
                 <th class="num">QAP</th>
-                <th class="num">Points</th>
-                <th class="num">Remuneration</th>
+                <template v-if="report.scope === 'full'">
+                  <th class="num">Points</th>
+                  <th class="num">Remuneration</th>
+                </template>
               </tr>
             </thead>
             <tbody>
@@ -94,8 +118,10 @@ const rateNote = computed(() => {
                 <td class="num">{{ p.hours.toFixed(2) }}</td>
                 <td class="num">{{ p.classifications }}</td>
                 <td class="num">{{ p.qap }}</td>
-                <td class="num">{{ p.points }}</td>
-                <td class="num">{{ money(p.remuneration) }}</td>
+                <template v-if="report.scope === 'full'">
+                  <td class="num">{{ p.points }}</td>
+                  <td class="num">{{ money(p.remuneration ?? 0) }}</td>
+                </template>
               </tr>
               <tr class="totals">
                 <td>Total</td>
@@ -103,8 +129,10 @@ const rateNote = computed(() => {
                 <td class="num">{{ report.totals.hours.toFixed(2) }}</td>
                 <td class="num">{{ report.totals.classifications }}</td>
                 <td class="num">{{ report.totals.qap }}</td>
-                <td class="num">{{ report.totals.points }}</td>
-                <td class="num">{{ money(report.totals.remuneration) }}</td>
+                <template v-if="report.scope === 'full'">
+                  <td class="num">{{ report.totals.points }}</td>
+                  <td class="num">{{ money(report.totals.remuneration ?? 0) }}</td>
+                </template>
               </tr>
             </tbody>
           </table>
@@ -146,7 +174,7 @@ const rateNote = computed(() => {
         </div>
       </section>
 
-      <footer class="border-t border-line pt-3 text-xs text-muted">
+      <footer v-if="rateNote" class="border-t border-line pt-3 text-xs text-muted">
         {{ rateNote }}
       </footer>
     </div>

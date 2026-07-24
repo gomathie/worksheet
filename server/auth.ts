@@ -73,18 +73,21 @@ export async function verifyPassword(
 // -------------------------------------------------------------------- rights
 
 export interface Rights {
+  add_entries: boolean
   edit_entries: boolean
   view_dashboard: boolean
   view_reports: boolean
 }
 
 export const DEFAULT_RIGHTS: Rights = {
+  add_entries: true,
   edit_entries: true,
   view_dashboard: false,
   view_reports: false,
 }
 
 const ALL_RIGHTS: Rights = {
+  add_entries: true,
   edit_entries: true,
   view_dashboard: true,
   view_reports: true,
@@ -95,6 +98,9 @@ export function parseRights(employee: Employee): Rights {
   try {
     const raw = JSON.parse(employee.rights || '{}') as Partial<Rights>
     return {
+      // Rows written before add/edit were split only have edit_entries;
+      // let it stand in for add_entries until the admin re-saves them.
+      add_entries: Boolean(raw.add_entries ?? raw.edit_entries ?? true),
       edit_entries: Boolean(raw.edit_entries ?? true),
       view_dashboard: Boolean(raw.view_dashboard),
       view_reports: Boolean(raw.view_reports),

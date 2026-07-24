@@ -139,6 +139,7 @@ function assertPassword(value: unknown): string {
 
 function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): string {
   return JSON.stringify({
+    add_entries: Boolean(raw?.add_entries ?? fallback.add_entries),
     edit_entries: Boolean(raw?.edit_entries ?? fallback.edit_entries),
     view_dashboard: Boolean(raw?.view_dashboard ?? fallback.view_dashboard),
     view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
@@ -185,6 +186,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     throw new ApiError(400, 'password is required when assigning a username')
   }
   const rights = rightsToJson(body.rights, {
+    add_entries: true,
     edit_entries: true,
     view_dashboard: false,
     view_reports: false,
@@ -336,7 +338,7 @@ interface EntryBody {
 
 async function createEntry(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  requireRight(user, 'edit_entries')
+  requireRight(user, 'add_entries')
   const body = await readJson<EntryBody>(request)
 
   // Employees may only log their own time; admins may log for anyone.
@@ -453,8 +455,11 @@ async function deleteEntry(request: Request, env: Env, id: string): Promise<Resp
 // ---------------------------------------------------- settings & report routes
 
 async function getSettings(request: Request, env: Env): Promise<Response> {
-  await requireUser(request, env)
-  return json(await loadSettings(env))
+  const user = await requireUser(request, env)
+  const settings = await loadSettings(env)
+  // Point rates are money-sensitive; non-admins only get the currency symbol.
+  if (user.role !== 'admin') return json({ currency: settings.currency })
+  return json(settings)
 }
 
 async function putSettings(request: Request, env: Env): Promise<Response> {
@@ -518,7 +523,34 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     classifications: e.classifications,
     qap: e.qap,
   }))
-  return json({ ...report, settings, daily_detail })
+
+  if (user.role === 'admin') {
+    return json({ ...report, scope: 'full', settings, daily_detail })
+  }
+
+  // Non-admins see everyone's work performance but money figures only for
+  // themselves: no rates, no points/remuneration of colleagues, no money totals.
+  const mine = report.per_person.find((p) => p.employee_id === user.id)
+  return json({
+    month: report.month,
+    scope: 'limited',
+    totals: {
+      hours: report.totals.hours,
+      classifications: report.totals.classifications,
+      qap: report.totals.qap,
+      days_worked: report.totals.days_worked,
+    },
+    per_person: report.per_person.map(
+      ({ points: _points, remuneration: _remuneration, ...p }) => p,
+    ),
+    daily_totals: report.daily_totals,
+    settings: { currency: settings.currency },
+    daily_detail,
+    my_summary: {
+      points: mine?.points ?? 0,
+      remuneration: mine?.remuneration ?? 0,
+    },
+  })
 }
 
 // -------------------------------------------------------------------- router

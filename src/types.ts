@@ -1,8 +1,9 @@
-import type { MonthlyReport, RateSettings } from '../shared/logic'
+import type { DailyTotal, MonthlyReport, RateSettings } from '../shared/logic'
 
 export type { MonthlyReport, RateSettings }
 
 export interface Rights {
+  add_entries: boolean
   edit_entries: boolean
   view_dashboard: boolean
   view_reports: boolean
@@ -54,7 +55,34 @@ export interface DailyDetailRow {
   qap: number
 }
 
-export type ReportPayload = MonthlyReport & {
-  settings: RateSettings
+// The API strips money fields for non-admin viewers ("limited" scope):
+// per-person points/remuneration and money totals are absent, settings only
+// carries the currency, and my_summary holds the viewer's own figures.
+export interface ReportPerson {
+  employee_id: string
+  name: string
+  days_worked: number
+  hours: number
+  classifications: number
+  qap: number
+  points?: number
+  remuneration?: number
+}
+
+export interface ReportPayload {
+  month: string
+  scope: 'full' | 'limited'
+  totals: {
+    hours: number
+    classifications: number
+    qap: number
+    days_worked: number
+    points?: number
+    remuneration?: number
+  }
+  per_person: ReportPerson[]
+  daily_totals: DailyTotal[]
+  settings: { currency: string } & Partial<RateSettings>
   daily_detail: DailyDetailRow[]
+  my_summary?: { points: number; remuneration: number }
 }

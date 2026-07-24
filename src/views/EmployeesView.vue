@@ -9,6 +9,7 @@ const busy = ref(false)
 const editingId = ref<string | null>(null)
 
 const blankRights = () => ({
+  add_entries: true,
   edit_entries: true,
   view_dashboard: false,
   view_reports: false,
@@ -96,7 +97,8 @@ async function toggleActive(e: Employee) {
 function rightsSummary(e: Employee): string {
   if (e.role === 'admin') return 'All rights'
   const labels: [keyof Employee['rights'], string][] = [
-    ['edit_entries', 'Log time'],
+    ['add_entries', 'Add time'],
+    ['edit_entries', 'Edit time'],
     ['view_dashboard', 'Dashboard'],
     ['view_reports', 'Reports'],
   ]
@@ -162,8 +164,12 @@ function rightsSummary(e: Employee): string {
           </p>
           <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <label class="flex items-center gap-2">
+              <input v-model="form.rights.add_entries" type="checkbox" />
+              Add own time entries
+            </label>
+            <label class="flex items-center gap-2">
               <input v-model="form.rights.edit_entries" type="checkbox" />
-              Log &amp; edit own time entries
+              Edit &amp; delete own time entries
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.view_dashboard" type="checkbox" />

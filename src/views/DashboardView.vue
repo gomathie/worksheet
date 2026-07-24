@@ -56,16 +56,32 @@ const money = (n: number) =>
             <p class="field-label">QAP</p>
             <p class="mono text-3xl font-semibold">{{ report.totals.qap }}</p>
           </div>
-          <div class="panel">
-            <p class="field-label">Points</p>
-            <p class="mono text-3xl font-semibold">{{ report.totals.points }}</p>
-          </div>
-          <div class="panel">
-            <p class="field-label">Est. remuneration</p>
-            <p class="mono text-3xl font-semibold text-teal">
-              {{ money(report.totals.remuneration) }}
-            </p>
-          </div>
+          <template v-if="report.scope === 'full'">
+            <div class="panel">
+              <p class="field-label">Points</p>
+              <p class="mono text-3xl font-semibold">{{ report.totals.points }}</p>
+            </div>
+            <div class="panel">
+              <p class="field-label">Est. remuneration</p>
+              <p class="mono text-3xl font-semibold text-teal">
+                {{ money(report.totals.remuneration ?? 0) }}
+              </p>
+            </div>
+          </template>
+          <template v-else>
+            <div class="panel">
+              <p class="field-label">Your points</p>
+              <p class="mono text-3xl font-semibold">
+                {{ report.my_summary?.points ?? 0 }}
+              </p>
+            </div>
+            <div class="panel">
+              <p class="field-label">Due to you</p>
+              <p class="mono text-3xl font-semibold text-teal">
+                {{ money(report.my_summary?.remuneration ?? 0) }}
+              </p>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -80,8 +96,10 @@ const money = (n: number) =>
                 <th class="num">Hours</th>
                 <th class="num">Classif.</th>
                 <th class="num">QAP</th>
-                <th class="num">Points</th>
-                <th class="num">Remuneration</th>
+                <template v-if="report.scope === 'full'">
+                  <th class="num">Points</th>
+                  <th class="num">Remuneration</th>
+                </template>
               </tr>
             </thead>
             <tbody>
@@ -91,11 +109,13 @@ const money = (n: number) =>
                 <td class="num">{{ p.hours.toFixed(2) }}</td>
                 <td class="num">{{ p.classifications }}</td>
                 <td class="num">{{ p.qap }}</td>
-                <td class="num">{{ p.points }}</td>
-                <td class="num">{{ money(p.remuneration) }}</td>
+                <template v-if="report.scope === 'full'">
+                  <td class="num">{{ p.points }}</td>
+                  <td class="num">{{ money(p.remuneration ?? 0) }}</td>
+                </template>
               </tr>
               <tr v-if="report.per_person.length === 0">
-                <td colspan="7" class="py-6 text-center text-muted">
+                <td :colspan="report.scope === 'full' ? 7 : 5" class="py-6 text-center text-muted">
                   No activity this month.
                 </td>
               </tr>

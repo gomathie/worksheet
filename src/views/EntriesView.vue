@@ -110,7 +110,7 @@ async function remove(entry: Entry) {
 
 <template>
   <div>
-    <div v-if="auth.rights.edit_entries" class="panel mb-6">
+    <div v-if="auth.rights.add_entries || editingId" class="panel mb-6">
       <h2 class="display mb-4 text-2xl">
         {{ editingId ? 'Edit entry' : 'Log time' }}
       </h2>
@@ -274,7 +274,10 @@ async function remove(entry: Entry) {
               </td>
             </tr>
             <tr v-if="entries.length === 0">
-              <td :colspan="auth.isAdmin ? 9 : 8" class="py-6 text-center text-muted">
+              <td
+                :colspan="(auth.isAdmin ? 8 : 7) + (auth.rights.edit_entries ? 1 : 0)"
+                class="py-6 text-center text-muted"
+              >
                 No entries for this month yet.
               </td>
             </tr>

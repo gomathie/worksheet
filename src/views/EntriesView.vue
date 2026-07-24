@@ -253,7 +253,7 @@ async function remove(entry: Entry) {
               <th class="num">Classif.</th>
               <th class="num">QAP</th>
               <th>Notes</th>
-              <th v-if="auth.rights.edit_entries"></th>
+              <th v-if="auth.rights.edit_entries || auth.rights.delete_entries"></th>
             </tr>
           </thead>
           <tbody>
@@ -268,14 +268,29 @@ async function remove(entry: Entry) {
               <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
                 {{ e.notes }}
               </td>
-              <td v-if="auth.rights.edit_entries" class="whitespace-nowrap">
-                <button class="btn btn-sm mr-1" @click="startEdit(e)">Edit</button>
-                <button class="btn btn-sm btn-danger" @click="remove(e)">Del</button>
+              <td
+                v-if="auth.rights.edit_entries || auth.rights.delete_entries"
+                class="whitespace-nowrap"
+              >
+                <button
+                  v-if="auth.rights.edit_entries"
+                  class="btn btn-sm mr-1"
+                  @click="startEdit(e)"
+                >
+                  Edit
+                </button>
+                <button
+                  v-if="auth.rights.delete_entries"
+                  class="btn btn-sm btn-danger"
+                  @click="remove(e)"
+                >
+                  Del
+                </button>
               </td>
             </tr>
             <tr v-if="entries.length === 0">
               <td
-                :colspan="(auth.isAdmin ? 8 : 7) + (auth.rights.edit_entries ? 1 : 0)"
+                :colspan="(auth.isAdmin ? 8 : 7) + (auth.rights.edit_entries || auth.rights.delete_entries ? 1 : 0)"
                 class="py-6 text-center text-muted"
               >
                 No entries for this month yet.

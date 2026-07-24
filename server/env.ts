@@ -16,6 +16,28 @@ export interface Employee {
   created_at: string
 }
 
+export interface AdjustmentRow {
+  id: string
+  employee_id: string
+  month: string
+  type: 'bonus' | 'reimbursement'
+  amount: number
+  description: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_by: string | null
+  created_at: string
+  decided_by: string | null
+  decided_at: string | null
+}
+
+export interface PaymentRow {
+  employee_id: string
+  month: string
+  paid_at: string | null
+  paid_by: string | null
+  confirmed_at: string | null
+}
+
 export interface EntryRow {
   id: string
   employee_id: string

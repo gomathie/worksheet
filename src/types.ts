@@ -5,6 +5,7 @@ export type { MonthlyReport, RateSettings }
 export interface Rights {
   add_entries: boolean
   edit_entries: boolean
+  delete_entries: boolean
   view_dashboard: boolean
   view_reports: boolean
 }
@@ -67,6 +68,11 @@ export interface ReportPerson {
   qap: number
   points?: number
   remuneration?: number
+  bonus?: number
+  reimbursements?: number
+  total_due?: number
+  paid?: boolean
+  confirmed?: boolean
 }
 
 export interface ReportPayload {
@@ -79,10 +85,49 @@ export interface ReportPayload {
     days_worked: number
     points?: number
     remuneration?: number
+    bonus?: number
+    reimbursements?: number
+    total_due?: number
   }
   per_person: ReportPerson[]
   daily_totals: DailyTotal[]
   settings: { currency: string } & Partial<RateSettings>
   daily_detail: DailyDetailRow[]
-  my_summary?: { points: number; remuneration: number }
+  my_summary?: {
+    points: number
+    remuneration: number
+    bonus: number
+    reimbursements: number
+    total_due: number
+    paid: boolean
+    confirmed: boolean
+  }
+}
+
+export interface Adjustment {
+  id: string
+  employee_id: string
+  employee_name?: string
+  month: string
+  type: 'bonus' | 'reimbursement'
+  amount: number
+  description: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
+export interface MyRemuneration {
+  month: string
+  currency: string
+  hours: number
+  classifications: number
+  qap: number
+  points: number
+  base: number
+  bonus: number
+  reimbursements: number
+  total_due: number
+  paid_at: string | null
+  confirmed_at: string | null
+  adjustments: Adjustment[]
 }

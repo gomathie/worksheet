@@ -11,6 +11,7 @@ const editingId = ref<string | null>(null)
 const blankRights = () => ({
   add_entries: true,
   edit_entries: true,
+  delete_entries: true,
   view_dashboard: false,
   view_reports: false,
 })
@@ -99,6 +100,7 @@ function rightsSummary(e: Employee): string {
   const labels: [keyof Employee['rights'], string][] = [
     ['add_entries', 'Add time'],
     ['edit_entries', 'Edit time'],
+    ['delete_entries', 'Delete time'],
     ['view_dashboard', 'Dashboard'],
     ['view_reports', 'Reports'],
   ]
@@ -169,7 +171,11 @@ function rightsSummary(e: Employee): string {
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.edit_entries" type="checkbox" />
-              Edit &amp; delete own time entries
+              Edit own time entries
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.delete_entries" type="checkbox" />
+              Delete own time entries
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.view_dashboard" type="checkbox" />

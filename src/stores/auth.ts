@@ -5,6 +5,7 @@ import type { Me, Rights } from '../types'
 const NO_RIGHTS: Rights = {
   add_entries: false,
   edit_entries: false,
+  delete_entries: false,
   view_dashboard: false,
   view_reports: false,
 }

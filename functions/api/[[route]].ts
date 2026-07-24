@@ -1,4 +1,4 @@
-import type { Employee, EntryRow, Env } from '../../server/env'
+import type { AdjustmentRow, Employee, EntryRow, Env, PaymentRow } from '../../server/env'
 import { ApiError, json, readJson, todayInTz } from '../../server/http'
 import {
   SESSION_COOKIE,
@@ -16,7 +16,13 @@ import {
   type Rights,
 } from '../../server/auth'
 import { loadSettings, saveSettings } from '../../server/settings'
-import { aggregateMonthly, computeHours, parseTime } from '../../shared/logic'
+import {
+  aggregateMonthly,
+  computeHours,
+  computePoints,
+  computeRemuneration,
+  parseTime,
+} from '../../shared/logic'
 import { getCookie } from '../../server/http'
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
@@ -141,6 +147,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
   return JSON.stringify({
     add_entries: Boolean(raw?.add_entries ?? fallback.add_entries),
     edit_entries: Boolean(raw?.edit_entries ?? fallback.edit_entries),
+    delete_entries: Boolean(raw?.delete_entries ?? fallback.delete_entries),
     view_dashboard: Boolean(raw?.view_dashboard ?? fallback.view_dashboard),
     view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
   })
@@ -188,6 +195,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   const rights = rightsToJson(body.rights, {
     add_entries: true,
     edit_entries: true,
+    delete_entries: true,
     view_dashboard: false,
     view_reports: false,
   })
@@ -388,7 +396,6 @@ async function loadOwnedEntry(
   id: string,
 ): Promise<{ user: Employee; entry: EntryRow }> {
   const user = await requireUser(request, env)
-  requireRight(user, 'edit_entries')
   const entry = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
     .first<EntryRow>()
@@ -401,6 +408,7 @@ async function loadOwnedEntry(
 
 async function patchEntry(request: Request, env: Env, id: string): Promise<Response> {
   const { user, entry } = await loadOwnedEntry(request, env, id)
+  requireRight(user, 'edit_entries')
   const body = await readJson<EntryBody>(request)
 
   const next = {
@@ -447,9 +455,268 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
 
 async function deleteEntry(request: Request, env: Env, id: string): Promise<Response> {
   const { user } = await loadOwnedEntry(request, env, id)
+  requireRight(user, 'delete_entries')
   await env.DB.prepare('DELETE FROM entries WHERE id = ?').bind(id).run()
   await audit(env, user.id, 'delete_entry', id)
   return json({ ok: true })
+}
+
+// ------------------------------------------- adjustments & payment routes
+
+function assertAmount(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new ApiError(400, 'amount must be a number > 0')
+  }
+  return Math.round(n * 100) / 100
+}
+
+async function listAdjustments(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const url = new URL(request.url)
+  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+
+  let sql =
+    'SELECT a.*, emp.name AS employee_name FROM adjustments a JOIN employees emp ON emp.id = a.employee_id WHERE a.month = ?'
+  const binds: unknown[] = [month]
+  if (user.role !== 'admin') {
+    sql += ' AND a.employee_id = ?'
+    binds.push(user.id)
+  }
+  sql += ' ORDER BY a.created_at DESC'
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds)
+    .all<AdjustmentRow & { employee_name: string }>()
+  return json(results)
+}
+
+async function createAdjustment(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const body = await readJson<{
+    type?: string
+    employee_id?: string
+    month?: string
+    amount?: number
+    description?: string
+  }>(request)
+  const month = assertMonth(body.month ?? currentMonth(env))
+  const amount = assertAmount(body.amount)
+  const description = (body.description ?? '').trim().slice(0, 200) || null
+
+  let type: 'bonus' | 'reimbursement'
+  let employeeId: string
+  let status: 'pending' | 'approved'
+  if (body.type === 'bonus') {
+    // Bonuses are granted by admins and count immediately.
+    if (user.role !== 'admin') throw new ApiError(403, 'Admin only')
+    if (!body.employee_id) throw new ApiError(400, 'employee_id is required')
+    if (!description) throw new ApiError(400, 'description is required for a bonus')
+    type = 'bonus'
+    employeeId = body.employee_id
+    status = 'approved'
+  } else if (body.type === 'reimbursement') {
+    // Employees request reimbursements for themselves; admins may enter one
+    // for anyone and it is approved on the spot.
+    type = 'reimbursement'
+    if (user.role === 'admin') {
+      employeeId = body.employee_id ?? user.id
+      status = 'approved'
+    } else {
+      employeeId = user.id
+      status = 'pending'
+    }
+  } else {
+    throw new ApiError(400, "type must be 'bonus' or 'reimbursement'")
+  }
+
+  const target = await env.DB.prepare(
+    'SELECT id FROM employees WHERE id = ? AND active = 1',
+  )
+    .bind(employeeId)
+    .first()
+  if (!target) throw new ApiError(400, 'Unknown employee')
+
+  const id = crypto.randomUUID()
+  await env.DB.prepare(
+    `INSERT INTO adjustments (id, employee_id, month, type, amount, description, status, created_by, decided_by, decided_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id,
+      employeeId,
+      month,
+      type,
+      amount,
+      description,
+      status,
+      user.id,
+      status === 'approved' ? user.id : null,
+      status === 'approved' ? new Date().toISOString() : null,
+    )
+    .run()
+  await audit(env, user.id, `create_${type}`, id, { employee_id: employeeId, month, amount, status })
+  const created = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
+    .bind(id)
+    .first<AdjustmentRow>()
+  return json(created, 201)
+}
+
+async function decideAdjustment(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const existing = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
+    .bind(id)
+    .first<AdjustmentRow>()
+  if (!existing) throw new ApiError(404, 'Adjustment not found')
+
+  const body = await readJson<{ status?: string }>(request)
+  if (body.status !== 'approved' && body.status !== 'rejected') {
+    throw new ApiError(400, "status must be 'approved' or 'rejected'")
+  }
+  await env.DB.prepare(
+    'UPDATE adjustments SET status = ?, decided_by = ?, decided_at = ? WHERE id = ?',
+  )
+    .bind(body.status, admin.id, new Date().toISOString(), id)
+    .run()
+  await audit(env, admin.id, 'decide_adjustment', id, { status: body.status })
+  const updated = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
+    .bind(id)
+    .first<AdjustmentRow>()
+  return json(updated)
+}
+
+async function deleteAdjustment(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const existing = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
+    .bind(id)
+    .first<AdjustmentRow>()
+  if (!existing) throw new ApiError(404, 'Adjustment not found')
+  // Employees may withdraw their own still-pending requests; admins any.
+  if (
+    user.role !== 'admin' &&
+    (existing.employee_id !== user.id || existing.status !== 'pending')
+  ) {
+    throw new ApiError(403, 'You can only withdraw your own pending requests')
+  }
+  await env.DB.prepare('DELETE FROM adjustments WHERE id = ?').bind(id).run()
+  await audit(env, user.id, 'delete_adjustment', id)
+  return json({ ok: true })
+}
+
+async function setPaid(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{
+    employee_id?: string
+    month?: string
+    paid?: boolean
+  }>(request)
+  const month = assertMonth(body.month ?? currentMonth(env))
+  if (!body.employee_id) throw new ApiError(400, 'employee_id is required')
+
+  if (body.paid) {
+    await env.DB.prepare(
+      `INSERT INTO payments (employee_id, month, paid_at, paid_by) VALUES (?, ?, ?, ?)
+       ON CONFLICT(employee_id, month) DO UPDATE SET paid_at = excluded.paid_at, paid_by = excluded.paid_by`,
+    )
+      .bind(body.employee_id, month, new Date().toISOString(), admin.id)
+      .run()
+  } else {
+    await env.DB.prepare(
+      'UPDATE payments SET paid_at = NULL, paid_by = NULL WHERE employee_id = ? AND month = ?',
+    )
+      .bind(body.employee_id, month)
+      .run()
+  }
+  await audit(env, admin.id, 'set_paid', body.employee_id, { month, paid: !!body.paid })
+  return json({ ok: true })
+}
+
+async function confirmReceipt(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const body = await readJson<{ month?: string; confirmed?: boolean }>(request)
+  const month = assertMonth(body.month ?? currentMonth(env))
+
+  if (body.confirmed === false) {
+    await env.DB.prepare(
+      'UPDATE payments SET confirmed_at = NULL WHERE employee_id = ? AND month = ?',
+    )
+      .bind(user.id, month)
+      .run()
+  } else {
+    await env.DB.prepare(
+      `INSERT INTO payments (employee_id, month, confirmed_at) VALUES (?, ?, ?)
+       ON CONFLICT(employee_id, month) DO UPDATE SET confirmed_at = excluded.confirmed_at`,
+    )
+      .bind(user.id, month, new Date().toISOString())
+      .run()
+  }
+  await audit(env, user.id, 'confirm_receipt', user.id, {
+    month,
+    confirmed: body.confirmed !== false,
+  })
+  return json({ ok: true })
+}
+
+/**
+ * The viewer's own pay summary for a month. Available to every signed-in
+ * user regardless of dashboard/report rights — it only exposes their own
+ * figures.
+ */
+async function myRemuneration(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const url = new URL(request.url)
+  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+
+  const [settings, entriesRes, adjRes, payment] = await Promise.all([
+    loadSettings(env),
+    env.DB.prepare(
+      'SELECT SUM(classifications) AS classifications, SUM(qap) AS qap, SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ?',
+    )
+      .bind(user.id, `${month}-%`)
+      .first<{ classifications: number | null; qap: number | null; hours: number | null }>(),
+    env.DB.prepare(
+      'SELECT * FROM adjustments WHERE employee_id = ? AND month = ? ORDER BY created_at DESC',
+    )
+      .bind(user.id, month)
+      .all<AdjustmentRow>(),
+    env.DB.prepare('SELECT * FROM payments WHERE employee_id = ? AND month = ?')
+      .bind(user.id, month)
+      .first<PaymentRow>(),
+  ])
+
+  const classifications = entriesRes?.classifications ?? 0
+  const qap = entriesRes?.qap ?? 0
+  const points = computePoints(classifications, qap, settings)
+  const base = computeRemuneration(points, settings)
+  const bonus = adjRes.results
+    .filter((a) => a.type === 'bonus' && a.status === 'approved')
+    .reduce((s, a) => s + a.amount, 0)
+  const reimbursements = adjRes.results
+    .filter((a) => a.type === 'reimbursement' && a.status === 'approved')
+    .reduce((s, a) => s + a.amount, 0)
+
+  return json({
+    month,
+    currency: settings.currency,
+    hours: entriesRes?.hours ?? 0,
+    classifications,
+    qap,
+    points,
+    base,
+    bonus: Math.round(bonus * 100) / 100,
+    reimbursements: Math.round(reimbursements * 100) / 100,
+    total_due: Math.round((base + bonus + reimbursements) * 100) / 100,
+    paid_at: payment?.paid_at ?? null,
+    confirmed_at: payment?.confirmed_at ?? null,
+    adjustments: adjRes.results,
+  })
 }
 
 // ---------------------------------------------------- settings & report routes
@@ -496,7 +763,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
 
-  const [settings, entriesRes, employeesRes] = await Promise.all([
+  const [settings, entriesRes, employeesRes, adjRes, payRes] = await Promise.all([
     loadSettings(env),
     env.DB.prepare(
       'SELECT employee_id, work_date, hours, classifications, qap, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? ORDER BY work_date, time_start',
@@ -504,7 +771,24 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       .bind(`${month}-%`)
       .all<EntryRow>(),
     env.DB.prepare('SELECT id, name FROM employees').all<{ id: string; name: string }>(),
+    env.DB.prepare(
+      "SELECT employee_id, type, amount FROM adjustments WHERE month = ? AND status = 'approved'",
+    )
+      .bind(month)
+      .all<{ employee_id: string; type: string; amount: number }>(),
+    env.DB.prepare('SELECT * FROM payments WHERE month = ?')
+      .bind(month)
+      .all<PaymentRow>(),
   ])
+
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  const bonusBy = new Map<string, number>()
+  const reimbBy = new Map<string, number>()
+  for (const a of adjRes.results) {
+    const map = a.type === 'bonus' ? bonusBy : reimbBy
+    map.set(a.employee_id, round2((map.get(a.employee_id) ?? 0) + a.amount))
+  }
+  const paymentBy = new Map(payRes.results.map((p) => [p.employee_id, p]))
 
   const report = aggregateMonthly(
     month,
@@ -525,12 +809,42 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   }))
 
   if (user.role === 'admin') {
-    return json({ ...report, scope: 'full', settings, daily_detail })
+    const per_person = report.per_person.map((p) => {
+      const bonus = bonusBy.get(p.employee_id) ?? 0
+      const reimbursements = reimbBy.get(p.employee_id) ?? 0
+      const payment = paymentBy.get(p.employee_id)
+      return {
+        ...p,
+        bonus,
+        reimbursements,
+        total_due: round2(p.remuneration + bonus + reimbursements),
+        paid: Boolean(payment?.paid_at),
+        confirmed: Boolean(payment?.confirmed_at),
+      }
+    })
+    const bonusTotal = round2(per_person.reduce((s, p) => s + p.bonus, 0))
+    const reimbTotal = round2(per_person.reduce((s, p) => s + p.reimbursements, 0))
+    return json({
+      ...report,
+      scope: 'full',
+      per_person,
+      totals: {
+        ...report.totals,
+        bonus: bonusTotal,
+        reimbursements: reimbTotal,
+        total_due: round2(report.totals.remuneration + bonusTotal + reimbTotal),
+      },
+      settings,
+      daily_detail,
+    })
   }
 
   // Non-admins see everyone's work performance but money figures only for
   // themselves: no rates, no points/remuneration of colleagues, no money totals.
   const mine = report.per_person.find((p) => p.employee_id === user.id)
+  const myBonus = bonusBy.get(user.id) ?? 0
+  const myReimb = reimbBy.get(user.id) ?? 0
+  const myPayment = paymentBy.get(user.id)
   return json({
     month: report.month,
     scope: 'limited',
@@ -549,6 +863,11 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     my_summary: {
       points: mine?.points ?? 0,
       remuneration: mine?.remuneration ?? 0,
+      bonus: myBonus,
+      reimbursements: myReimb,
+      total_due: round2((mine?.remuneration ?? 0) + myBonus + myReimb),
+      paid: Boolean(myPayment?.paid_at),
+      confirmed: Boolean(myPayment?.confirmed_at),
     },
   })
 }
@@ -595,6 +914,22 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (entryMatch) {
     if (method === 'PATCH') return patchEntry(request, env, entryMatch[1])
     if (method === 'DELETE') return deleteEntry(request, env, entryMatch[1])
+  }
+
+  if (path === '/api/adjustments' && method === 'GET') return listAdjustments(request, env)
+  if (path === '/api/adjustments' && method === 'POST') return createAdjustment(request, env)
+  const adjMatch = /^\/api\/adjustments\/([\w-]+)$/.exec(path)
+  if (adjMatch) {
+    if (method === 'PATCH') return decideAdjustment(request, env, adjMatch[1])
+    if (method === 'DELETE') return deleteAdjustment(request, env, adjMatch[1])
+  }
+
+  if (path === '/api/payments/paid' && method === 'POST') return setPaid(request, env)
+  if (path === '/api/payments/confirm' && method === 'POST') {
+    return confirmReceipt(request, env)
+  }
+  if (path === '/api/me/remuneration' && method === 'GET') {
+    return myRemuneration(request, env)
   }
 
   if (path === '/api/settings' && method === 'GET') return getSettings(request, env)

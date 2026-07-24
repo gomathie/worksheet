@@ -62,9 +62,9 @@ const money = (n: number) =>
               <p class="mono text-3xl font-semibold">{{ report.totals.points }}</p>
             </div>
             <div class="panel">
-              <p class="field-label">Est. remuneration</p>
+              <p class="field-label">Total due (incl. bonuses)</p>
               <p class="mono text-3xl font-semibold text-teal">
-                {{ money(report.totals.remuneration ?? 0) }}
+                {{ money(report.totals.total_due ?? report.totals.remuneration ?? 0) }}
               </p>
             </div>
           </template>
@@ -78,7 +78,7 @@ const money = (n: number) =>
             <div class="panel">
               <p class="field-label">Due to you</p>
               <p class="mono text-3xl font-semibold text-teal">
-                {{ money(report.my_summary?.remuneration ?? 0) }}
+                {{ money(report.my_summary?.total_due ?? report.my_summary?.remuneration ?? 0) }}
               </p>
             </div>
           </template>
@@ -98,7 +98,10 @@ const money = (n: number) =>
                 <th class="num">QAP</th>
                 <template v-if="report.scope === 'full'">
                   <th class="num">Points</th>
-                  <th class="num">Remuneration</th>
+                  <th class="num">Base</th>
+                  <th class="num">Bonus</th>
+                  <th class="num">Reimb.</th>
+                  <th class="num">Total due</th>
                 </template>
               </tr>
             </thead>
@@ -112,10 +115,13 @@ const money = (n: number) =>
                 <template v-if="report.scope === 'full'">
                   <td class="num">{{ p.points }}</td>
                   <td class="num">{{ money(p.remuneration ?? 0) }}</td>
+                  <td class="num">{{ money(p.bonus ?? 0) }}</td>
+                  <td class="num">{{ money(p.reimbursements ?? 0) }}</td>
+                  <td class="num font-semibold">{{ money(p.total_due ?? 0) }}</td>
                 </template>
               </tr>
               <tr v-if="report.per_person.length === 0">
-                <td :colspan="report.scope === 'full' ? 7 : 5" class="py-6 text-center text-muted">
+                <td :colspan="report.scope === 'full' ? 10 : 5" class="py-6 text-center text-muted">
                   No activity this month.
                 </td>
               </tr>

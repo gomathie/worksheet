@@ -86,10 +86,17 @@ const rateNote = computed(() => {
         <div class="rounded-lg border border-teal bg-teal-soft p-4">
           <p class="field-label">Amount due to you this month</p>
           <p class="mono text-3xl font-semibold text-teal">
-            {{ money(report.my_summary.remuneration) }}
+            {{ money(report.my_summary.total_due ?? report.my_summary.remuneration) }}
           </p>
           <p class="mt-1 text-xs text-muted">
-            Based on your {{ report.my_summary.points }} point(s) for {{ monthLabel }}.
+            {{ report.my_summary.points }} point(s) = {{ money(report.my_summary.remuneration) }}
+            <template v-if="report.my_summary.bonus">
+              + {{ money(report.my_summary.bonus) }} bonus</template
+            >
+            <template v-if="report.my_summary.reimbursements">
+              + {{ money(report.my_summary.reimbursements) }} reimbursements</template
+            >
+            for {{ monthLabel }}.
           </p>
         </div>
       </section>
@@ -107,7 +114,10 @@ const rateNote = computed(() => {
                 <th class="num">QAP</th>
                 <template v-if="report.scope === 'full'">
                   <th class="num">Points</th>
-                  <th class="num">Remuneration</th>
+                  <th class="num">Base</th>
+                  <th class="num">Bonus</th>
+                  <th class="num">Reimb.</th>
+                  <th class="num">Total due</th>
                 </template>
               </tr>
             </thead>
@@ -121,6 +131,9 @@ const rateNote = computed(() => {
                 <template v-if="report.scope === 'full'">
                   <td class="num">{{ p.points }}</td>
                   <td class="num">{{ money(p.remuneration ?? 0) }}</td>
+                  <td class="num">{{ money(p.bonus ?? 0) }}</td>
+                  <td class="num">{{ money(p.reimbursements ?? 0) }}</td>
+                  <td class="num font-semibold">{{ money(p.total_due ?? 0) }}</td>
                 </template>
               </tr>
               <tr class="totals">
@@ -132,6 +145,9 @@ const rateNote = computed(() => {
                 <template v-if="report.scope === 'full'">
                   <td class="num">{{ report.totals.points }}</td>
                   <td class="num">{{ money(report.totals.remuneration ?? 0) }}</td>
+                  <td class="num">{{ money(report.totals.bonus ?? 0) }}</td>
+                  <td class="num">{{ money(report.totals.reimbursements ?? 0) }}</td>
+                  <td class="num font-semibold">{{ money(report.totals.total_due ?? 0) }}</td>
                 </template>
               </tr>
             </tbody>

@@ -6,7 +6,9 @@
       "PowerShell(npx wrangler whoami 2>$null)",
       "WebFetch(domain:developers.cloudflare.com)",
       "PowerShell($out = node \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\genhash.mjs\"; $cred = $out | ConvertFrom-Json; $cred.password | Out-File \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\temppass.txt\" -Encoding utf8; npx wrangler d1 execute ledger-db --remote --command \"INSERT INTO employees \\(id, name, username, password_hash, role\\) VALUES \\('temp-verify-admin', 'Temp Verify', 'tempverify', '$\\($cred.hash\\)', 'admin'\\)\" | Out-Null; \"temp admin created\")",
-      "PowerShell(npx wrangler pages deployment list --project-name ledger 2>$null)"
+      "PowerShell(npx wrangler pages deployment list --project-name ledger 2>$null)",
+      "PowerShell(npx wrangler d1 execute ledger-db --remote --command \"DELETE FROM entries WHERE employee_id IN \\('d4ffff60-90e9-4eee-8b8f-ddfb00626468','temp-verify-admin'\\); DELETE FROM employees WHERE id IN \\('d4ffff60-90e9-4eee-8b8f-ddfb00626468','temp-verify-admin'\\)\")",
+      "PowerShell(\"test data removed\")"
     ]
   }
 }

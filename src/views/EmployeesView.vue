@@ -29,6 +29,7 @@ const form = ref({
   role: 'employee',
   rights: blankRights(),
   work_type_ids: [] as string[],
+  rate_overrides: {} as Record<string, number | ''>,
 })
 
 async function load() {
@@ -49,6 +50,7 @@ function startEdit(e: Employee) {
     role: e.role,
     rights: { ...e.rights },
     work_type_ids: [...e.work_type_ids],
+    rate_overrides: { ...e.rate_overrides },
   }
 }
 
@@ -62,6 +64,7 @@ function resetForm() {
     role: 'employee',
     rights: blankRights(),
     work_type_ids: activeTypes.value.map((w) => w.id),
+    rate_overrides: {},
   }
 }
 
@@ -76,6 +79,11 @@ async function submit() {
       role: form.value.role,
       rights: form.value.rights,
       work_type_ids: form.value.work_type_ids,
+      rate_overrides: Object.fromEntries(
+        Object.entries(form.value.rate_overrides).filter(
+          ([id, v]) => form.value.work_type_ids.includes(id) && v !== '' && v !== null,
+        ),
+      ),
     }
     if (form.value.password) payload.password = form.value.password
     if (editingId.value) {
@@ -110,7 +118,10 @@ async function toggleActive(e: Employee) {
 function workSummary(e: Employee): string {
   const names = activeTypes.value
     .filter((w) => e.work_type_ids.includes(w.id))
-    .map((w) => w.name)
+    .map((w) => {
+      const custom = e.rate_overrides?.[w.id]
+      return custom !== undefined ? `${w.name} @${custom}` : w.name
+    })
   return names.length ? names.join(', ') : 'Hours only'
 }
 
@@ -181,18 +192,32 @@ function rightsSummary(e: Employee): string {
         <fieldset class="mt-4">
           <legend class="field-label">Work they do (types they can log)</legend>
           <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            <label
+            <div
               v-for="wt in activeTypes"
               :key="wt.id"
               class="flex items-center gap-2"
             >
-              <input v-model="form.work_type_ids" type="checkbox" :value="wt.id" />
-              {{ wt.name }}
-            </label>
+              <label class="flex items-center gap-2">
+                <input v-model="form.work_type_ids" type="checkbox" :value="wt.id" />
+                {{ wt.name }}
+              </label>
+              <input
+                v-if="form.work_type_ids.includes(wt.id)"
+                v-model.number="form.rate_overrides[wt.id]"
+                type="number"
+                min="0"
+                step="any"
+                class="field-input mono !w-20 text-right"
+                :placeholder="String(wt.points_per_unit ?? '')"
+                :title="`Custom points per unit (blank = general rate ${wt.points_per_unit})`"
+              />
+            </div>
           </div>
           <p class="mt-1 text-xs text-muted">
-            Untick everything for staff tracked by hours &amp; notes only (they earn
-            through bonuses/reimbursements). Manage the type list in Settings.
+            The box next to each ticked type is an optional custom rate (points per
+            unit) for this employee — leave blank to use the general rate. Untick
+            everything for staff tracked by hours &amp; notes only. Manage types and
+            general rates in Settings.
           </p>
         </fieldset>
 

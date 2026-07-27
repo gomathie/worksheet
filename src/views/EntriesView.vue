@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { computeHours } from '../../shared/logic'
+import { downloadCsv } from '../csv'
 import { useAuthStore } from '../stores/auth'
 import type { Employee, Entry, WorkTypeInfo } from '../types'
 
@@ -135,6 +136,28 @@ async function remove(entry: Entry) {
   await loadEntries()
 }
 
+function exportCsv() {
+  const header = [
+    'Date',
+    ...(auth.isAdmin ? ['Employee'] : []),
+    'Start',
+    'End',
+    'Hours',
+    ...activeTypes.value.map((w) => w.name),
+    'Notes',
+  ]
+  const rows = entries.value.map((e) => [
+    e.work_date,
+    ...(auth.isAdmin ? [e.employee_name ?? ''] : []),
+    e.time_start,
+    e.time_end,
+    e.hours,
+    ...activeTypes.value.map((w) => e.units[w.id] ?? 0),
+    e.notes ?? '',
+  ])
+  downloadCsv(`entries-${month.value}.csv`, [header, ...rows])
+}
+
 const showActions = computed(
   () => auth.rights.edit_entries || auth.rights.delete_entries,
 )
@@ -251,6 +274,13 @@ const tableColspan = computed(
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 class="display text-2xl">Recent entries</h2>
         <div class="flex flex-wrap items-center gap-2">
+          <button
+            class="btn btn-sm"
+            :disabled="entries.length === 0"
+            @click="exportCsv"
+          >
+            Download CSV
+          </button>
           <input
             v-model="month"
             type="month"

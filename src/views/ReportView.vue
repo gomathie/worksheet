@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { downloadCsv } from '../csv'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
 import type { ReportPayload } from '../types'
@@ -42,6 +43,66 @@ const money = (n: number) =>
 
 const printPage = () => window.print()
 
+function exportSummaryCsv() {
+  const r = report.value
+  if (!r) return
+  const full = r.scope === 'full'
+  const header = [
+    'Employee',
+    'Days worked',
+    'Hours',
+    ...visibleTypes.value.map((w) => w.name),
+    ...(full ? ['Points', 'Base', 'Bonus', 'Reimbursements', 'Total due'] : []),
+  ]
+  const rows = r.per_person.map((p) => [
+    p.name,
+    p.days_worked,
+    p.hours,
+    ...visibleTypes.value.map((w) => p.units[w.id] ?? 0),
+    ...(full
+      ? [p.points ?? 0, p.remuneration ?? 0, p.bonus ?? 0, p.reimbursements ?? 0, p.total_due ?? 0]
+      : []),
+  ])
+  const totals = [
+    'Total',
+    r.totals.days_worked,
+    r.totals.hours,
+    ...visibleTypes.value.map((w) => r.totals.units[w.id] ?? 0),
+    ...(full
+      ? [
+          r.totals.points ?? 0,
+          r.totals.remuneration ?? 0,
+          r.totals.bonus ?? 0,
+          r.totals.reimbursements ?? 0,
+          r.totals.total_due ?? 0,
+        ]
+      : []),
+  ]
+  downloadCsv(`report-summary-${month.value}.csv`, [header, ...rows, totals])
+}
+
+function exportDailyCsv() {
+  const r = report.value
+  if (!r) return
+  const header = [
+    'Date',
+    'Employee',
+    'Start',
+    'End',
+    'Hours',
+    ...visibleTypes.value.map((w) => w.name),
+  ]
+  const rows = r.daily_detail.map((row) => [
+    row.date,
+    row.employee_name,
+    row.time_start,
+    row.time_end,
+    row.hours,
+    ...visibleTypes.value.map((w) => row.units[w.id] ?? 0),
+  ])
+  downloadCsv(`report-daily-${month.value}.csv`, [header, ...rows])
+}
+
 const visibleTypes = computed(() => {
   const r = report.value
   if (!r) return []
@@ -66,6 +127,12 @@ const rateNote = computed(() => {
       <h2 class="display text-2xl">Monthly report</h2>
       <div class="flex flex-wrap items-center gap-3">
         <MonthPicker v-model="month" />
+        <button class="btn" :disabled="!report" @click="exportSummaryCsv">
+          Summary CSV
+        </button>
+        <button class="btn" :disabled="!report" @click="exportDailyCsv">
+          Daily CSV
+        </button>
         <button class="btn btn-solid" @click="printPage">
           Print / Save as PDF
         </button>

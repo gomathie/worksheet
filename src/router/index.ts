@@ -41,6 +41,12 @@ const router = createRouter({
       component: () => import('../views/SettingsView.vue'),
       meta: { auth: true, admin: true },
     },
+    {
+      path: '/activity',
+      name: 'activity',
+      component: () => import('../views/AuditView.vue'),
+      meta: { auth: true, admin: true },
+    },
   ],
 })
 

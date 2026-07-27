@@ -416,7 +416,13 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   const created = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
     .bind(id)
     .first<Employee>()
-  return json(publicEmployee(created!, typeIds), 201)
+  const savedOverrides: Record<string, number> = {}
+  for (const [typeId, rate] of Object.entries(body.rate_overrides ?? {})) {
+    if (typeIds.includes(typeId) && rate !== null && rate !== ('' as unknown)) {
+      savedOverrides[typeId] = Number(rate)
+    }
+  }
+  return json(publicEmployee(created!, typeIds, savedOverrides), 201)
 }
 
 async function patchEmployee(
@@ -933,6 +939,41 @@ async function confirmReceipt(request: Request, env: Env): Promise<Response> {
   return json({ ok: true })
 }
 
+async function changeOwnPassword(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const { current_password, new_password } = await readJson<{
+    current_password?: string
+    new_password?: string
+  }>(request)
+  if (
+    !user.password_hash ||
+    !current_password ||
+    !(await verifyPassword(current_password, user.password_hash))
+  ) {
+    throw new ApiError(401, 'Current password is incorrect')
+  }
+  const hash = await hashPassword(assertPassword(new_password))
+  await env.DB.prepare('UPDATE employees SET password_hash = ? WHERE id = ?')
+    .bind(hash, user.id)
+    .run()
+  await audit(env, user.id, 'change_password', user.id)
+  return json({ ok: true })
+}
+
+async function listAudit(request: Request, env: Env): Promise<Response> {
+  await requireAdmin(request, env)
+  const url = new URL(request.url)
+  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+  const { results } = await env.DB.prepare(
+    `SELECT a.id, a.action, a.target_id, a.meta, a.created_at, emp.name AS actor_name
+     FROM audit_log a LEFT JOIN employees emp ON emp.id = a.actor_id
+     WHERE a.created_at LIKE ? ORDER BY a.created_at DESC LIMIT 500`,
+  )
+    .bind(`${month}-%`)
+    .all()
+  return json(results)
+}
+
 /**
  * The viewer's own pay summary for a month. Available to every signed-in
  * user regardless of dashboard/report rights — it only exposes their own
@@ -972,7 +1013,14 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
 
   const units: Record<string, number> = {}
   for (const r of unitRows.results) units[r.work_type_id] = r.units
-  const points = computePoints(units, wtRes.results)
+  const { results: ownOverrideRows } = await env.DB.prepare(
+    'SELECT work_type_id, points_per_unit FROM employee_work_types WHERE employee_id = ? AND points_per_unit IS NOT NULL',
+  )
+    .bind(user.id)
+    .all<{ work_type_id: string; points_per_unit: number }>()
+  const ownOverrides: Record<string, number> = {}
+  for (const r of ownOverrideRows) ownOverrides[r.work_type_id] = r.points_per_unit
+  const points = computePoints(units, wtRes.results, ownOverrides)
   const base = computeRemuneration(points, settings)
   const bonus = adjRes.results
     .filter((a) => a.type === 'bonus' && a.status === 'approved')
@@ -1237,6 +1285,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/me/remuneration' && method === 'GET') {
     return myRemuneration(request, env)
   }
+  if (path === '/api/me/password' && method === 'POST') {
+    return changeOwnPassword(request, env)
+  }
+  if (path === '/api/audit' && method === 'GET') return listAudit(request, env)
 
   if (path === '/api/settings' && method === 'GET') return getSettings(request, env)
   if (path === '/api/settings' && method === 'PUT') return putSettings(request, env)

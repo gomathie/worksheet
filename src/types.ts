@@ -38,6 +38,7 @@ export interface Employee {
   role: 'admin' | 'employee'
   rights: Rights
   work_type_ids: string[]
+  rate_overrides: Record<string, number>
   has_password?: number
   active: number
   created_at?: string

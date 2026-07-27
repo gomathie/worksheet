@@ -23,9 +23,15 @@ const TYPES = [
 ]
 const typeLabel = (t: string) => TYPES.find((x) => x.value === t)?.label ?? t
 
+// Paid leave requires the log_leave right; other types are open to everyone.
+const canLogLeave = computed(() => auth.isAdmin || auth.rights.log_leave)
+const formTypes = computed(() =>
+  canLogLeave.value ? TYPES : TYPES.filter((t) => t.value !== 'leave'),
+)
+
 const form = ref({
   work_date: auth.user!.today,
-  type: 'leave',
+  type: auth.isAdmin || auth.rights.log_leave ? 'leave' : 'sick',
   note: '',
 })
 
@@ -173,7 +179,9 @@ const allowance = computed<number | null>(() => {
         <div>
           <label class="field-label" for="ab-type">Type</label>
           <select id="ab-type" v-model="form.type" class="field-input">
-            <option v-for="t in TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+            <option v-for="t in formTypes" :key="t.value" :value="t.value">
+              {{ t.label }}
+            </option>
           </select>
         </div>
         <div class="md:col-span-2">

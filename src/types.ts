@@ -10,7 +10,7 @@ export interface Rights {
   view_reports: boolean
   view_remuneration: boolean
   view_payslip: boolean
-  manage_absences: boolean
+  log_leave: boolean
 }
 
 export interface WorkTypeInfo {

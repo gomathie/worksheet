@@ -7,12 +7,24 @@ import { useAuthStore } from './stores/auth'
 const auth = useAuthStore()
 const router = useRouter()
 
+const menuOpen = ref(false)
+
 async function signOut() {
+  menuOpen.value = false
   await auth.logout()
   router.push({ name: 'login' })
 }
 
 const showPw = ref(false)
+
+function openPassword() {
+  menuOpen.value = false
+  showPw.value = true
+  pwError.value = ''
+  pwDone.value = false
+  pwCurrent.value = ''
+  pwNew.value = ''
+}
 const pwCurrent = ref('')
 const pwNew = ref('')
 const pwBusy = ref(false)
@@ -65,14 +77,41 @@ async function changePassword() {
           </p>
         </div>
       </div>
-      <div v-if="auth.user" class="flex items-center gap-3 text-sm">
-        <span class="text-muted">{{ auth.user.name }}</span>
-        <span
-          class="display rounded-full border border-line px-2 py-0.5 text-xs tracking-wider"
-          >{{ auth.user.role }}</span
+      <div v-if="auth.user" class="relative text-sm">
+        <button
+          class="btn btn-sm flex items-center gap-2"
+          @click="menuOpen = !menuOpen"
         >
-        <button class="btn btn-sm" @click="togglePw">Password</button>
-        <button class="btn btn-sm" @click="signOut">Sign out</button>
+          <span>{{ auth.user.name }}</span>
+          <span class="text-muted">▾</span>
+        </button>
+
+        <!-- click-away backdrop -->
+        <div v-if="menuOpen" class="fixed inset-0 z-10" @click="menuOpen = false" />
+
+        <div
+          v-if="menuOpen"
+          class="panel absolute right-0 z-20 mt-1 w-52 !p-1 text-sm shadow-lg"
+        >
+          <div class="border-b border-line px-3 py-2">
+            <p class="font-medium">{{ auth.user.name }}</p>
+            <p class="text-xs tracking-wider text-muted uppercase">
+              {{ auth.user.role }}
+            </p>
+          </div>
+          <button
+            class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
+            @click="openPassword"
+          >
+            Change password
+          </button>
+          <button
+            class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
+            @click="signOut"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
 
@@ -145,11 +184,7 @@ async function changePassword() {
       <RouterLink :to="{ name: 'trends' }" class="btn" active-class="btn-solid"
         >Trends</RouterLink
       >
-      <RouterLink
-        v-if="auth.rights.manage_absences"
-        :to="{ name: 'absences' }"
-        class="btn"
-        active-class="btn-solid"
+      <RouterLink :to="{ name: 'absences' }" class="btn" active-class="btn-solid"
         >Absences</RouterLink
       >
       <template v-if="auth.isAdmin">

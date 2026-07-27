@@ -321,7 +321,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
     view_remuneration: Boolean(raw?.view_remuneration ?? fallback.view_remuneration),
     view_payslip: Boolean(raw?.view_payslip ?? fallback.view_payslip),
-    manage_absences: Boolean(raw?.manage_absences ?? fallback.manage_absences),
+    log_leave: Boolean(raw?.log_leave ?? fallback.log_leave),
   })
 }
 
@@ -397,7 +397,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     view_reports: false,
     view_remuneration: false,
     view_payslip: false,
-    manage_absences: false,
+    log_leave: false,
   })
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
@@ -1326,7 +1326,6 @@ const YEAR_RE = /^\d{4}$/
 
 async function listAbsences(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  requireRight(user, 'manage_absences')
   const url = new URL(request.url)
   const year = url.searchParams.get('year') ?? String(new Date().getUTCFullYear())
   if (!YEAR_RE.test(year)) throw new ApiError(400, 'year must be YYYY')
@@ -1349,7 +1348,6 @@ async function listAbsences(request: Request, env: Env): Promise<Response> {
 
 async function createAbsence(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  requireRight(user, 'manage_absences')
   const body = await readJson<{
     employee_id?: string
     work_date?: string
@@ -1366,6 +1364,8 @@ async function createAbsence(request: Request, env: Env): Promise<Response> {
   if (!body.type || !ABSENCE_TYPES.has(body.type)) {
     throw new ApiError(400, 'type must be leave, sick, holiday, unpaid or other')
   }
+  // Anyone can log sick/holiday/unpaid/other; paid leave needs the right.
+  if (body.type === 'leave') requireRight(user, 'log_leave')
   if (employeeId !== user.id) {
     const target = await env.DB.prepare(
       'SELECT id FROM employees WHERE id = ? AND active = 1',
@@ -1401,7 +1401,6 @@ async function createAbsence(request: Request, env: Env): Promise<Response> {
 
 async function deleteAbsence(request: Request, env: Env, id: string): Promise<Response> {
   const user = await requireUser(request, env)
-  requireRight(user, 'manage_absences')
   const existing = await env.DB.prepare('SELECT * FROM absences WHERE id = ?')
     .bind(id)
     .first<AbsenceRow>()

@@ -10,7 +10,7 @@ const NO_RIGHTS: Rights = {
   view_reports: false,
   view_remuneration: false,
   view_payslip: false,
-  manage_absences: false,
+  log_leave: false,
 }
 
 export const useAuthStore = defineStore('auth', {

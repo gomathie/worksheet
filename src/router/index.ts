@@ -45,7 +45,7 @@ const router = createRouter({
       path: '/absences',
       name: 'absences',
       component: () => import('../views/AbsencesView.vue'),
-      meta: { auth: true, right: 'manage_absences' },
+      meta: { auth: true },
     },
     {
       path: '/employees',

@@ -75,6 +75,7 @@ export interface EntryRow {
   classifications: number
   qap: number
   notes: string | null
+  status: 'approved' | 'pending' | 'rejected'
   created_at: string
   updated_at: string
 }

@@ -145,7 +145,11 @@ async function changePassword() {
       <RouterLink :to="{ name: 'trends' }" class="btn" active-class="btn-solid"
         >Trends</RouterLink
       >
-      <RouterLink :to="{ name: 'absences' }" class="btn" active-class="btn-solid"
+      <RouterLink
+        v-if="auth.rights.manage_absences"
+        :to="{ name: 'absences' }"
+        class="btn"
+        active-class="btn-solid"
         >Absences</RouterLink
       >
       <template v-if="auth.isAdmin">

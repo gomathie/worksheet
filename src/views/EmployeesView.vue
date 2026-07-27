@@ -21,6 +21,7 @@ const blankRights = () => ({
   view_reports: false,
   view_remuneration: false,
   view_payslip: false,
+  manage_absences: false,
 })
 
 const form = ref({
@@ -147,6 +148,7 @@ function rightsSummary(e: Employee): string {
     ['view_reports', 'Reports'],
     ['view_remuneration', 'Remuneration'],
     ['view_payslip', 'Payslip'],
+    ['manage_absences', 'Absences'],
   ]
   const granted = labels.filter(([key]) => e.rights[key]).map(([, label]) => label)
   return granted.length ? granted.join(', ') : 'View own entries only'
@@ -292,6 +294,10 @@ function rightsSummary(e: Employee): string {
             <label class="flex items-center gap-2">
               <input v-model="form.rights.view_payslip" type="checkbox" />
               View own payslip
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.manage_absences" type="checkbox" />
+              Record leave &amp; absences
             </label>
           </div>
         </fieldset>

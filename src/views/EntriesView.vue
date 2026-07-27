@@ -175,12 +175,30 @@ const limitReached = computed(
     usedOnFormDate.value >= entryLimit.value,
 )
 
+const approvalOn = computed(() => auth.user!.entry_approval)
+
+async function setStatus(entry: Entry, status: 'approved' | 'rejected') {
+  error.value = ''
+  try {
+    await api(`/api/entries/${entry.id}/status`, { method: 'PATCH', json: { status } })
+    await loadEntries()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to update status'
+  }
+}
+
+const statusLabel = (s: string) =>
+  s === 'pending' ? 'Pending' : s === 'rejected' ? 'Rejected' : 'Approved'
+
 const showActions = computed(
   () => auth.rights.edit_entries || auth.rights.delete_entries,
 )
 const tableColspan = computed(
   () =>
-    (auth.isAdmin ? 6 : 5) + activeTypes.value.length + (showActions.value ? 1 : 0),
+    (auth.isAdmin ? 6 : 5) +
+    activeTypes.value.length +
+    (approvalOn.value ? 1 : 0) +
+    (showActions.value ? 1 : 0),
 )
 </script>
 
@@ -288,6 +306,9 @@ const tableColspan = computed(
               {{ usedOnFormDate }} of {{ entryLimit }} entries used for this date.
             </template>
           </span>
+          <span v-if="!auth.isAdmin && approvalOn" class="text-xs text-muted">
+            Entries need admin approval before they count.
+          </span>
         </div>
       </form>
       <p v-if="error" class="mt-3 rounded-lg border border-red bg-red-soft p-3 text-sm text-red">
@@ -337,6 +358,7 @@ const tableColspan = computed(
               <th class="num">Hours</th>
               <th v-for="wt in activeTypes" :key="wt.id" class="num">{{ wt.name }}</th>
               <th>Notes</th>
+              <th v-if="approvalOn">Status</th>
               <th v-if="showActions"></th>
             </tr>
           </thead>
@@ -352,6 +374,29 @@ const tableColspan = computed(
               </td>
               <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
                 {{ e.notes }}
+              </td>
+              <td v-if="approvalOn" class="whitespace-nowrap">
+                <span
+                  class="display rounded-full border px-2 py-0.5 text-xs tracking-wider"
+                  :class="
+                    e.status === 'approved'
+                      ? 'border-teal text-teal'
+                      : e.status === 'rejected'
+                        ? 'border-red text-red'
+                        : 'border-amber text-amber'
+                  "
+                  >{{ statusLabel(e.status) }}</span
+                >
+                <template v-if="auth.isAdmin && e.status !== 'approved'">
+                  <button class="btn btn-sm ml-1" @click="setStatus(e, 'approved')">
+                    Approve
+                  </button>
+                </template>
+                <template v-if="auth.isAdmin && e.status === 'pending'">
+                  <button class="btn btn-sm btn-danger ml-1" @click="setStatus(e, 'rejected')">
+                    Reject
+                  </button>
+                </template>
               </td>
               <td v-if="showActions" class="whitespace-nowrap">
                 <button

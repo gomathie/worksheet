@@ -4,7 +4,12 @@ import { api } from '../api'
 import { downloadJson } from '../csv'
 import type { RateSettings, WorkTypeInfo } from '../types'
 
-const form = ref<RateSettings>({ point_value: 1, currency: '$', max_entries_per_day: 0 })
+const form = ref<RateSettings>({
+  point_value: 1,
+  currency: '$',
+  max_entries_per_day: 0,
+  require_entry_approval: 0,
+})
 const workTypes = ref<WorkTypeInfo[]>([])
 const newType = ref({ name: '', points_per_unit: 1 })
 const error = ref('')
@@ -203,6 +208,21 @@ function downloadBackup() {
           <p class="mt-1 text-xs text-muted">
             The default cap on how many times an employee can log per day. Set a
             per-person override in the Employees tab. Admins are never capped.
+          </p>
+        </div>
+        <div class="col-span-2">
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              :checked="form.require_entry_approval === 1"
+              type="checkbox"
+              @change="form.require_entry_approval = ($event.target as HTMLInputElement).checked ? 1 : 0"
+            />
+            Require admin approval for employee time entries
+          </label>
+          <p class="mt-1 text-xs text-muted">
+            When on, entries logged by employees stay pending and only count
+            toward pay once you approve them. Admin-logged entries are approved
+            automatically.
           </p>
         </div>
         <div class="col-span-2">

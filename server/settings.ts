@@ -7,6 +7,7 @@ const DEFAULTS: RateSettings = {
   point_value: 1,
   currency: '$',
   max_entries_per_day: 0,
+  require_entry_approval: 0,
 }
 
 export async function loadSettings(env: Env): Promise<RateSettings> {
@@ -20,6 +21,9 @@ export async function loadSettings(env: Env): Promise<RateSettings> {
     max_entries_per_day: Number(
       map.get('max_entries_per_day') ?? DEFAULTS.max_entries_per_day,
     ),
+    require_entry_approval: Number(
+      map.get('require_entry_approval') ?? DEFAULTS.require_entry_approval,
+    ),
   }
 }
 
@@ -31,5 +35,6 @@ export async function saveSettings(env: Env, s: RateSettings): Promise<void> {
     stmt.bind('point_value', String(s.point_value)),
     stmt.bind('currency', s.currency),
     stmt.bind('max_entries_per_day', String(s.max_entries_per_day)),
+    stmt.bind('require_entry_approval', String(s.require_entry_approval)),
   ])
 }

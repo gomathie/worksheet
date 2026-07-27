@@ -321,6 +321,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
     view_remuneration: Boolean(raw?.view_remuneration ?? fallback.view_remuneration),
     view_payslip: Boolean(raw?.view_payslip ?? fallback.view_payslip),
+    manage_absences: Boolean(raw?.manage_absences ?? fallback.manage_absences),
   })
 }
 
@@ -396,6 +397,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     view_reports: false,
     view_remuneration: false,
     view_payslip: false,
+    manage_absences: false,
   })
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
@@ -706,10 +708,18 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
   const items = await normalizeItems(env, employeeId, body.items)
   const hours = computeHours(body.time_start!, body.time_end!)
 
+  // When approval is required, employee-logged entries start pending;
+  // admin-logged entries are auto-approved.
+  const settings = await loadSettings(env)
+  const status =
+    settings.require_entry_approval === 1 && user.role !== 'admin'
+      ? 'pending'
+      : 'approved'
+
   const id = crypto.randomUUID()
   await env.DB.prepare(
-    `INSERT INTO entries (id, employee_id, work_date, time_start, time_end, hours, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO entries (id, employee_id, work_date, time_start, time_end, hours, notes, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -719,6 +729,7 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
       body.time_end,
       hours,
       body.notes?.trim() || null,
+      status,
     )
     .run()
   await writeEntryItems(env, id, items)
@@ -767,9 +778,17 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
   }
   const hours = computeHours(next.time_start, next.time_end)
 
+  // An employee editing their entry sends it back for approval (when required);
+  // admin edits leave the current status untouched.
+  const settings = await loadSettings(env)
+  const nextStatus =
+    settings.require_entry_approval === 1 && user.role !== 'admin'
+      ? 'pending'
+      : entry.status
+
   await env.DB.prepare(
     `UPDATE entries SET employee_id = ?, work_date = ?, time_start = ?, time_end = ?,
-       hours = ?, notes = ?, updated_at = datetime('now')
+       hours = ?, notes = ?, status = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -779,6 +798,7 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
       next.time_end,
       hours,
       next.notes,
+      nextStatus,
       id,
     )
     .run()
@@ -805,6 +825,24 @@ async function deleteEntry(request: Request, env: Env, id: string): Promise<Resp
   requireRight(user, 'delete_entries')
   await env.DB.prepare('DELETE FROM entries WHERE id = ?').bind(id).run()
   await audit(env, user.id, 'delete_entry', id)
+  return json({ ok: true })
+}
+
+/** Admin approve/reject a time entry. Only approved entries count toward pay. */
+async function setEntryStatus(request: Request, env: Env, id: string): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{ status?: string }>(request)
+  if (body.status !== 'approved' && body.status !== 'rejected') {
+    throw new ApiError(400, "status must be 'approved' or 'rejected'")
+  }
+  const entry = await env.DB.prepare('SELECT id FROM entries WHERE id = ?')
+    .bind(id)
+    .first()
+  if (!entry) throw new ApiError(404, 'Entry not found')
+  await env.DB.prepare('UPDATE entries SET status = ? WHERE id = ?')
+    .bind(body.status, id)
+    .run()
+  await audit(env, admin.id, 'set_entry_status', id, { status: body.status })
   return json({ ok: true })
 }
 
@@ -1081,12 +1119,12 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
   const [settings, hoursRow, unitRows, wtRes, adjRes, payment] = await Promise.all([
     loadSettings(env),
     env.DB.prepare(
-      'SELECT SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ?',
+      "SELECT SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ? AND status = 'approved'",
     )
       .bind(employee.id, `${month}-%`)
       .first<{ hours: number | null }>(),
     env.DB.prepare(
-      'SELECT ei.work_type_id, SUM(ei.units) AS units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date LIKE ? GROUP BY ei.work_type_id',
+      "SELECT ei.work_type_id, SUM(ei.units) AS units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date LIKE ? AND e.status = 'approved' GROUP BY ei.work_type_id",
     )
       .bind(employee.id, `${month}-%`)
       .all<{ work_type_id: string; units: number }>(),
@@ -1215,12 +1253,12 @@ async function trends(request: Request, env: Env): Promise<Response> {
   const [settings, hoursRows, unitRows, wtRes, overrideRows] = await Promise.all([
     loadSettings(env),
     env.DB.prepare(
-      'SELECT substr(work_date,1,7) AS m, SUM(hours) AS h FROM entries WHERE employee_id = ? AND work_date >= ? AND work_date < ? GROUP BY m',
+      "SELECT substr(work_date,1,7) AS m, SUM(hours) AS h FROM entries WHERE employee_id = ? AND work_date >= ? AND work_date < ? AND status = 'approved' GROUP BY m",
     )
       .bind(targetId, rangeStart, rangeEnd)
       .all<{ m: string; h: number }>(),
     env.DB.prepare(
-      'SELECT substr(e.work_date,1,7) AS m, ei.work_type_id AS wt, SUM(ei.units) AS u FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date >= ? AND e.work_date < ? GROUP BY m, wt',
+      "SELECT substr(e.work_date,1,7) AS m, ei.work_type_id AS wt, SUM(ei.units) AS u FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date >= ? AND e.work_date < ? AND e.status = 'approved' GROUP BY m, wt",
     )
       .bind(targetId, rangeStart, rangeEnd)
       .all<{ m: string; wt: string; u: number }>(),
@@ -1288,6 +1326,7 @@ const YEAR_RE = /^\d{4}$/
 
 async function listAbsences(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
+  requireRight(user, 'manage_absences')
   const url = new URL(request.url)
   const year = url.searchParams.get('year') ?? String(new Date().getUTCFullYear())
   if (!YEAR_RE.test(year)) throw new ApiError(400, 'year must be YYYY')
@@ -1310,6 +1349,7 @@ async function listAbsences(request: Request, env: Env): Promise<Response> {
 
 async function createAbsence(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
+  requireRight(user, 'manage_absences')
   const body = await readJson<{
     employee_id?: string
     work_date?: string
@@ -1361,6 +1401,7 @@ async function createAbsence(request: Request, env: Env): Promise<Response> {
 
 async function deleteAbsence(request: Request, env: Env, id: string): Promise<Response> {
   const user = await requireUser(request, env)
+  requireRight(user, 'manage_absences')
   const existing = await env.DB.prepare('SELECT * FROM absences WHERE id = ?')
     .bind(id)
     .first<AbsenceRow>()
@@ -1389,6 +1430,7 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     point_value?: number
     currency?: string
     max_entries_per_day?: number
+    require_entry_approval?: number | boolean
   }>(request)
   const num = (v: unknown, field: string) => {
     const n = Number(v)
@@ -1399,6 +1441,7 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     point_value: num(body.point_value, 'point_value'),
     currency: String(body.currency ?? '$').slice(0, 4) || '$',
     max_entries_per_day: Math.floor(num(body.max_entries_per_day ?? 0, 'max_entries_per_day')),
+    require_entry_approval: body.require_entry_approval ? 1 : 0,
   }
   await saveSettings(env, next)
   await audit(env, admin.id, 'update_settings', null, next)
@@ -1419,7 +1462,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     await Promise.all([
       loadSettings(env),
       env.DB.prepare(
-        'SELECT employee_id, work_date, hours, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? ORDER BY work_date, time_start',
+        "SELECT employee_id, work_date, hours, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? AND status = 'approved' ORDER BY work_date, time_start",
       )
         .bind(`${month}-%`)
         .all<EntryRow>(),
@@ -1577,6 +1620,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       // 0 = unlimited; admins are exempt from the per-day cap.
       entry_limit: user.role === 'admin' ? 0 : await effectiveEntryLimit(env, user),
       leave_allowance: user.leave_allowance,
+      entry_approval: (await loadSettings(env)).require_entry_approval === 1,
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
     })
   }
@@ -1600,6 +1644,10 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/entries' && method === 'GET') return listEntries(request, env)
   if (path === '/api/entries' && method === 'POST') return createEntry(request, env)
+  const entryStatusMatch = /^\/api\/entries\/([\w-]+)\/status$/.exec(path)
+  if (entryStatusMatch && method === 'PATCH') {
+    return setEntryStatus(request, env, entryStatusMatch[1])
+  }
   const entryMatch = /^\/api\/entries\/([\w-]+)$/.exec(path)
   if (entryMatch) {
     if (method === 'PATCH') return patchEntry(request, env, entryMatch[1])

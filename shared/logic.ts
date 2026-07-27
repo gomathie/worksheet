@@ -5,6 +5,8 @@ export interface RateSettings {
   currency: string
   /** Global cap on entries an employee may log per day; 0 = unlimited. */
   max_entries_per_day: number
+  /** 1 = employee entries need admin approval before they count; 0 = off. */
+  require_entry_approval: number
 }
 
 export interface WorkType {

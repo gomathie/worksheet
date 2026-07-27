@@ -9,7 +9,7 @@ import {
   type WorkType,
 } from '../shared/logic'
 
-const rates: RateSettings = { point_value: 1, currency: '$', max_entries_per_day: 0 }
+const rates: RateSettings = { point_value: 1, currency: '$', max_entries_per_day: 0, require_entry_approval: 0 }
 
 const workTypes: WorkType[] = [
   { id: 'wt-classification', name: 'Classification', points_per_unit: 1 },
@@ -66,7 +66,7 @@ describe('points & remuneration', () => {
     ) // 8 + 6 + 5
     expect(points).toBe(19)
     expect(
-      computeRemuneration(points, { point_value: 0.5, currency: '₵', max_entries_per_day: 0 }),
+      computeRemuneration(points, { point_value: 0.5, currency: '₵', max_entries_per_day: 0, require_entry_approval: 0 }),
     ).toBe(9.5)
   })
   it('ignores units for unknown work types', () => {
@@ -174,6 +174,7 @@ describe('aggregateMonthly', () => {
       point_value: 2.5,
       currency: '$',
       max_entries_per_day: 0,
+      require_entry_approval: 0,
     })
     expect(r.totals.points).toBe(12)
     expect(r.totals.remuneration).toBe(30)

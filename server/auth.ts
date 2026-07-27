@@ -80,6 +80,7 @@ export interface Rights {
   view_reports: boolean
   view_remuneration: boolean
   view_payslip: boolean
+  manage_absences: boolean
 }
 
 export const DEFAULT_RIGHTS: Rights = {
@@ -90,6 +91,7 @@ export const DEFAULT_RIGHTS: Rights = {
   view_reports: false,
   view_remuneration: false,
   view_payslip: false,
+  manage_absences: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -100,6 +102,7 @@ const ALL_RIGHTS: Rights = {
   view_reports: true,
   view_remuneration: true,
   view_payslip: true,
+  manage_absences: true,
 }
 
 export function parseRights(employee: Employee): Rights {
@@ -118,6 +121,7 @@ export function parseRights(employee: Employee): Rights {
       // so existing payslip-holders keep the Payments summary until re-saved.
       view_remuneration: Boolean(raw.view_remuneration ?? raw.view_payslip),
       view_payslip: Boolean(raw.view_payslip),
+      manage_absences: Boolean(raw.manage_absences),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

@@ -10,6 +10,7 @@ export interface Rights {
   view_reports: boolean
   view_remuneration: boolean
   view_payslip: boolean
+  manage_absences: boolean
 }
 
 export interface WorkTypeInfo {
@@ -31,6 +32,7 @@ export interface Me {
   work_types: WorkTypeInfo[]
   entry_limit: number // 0 = unlimited
   leave_allowance: number | null
+  entry_approval: boolean // employee entries need admin approval
   today: string
 }
 
@@ -60,6 +62,7 @@ export interface Entry {
   hours: number
   units: Record<string, number>
   notes: string | null
+  status: 'approved' | 'pending' | 'rejected'
 }
 
 export interface DailyDetailRow {

@@ -30,7 +30,7 @@ async function load() {
     settingsCurrency.value = (
       await api<{ currency: string }>('/api/settings')
     ).currency
-    mine.value = auth.rights.view_payslip
+    mine.value = auth.rights.view_remuneration
       ? await api<MyRemuneration>(`/api/me/remuneration?month=${month.value}`)
       : null
     if (auth.isAdmin) {
@@ -150,8 +150,8 @@ const statusLabel = (a: Adjustment) =>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
 
-    <!-- ======================== own pay summary (requires payslip right) -->
-    <div v-if="auth.rights.view_payslip && mine" class="panel mb-6">
+    <!-- ======================== own pay summary (requires remuneration right) -->
+    <div v-if="auth.rights.view_remuneration && mine" class="panel mb-6">
       <h3 class="display mb-3 text-xl">Your remuneration</h3>
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div>
@@ -265,8 +265,8 @@ const statusLabel = (a: Adjustment) =>
       </form>
 
       <!-- Own reimbursement requests — shown here for staff who can't see the
-           full pay panel above (no payslip right). -->
-      <div v-if="!auth.rights.view_payslip && myReimbursements.length" class="mt-5">
+           full pay panel above (no remuneration right). -->
+      <div v-if="!auth.rights.view_remuneration && myReimbursements.length" class="mt-5">
         <p class="field-label mb-2">Your requests this month</p>
         <ul class="space-y-1 text-sm">
           <li

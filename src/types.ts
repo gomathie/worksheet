@@ -8,6 +8,7 @@ export interface Rights {
   delete_entries: boolean
   view_dashboard: boolean
   view_reports: boolean
+  view_remuneration: boolean
   view_payslip: boolean
 }
 

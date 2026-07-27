@@ -78,6 +78,7 @@ export interface Rights {
   delete_entries: boolean
   view_dashboard: boolean
   view_reports: boolean
+  view_remuneration: boolean
   view_payslip: boolean
 }
 
@@ -87,6 +88,7 @@ export const DEFAULT_RIGHTS: Rights = {
   delete_entries: true,
   view_dashboard: false,
   view_reports: false,
+  view_remuneration: false,
   view_payslip: false,
 }
 
@@ -96,6 +98,7 @@ const ALL_RIGHTS: Rights = {
   delete_entries: true,
   view_dashboard: true,
   view_reports: true,
+  view_remuneration: true,
   view_payslip: true,
 }
 
@@ -111,11 +114,19 @@ export function parseRights(employee: Employee): Rights {
       delete_entries: Boolean(raw.delete_entries ?? raw.edit_entries ?? true),
       view_dashboard: Boolean(raw.view_dashboard),
       view_reports: Boolean(raw.view_reports),
+      // view_payslip predates the split; let it stand in for view_remuneration
+      // so existing payslip-holders keep the Payments summary until re-saved.
+      view_remuneration: Boolean(raw.view_remuneration ?? raw.view_payslip),
       view_payslip: Boolean(raw.view_payslip),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }
   }
+}
+
+/** True when the user may see their own pay figures via either pay view. */
+export function canSeeOwnPay(rights: Rights): boolean {
+  return rights.view_remuneration || rights.view_payslip
 }
 
 export function requireRight(user: Employee, right: keyof Rights): void {

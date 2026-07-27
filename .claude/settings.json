@@ -14,7 +14,9 @@
       "Bash(git log *)",
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'sed \"/[Cc]o-[Aa]uthored-[Bb]y:.*[Cc]laude/d;/noreply@anthropic.com/d\"' -- --all)",
       "Bash(git stash *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "PowerShell($out = node \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\genhash.mjs\"; $cred = $out | ConvertFrom-Json; $cred.password | Out-File \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\temppass.txt\" -Encoding utf8; npx wrangler d1 execute ledger-db --remote --command \"INSERT INTO employees \\(id, name, username, password_hash, role\\) VALUES \\('temp-verify-admin', 'Temp Verify', 'tempverify', '$\\($cred.hash\\)', 'admin'\\)\" | Out-Null; \"temp admin ready\")",
+      "PowerShell(npm test 2>&1)"
     ]
   }
 }

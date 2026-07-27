@@ -8,6 +8,7 @@ const NO_RIGHTS: Rights = {
   delete_entries: false,
   view_dashboard: false,
   view_reports: false,
+  view_remuneration: false,
   view_payslip: false,
 }
 

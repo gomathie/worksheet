@@ -19,6 +19,7 @@ const blankRights = () => ({
   delete_entries: true,
   view_dashboard: false,
   view_reports: false,
+  view_remuneration: false,
   view_payslip: false,
 })
 
@@ -134,6 +135,7 @@ function rightsSummary(e: Employee): string {
     ['delete_entries', 'Delete time'],
     ['view_dashboard', 'Dashboard'],
     ['view_reports', 'Reports'],
+    ['view_remuneration', 'Remuneration'],
     ['view_payslip', 'Payslip'],
   ]
   const granted = labels.filter(([key]) => e.rights[key]).map(([, label]) => label)
@@ -248,6 +250,10 @@ function rightsSummary(e: Employee): string {
             <label class="flex items-center gap-2">
               <input v-model="form.rights.view_reports" type="checkbox" />
               View monthly reports
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.view_remuneration" type="checkbox" />
+              View own remuneration (Payments tab)
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.view_payslip" type="checkbox" />

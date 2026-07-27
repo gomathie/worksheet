@@ -12,6 +12,7 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
   audit,
+  canSeeOwnPay,
   currentUser,
   hashPassword,
   parseRights,
@@ -305,6 +306,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     delete_entries: Boolean(raw?.delete_entries ?? fallback.delete_entries),
     view_dashboard: Boolean(raw?.view_dashboard ?? fallback.view_dashboard),
     view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
+    view_remuneration: Boolean(raw?.view_remuneration ?? fallback.view_remuneration),
     view_payslip: Boolean(raw?.view_payslip ?? fallback.view_payslip),
   })
 }
@@ -377,6 +379,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     delete_entries: true,
     view_dashboard: false,
     view_reports: false,
+    view_remuneration: false,
     view_payslip: false,
   })
 
@@ -1049,8 +1052,10 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
  */
 async function myRemuneration(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  // Seeing one's own pay figures is gated by the payslip right.
-  requireRight(user, 'view_payslip')
+  // Own pay figures back both pay views; either right unlocks the endpoint.
+  if (!canSeeOwnPay(parseRights(user))) {
+    throw new ApiError(403, 'You do not have permission for this')
+  }
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
   return json(await remunerationFor(env, user, month))

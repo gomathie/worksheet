@@ -33,6 +33,7 @@ const form = ref({
   work_type_ids: [] as string[],
   rate_overrides: {} as Record<string, number | ''>,
   max_entries_per_day: '' as number | '',
+  leave_allowance: '' as number | '',
 })
 
 async function load() {
@@ -55,6 +56,7 @@ function startEdit(e: Employee) {
     work_type_ids: [...e.work_type_ids],
     rate_overrides: { ...e.rate_overrides },
     max_entries_per_day: e.max_entries_per_day ?? '',
+    leave_allowance: e.leave_allowance ?? '',
   }
 }
 
@@ -70,6 +72,7 @@ function resetForm() {
     work_type_ids: activeTypes.value.map((w) => w.id),
     rate_overrides: {},
     max_entries_per_day: '',
+    leave_allowance: '',
   }
 }
 
@@ -91,6 +94,8 @@ async function submit() {
       ),
       max_entries_per_day:
         form.value.max_entries_per_day === '' ? null : form.value.max_entries_per_day,
+      leave_allowance:
+        form.value.leave_allowance === '' ? null : form.value.leave_allowance,
     }
     if (form.value.password) payload.password = form.value.password
     if (editingId.value) {
@@ -206,6 +211,18 @@ function rightsSummary(e: Employee): string {
               step="1"
               class="field-input mono"
               placeholder="use default"
+            />
+          </div>
+          <div>
+            <label class="field-label" for="leave">Annual leave (days)</label>
+            <input
+              id="leave"
+              v-model.number="form.leave_allowance"
+              type="number"
+              min="0"
+              step="1"
+              class="field-input mono"
+              placeholder="not tracked"
             />
           </div>
         </div>

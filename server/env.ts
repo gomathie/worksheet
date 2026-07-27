@@ -13,7 +13,18 @@ export interface Employee {
   role: 'admin' | 'employee'
   rights: string // JSON — see Rights in auth.ts
   max_entries_per_day: number | null // per-employee override; NULL = use global
+  leave_allowance: number | null // annual paid-leave days; NULL = not tracked
   active: number
+  created_at: string
+}
+
+export interface AbsenceRow {
+  id: string
+  employee_id: string
+  work_date: string
+  type: string
+  note: string | null
+  created_by: string | null
   created_at: string
 }
 

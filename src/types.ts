@@ -30,6 +30,7 @@ export interface Me {
   rights: Rights
   work_types: WorkTypeInfo[]
   entry_limit: number // 0 = unlimited
+  leave_allowance: number | null
   today: string
 }
 
@@ -43,6 +44,7 @@ export interface Employee {
   work_type_ids: string[]
   rate_overrides: Record<string, number>
   max_entries_per_day: number | null
+  leave_allowance: number | null
   has_password?: number
   active: number
   created_at?: string
@@ -115,6 +117,15 @@ export interface ReportPayload {
     paid: boolean
     confirmed: boolean
   }
+}
+
+export interface Absence {
+  id: string
+  employee_id: string
+  employee_name?: string
+  work_date: string
+  type: 'leave' | 'sick' | 'holiday' | 'unpaid' | 'other'
+  note: string | null
 }
 
 export interface Adjustment {

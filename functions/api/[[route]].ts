@@ -1,4 +1,5 @@
 import type {
+  AbsenceRow,
   AdjustmentRow,
   Employee,
   EntryItemRow,
@@ -272,6 +273,7 @@ function publicEmployee(
     work_type_ids: workTypeIds,
     rate_overrides: rateOverrides,
     max_entries_per_day: e.max_entries_per_day,
+    leave_allowance: e.leave_allowance,
     has_password: e.password_hash ? 1 : 0,
     active: e.active,
     created_at: e.created_at,
@@ -332,6 +334,7 @@ interface EmployeeBody {
   work_type_ids?: string[]
   rate_overrides?: Record<string, number | null>
   max_entries_per_day?: number | null
+  leave_allowance?: number | null
   active?: number | boolean
 }
 
@@ -396,13 +399,14 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   })
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
+  const leaveAllowance = normalizeEntryLimit(body.leave_allowance)
 
   const id = crypto.randomUUID()
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, name, email, username, password_hash, role, rights, max_entries_per_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (id, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-      .bind(id, name, email, username, passwordHash, role, rights, maxPerDay)
+      .bind(id, name, email, username, passwordHash, role, rights, maxPerDay, leaveAllowance)
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -485,6 +489,10 @@ async function patchEmployee(
     body.max_entries_per_day !== undefined
       ? normalizeEntryLimit(body.max_entries_per_day)
       : existing.max_entries_per_day
+  const leaveAllowance =
+    body.leave_allowance !== undefined
+      ? normalizeEntryLimit(body.leave_allowance)
+      : existing.leave_allowance
 
   // Admins cannot demote or deactivate themselves — avoids locking everyone out.
   if (existing.id === admin.id && (role !== 'admin' || !active)) {
@@ -493,9 +501,9 @@ async function patchEmployee(
 
   try {
     await env.DB.prepare(
-      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, active = ? WHERE id = ?',
+      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, active = ? WHERE id = ?',
     )
-      .bind(name, email, username, passwordHash, role, rights, maxPerDay, active, id)
+      .bind(name, email, username, passwordHash, role, rights, maxPerDay, leaveAllowance, active, id)
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -1273,6 +1281,98 @@ async function trends(request: Request, env: Env): Promise<Response> {
   return json(base)
 }
 
+// ---------------------------------------------------------------- absences
+
+const ABSENCE_TYPES = new Set(['leave', 'sick', 'holiday', 'unpaid', 'other'])
+const YEAR_RE = /^\d{4}$/
+
+async function listAbsences(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const url = new URL(request.url)
+  const year = url.searchParams.get('year') ?? String(new Date().getUTCFullYear())
+  if (!YEAR_RE.test(year)) throw new ApiError(400, 'year must be YYYY')
+  const employeeFilter = url.searchParams.get('employee_id')
+
+  let sql =
+    'SELECT a.*, emp.name AS employee_name FROM absences a JOIN employees emp ON emp.id = a.employee_id WHERE a.work_date LIKE ?'
+  const binds: unknown[] = [`${year}-%`]
+  const scope = user.role !== 'admin' ? user.id : employeeFilter || undefined
+  if (scope) {
+    sql += ' AND a.employee_id = ?'
+    binds.push(scope)
+  }
+  sql += ' ORDER BY a.work_date DESC'
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds)
+    .all<AbsenceRow & { employee_name: string }>()
+  return json(results)
+}
+
+async function createAbsence(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const body = await readJson<{
+    employee_id?: string
+    work_date?: string
+    type?: string
+    note?: string
+  }>(request)
+
+  // Employees log their own; admins may log for anyone.
+  const employeeId =
+    user.role === 'admin' && body.employee_id ? body.employee_id : user.id
+  if (!body.work_date || !DATE_RE.test(body.work_date)) {
+    throw new ApiError(400, 'work_date must be YYYY-MM-DD')
+  }
+  if (!body.type || !ABSENCE_TYPES.has(body.type)) {
+    throw new ApiError(400, 'type must be leave, sick, holiday, unpaid or other')
+  }
+  if (employeeId !== user.id) {
+    const target = await env.DB.prepare(
+      'SELECT id FROM employees WHERE id = ? AND active = 1',
+    )
+      .bind(employeeId)
+      .first()
+    if (!target) throw new ApiError(400, 'Unknown employee')
+  }
+
+  const id = crypto.randomUUID()
+  try {
+    await env.DB.prepare(
+      'INSERT INTO absences (id, employee_id, work_date, type, note, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+      .bind(id, employeeId, body.work_date, body.type, body.note?.trim() || null, user.id)
+      .run()
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) {
+      throw new ApiError(409, 'An absence is already recorded for that day')
+    }
+    throw e
+  }
+  await audit(env, user.id, 'create_absence', id, {
+    employee_id: employeeId,
+    work_date: body.work_date,
+    type: body.type,
+  })
+  const created = await env.DB.prepare('SELECT * FROM absences WHERE id = ?')
+    .bind(id)
+    .first<AbsenceRow>()
+  return json(created, 201)
+}
+
+async function deleteAbsence(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireUser(request, env)
+  const existing = await env.DB.prepare('SELECT * FROM absences WHERE id = ?')
+    .bind(id)
+    .first<AbsenceRow>()
+  if (!existing) throw new ApiError(404, 'Absence not found')
+  if (user.role !== 'admin' && existing.employee_id !== user.id) {
+    throw new ApiError(403, 'You can only remove your own absences')
+  }
+  await env.DB.prepare('DELETE FROM absences WHERE id = ?').bind(id).run()
+  await audit(env, user.id, 'delete_absence', id)
+  return json({ ok: true })
+}
+
 // ---------------------------------------------------- settings & report routes
 
 async function getSettings(request: Request, env: Env): Promise<Response> {
@@ -1476,6 +1576,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       work_types: myTypes,
       // 0 = unlimited; admins are exempt from the per-day cap.
       entry_limit: user.role === 'admin' ? 0 : await effectiveEntryLimit(env, user),
+      leave_allowance: user.leave_allowance,
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
     })
   }
@@ -1526,6 +1627,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/audit' && method === 'GET') return listAudit(request, env)
   if (path === '/api/export' && method === 'GET') return exportData(request, env)
   if (path === '/api/trends' && method === 'GET') return trends(request, env)
+
+  if (path === '/api/absences' && method === 'GET') return listAbsences(request, env)
+  if (path === '/api/absences' && method === 'POST') return createAbsence(request, env)
+  const absMatch = /^\/api\/absences\/([\w-]+)$/.exec(path)
+  if (absMatch && method === 'DELETE') return deleteAbsence(request, env, absMatch[1])
 
   if (path === '/api/settings' && method === 'GET') return getSettings(request, env)
   if (path === '/api/settings' && method === 'PUT') return putSettings(request, env)

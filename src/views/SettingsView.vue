@@ -21,7 +21,11 @@ async function loadTypes() {
 }
 
 onMounted(async () => {
-  ;[form.value] = await Promise.all([api<RateSettings>('/api/settings'), loadTypes()])
+  ;[form.value] = await Promise.all([
+    api<RateSettings>('/api/settings'),
+    loadTypes(),
+    loadSmtp(),
+  ])
 })
 
 async function run(fn: () => Promise<unknown>) {
@@ -80,6 +84,56 @@ function downloadBackup() {
     const data = await api<unknown>('/api/export')
     const date = new Date().toISOString().slice(0, 10)
     downloadJson(`ledger-backup-${date}.json`, data)
+  })
+}
+
+// ---- SMTP / email notifications
+interface SmtpForm {
+  enabled: boolean
+  host: string
+  port: number
+  user: string
+  pass: string
+  from: string
+  from_name: string
+  has_password?: number
+}
+const smtp = ref<SmtpForm>({
+  enabled: false,
+  host: '',
+  port: 587,
+  user: '',
+  pass: '',
+  from: '',
+  from_name: 'OpenSignal Ledger',
+})
+const smtpSaved = ref(false)
+const testTo = ref('')
+const testMsg = ref('')
+
+async function loadSmtp() {
+  smtp.value = { ...smtp.value, ...(await api<SmtpForm>('/api/settings/smtp')), pass: '' }
+}
+
+function saveSmtp() {
+  smtpSaved.value = false
+  testMsg.value = ''
+  return run(async () => {
+    await api('/api/settings/smtp', { method: 'PUT', json: smtp.value })
+    smtp.value.pass = ''
+    await loadSmtp()
+    smtpSaved.value = true
+  })
+}
+
+function sendTest() {
+  testMsg.value = ''
+  return run(async () => {
+    const res = await api<{ to: string }>('/api/settings/smtp/test', {
+      method: 'POST',
+      json: { to: testTo.value || undefined },
+    })
+    testMsg.value = `Test email sent to ${res.to}.`
   })
 }
 </script>
@@ -232,6 +286,67 @@ function downloadBackup() {
           <span v-if="saved" class="ml-3 text-sm text-teal">Saved.</span>
         </div>
       </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Email notifications (SMTP)</h2>
+      <p class="mb-4 text-sm text-muted">
+        Point this at any SMTP server to email employees when they're marked paid
+        or a reimbursement is decided, and alert admins on new requests. Use port
+        587 (STARTTLS) or 465 (TLS); port 25 is blocked.
+      </p>
+      <form class="grid grid-cols-1 gap-4 md:grid-cols-2" @submit.prevent="saveSmtp">
+        <label class="flex items-center gap-2 text-sm md:col-span-2">
+          <input v-model="smtp.enabled" type="checkbox" />
+          Enable email notifications
+        </label>
+        <div>
+          <label class="field-label" for="s-host">SMTP host</label>
+          <input id="s-host" v-model="smtp.host" class="field-input" placeholder="smtp.example.com" />
+        </div>
+        <div>
+          <label class="field-label" for="s-port">Port</label>
+          <input id="s-port" v-model.number="smtp.port" type="number" class="field-input mono" />
+        </div>
+        <div>
+          <label class="field-label" for="s-user">Username</label>
+          <input id="s-user" v-model="smtp.user" autocomplete="off" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label" for="s-pass">
+            Password {{ smtp.has_password ? '(set — blank keeps it)' : '' }}
+          </label>
+          <input id="s-pass" v-model="smtp.pass" type="password" autocomplete="new-password" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label" for="s-from">From address</label>
+          <input id="s-from" v-model="smtp.from" type="email" class="field-input" placeholder="ledger@example.com" />
+        </div>
+        <div>
+          <label class="field-label" for="s-fromname">From name</label>
+          <input id="s-fromname" v-model="smtp.from_name" class="field-input" />
+        </div>
+        <div class="md:col-span-2">
+          <button class="btn btn-solid" :disabled="busy">
+            {{ busy ? 'Saving…' : 'Save SMTP settings' }}
+          </button>
+          <span v-if="smtpSaved" class="ml-3 text-sm text-teal">Saved.</span>
+        </div>
+      </form>
+      <div class="mt-4 flex flex-wrap items-end gap-2 border-t border-line pt-4">
+        <div>
+          <label class="field-label" for="s-test">Send a test email to</label>
+          <input
+            id="s-test"
+            v-model="testTo"
+            type="email"
+            class="field-input"
+            placeholder="your own email"
+          />
+        </div>
+        <button class="btn" :disabled="busy" @click="sendTest">Send test</button>
+        <span v-if="testMsg" class="text-sm text-teal">{{ testMsg }}</span>
+      </div>
     </div>
 
     <div class="panel">

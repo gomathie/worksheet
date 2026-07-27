@@ -27,6 +27,13 @@ import {
 } from '../../server/auth'
 import { loadSettings, saveSettings } from '../../server/settings'
 import {
+  adminEmails,
+  loadSmtp,
+  notify,
+  saveSmtp,
+  sendMail,
+} from '../../server/email'
+import {
   aggregateMonthly,
   computeHours,
   computePoints,
@@ -940,6 +947,21 @@ async function createAdjustment(request: Request, env: Env): Promise<Response> {
     )
     .run()
   await audit(env, user.id, `create_${type}`, id, { employee_id: employeeId, month, amount, status })
+  // A new employee reimbursement request pings the admins.
+  if (type === 'reimbursement' && status === 'pending') {
+    const who =
+      (await env.DB.prepare('SELECT name FROM employees WHERE id = ?')
+        .bind(employeeId)
+        .first<{ name: string }>())?.name ?? 'An employee'
+    for (const to of await adminEmails(env)) {
+      await notify(
+        env,
+        to,
+        'Ledger: new reimbursement request',
+        `${who} requested a reimbursement of ${amount} for ${month}${description ? ` — ${description}` : ''}.\n\nReview it on the Payments tab.`,
+      )
+    }
+  }
   const created = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
     .bind(id)
     .first<AdjustmentRow>()
@@ -967,6 +989,17 @@ async function decideAdjustment(
     .bind(body.status, admin.id, new Date().toISOString(), id)
     .run()
   await audit(env, admin.id, 'decide_adjustment', id, { status: body.status })
+  if (existing.type === 'reimbursement') {
+    const emp = await env.DB.prepare('SELECT email FROM employees WHERE id = ?')
+      .bind(existing.employee_id)
+      .first<{ email: string | null }>()
+    await notify(
+      env,
+      emp?.email ?? null,
+      `Ledger: reimbursement ${body.status}`,
+      `Your reimbursement of ${existing.amount} for ${existing.month}${existing.description ? ` (${existing.description})` : ''} was ${body.status}.`,
+    )
+  }
   const updated = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
     .bind(id)
     .first<AdjustmentRow>()
@@ -1020,6 +1053,17 @@ async function setPaid(request: Request, env: Env): Promise<Response> {
       .run()
   }
   await audit(env, admin.id, 'set_paid', body.employee_id, { month, paid: !!body.paid })
+  if (body.paid) {
+    const emp = await env.DB.prepare('SELECT email FROM employees WHERE id = ?')
+      .bind(body.employee_id)
+      .first<{ email: string | null }>()
+    await notify(
+      env,
+      emp?.email ?? null,
+      'Ledger: payment recorded',
+      `Your remuneration for ${month} has been marked as paid.\n\nYou can confirm receipt on the Payments tab.`,
+    )
+  }
   return json({ ok: true })
 }
 
@@ -1447,6 +1491,59 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
   return json(next)
 }
 
+// ------------------------------------------------------------ SMTP settings
+
+async function getSmtp(request: Request, env: Env): Promise<Response> {
+  await requireAdmin(request, env)
+  const cfg = await loadSmtp(env)
+  // Never return the stored password; expose only whether one is set.
+  const { pass, ...rest } = cfg
+  return json({ ...rest, has_password: pass ? 1 : 0 })
+}
+
+async function putSmtp(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{
+    enabled?: boolean
+    host?: string
+    port?: number
+    user?: string
+    pass?: string
+    from?: string
+    from_name?: string
+  }>(request)
+  await saveSmtp(env, {
+    enabled: body.enabled,
+    host: body.host?.trim(),
+    port: body.port !== undefined ? Math.floor(Number(body.port)) || 587 : undefined,
+    user: body.user?.trim(),
+    pass: body.pass, // blank keeps the existing password
+    from: body.from?.trim(),
+    from_name: body.from_name?.trim(),
+  })
+  await audit(env, admin.id, 'update_smtp', null, { enabled: body.enabled })
+  return json({ ok: true })
+}
+
+async function testSmtp(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{ to?: string }>(request)
+  const to = (body.to ?? admin.email ?? '').trim()
+  if (!to) throw new ApiError(400, 'No recipient — set a test address or your own email')
+  const cfg = await loadSmtp(env)
+  if (!cfg.host) throw new ApiError(400, 'Configure the SMTP host first')
+  try {
+    await sendMail(cfg, {
+      to,
+      subject: 'OpenSignal Ledger — SMTP test',
+      body: 'This is a test email confirming your SMTP settings work.',
+    })
+  } catch (e) {
+    throw new ApiError(400, e instanceof Error ? e.message : 'Send failed')
+  }
+  return json({ ok: true, to })
+}
+
 async function monthlyReport(request: Request, env: Env): Promise<Response> {
   // Dashboard and Monthly Report both read this endpoint; either right unlocks it.
   const user = await requireUser(request, env)
@@ -1682,6 +1779,9 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/settings' && method === 'GET') return getSettings(request, env)
   if (path === '/api/settings' && method === 'PUT') return putSettings(request, env)
+  if (path === '/api/settings/smtp' && method === 'GET') return getSmtp(request, env)
+  if (path === '/api/settings/smtp' && method === 'PUT') return putSmtp(request, env)
+  if (path === '/api/settings/smtp/test' && method === 'POST') return testSmtp(request, env)
 
   if (path === '/api/reports/monthly' && method === 'GET') {
     return monthlyReport(request, env)

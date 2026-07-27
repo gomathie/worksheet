@@ -1077,6 +1077,113 @@ async function employeeRemuneration(
   return json(await remunerationFor(env, employee, month))
 }
 
+// --------------------------------------------------------- performance trends
+
+/** The last `n` months (YYYY-MM), oldest first, ending at `endMonth`. */
+function lastMonths(endMonth: string, n: number): string[] {
+  const [y, m] = endMonth.split('-').map(Number)
+  const out: string[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1))
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
+  }
+  return out
+}
+
+/**
+ * A single employee's month-by-month work output (hours, units) over a
+ * window, with points/remuneration only when the viewer may see that
+ * employee's money. Non-admins may only request their own trend.
+ */
+async function trends(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const url = new URL(request.url)
+  const targetId = url.searchParams.get('employee_id') || user.id
+  if (targetId !== user.id && user.role !== 'admin') {
+    throw new ApiError(403, 'You can only view your own trend')
+  }
+  const n = Math.min(Math.max(Number(url.searchParams.get('months')) || 6, 1), 24)
+  const months = lastMonths(currentMonth(env), n)
+  const rangeStart = `${months[0]}-01`
+  // Exclusive upper bound: first day of the month after the window.
+  const [ey, em] = months[months.length - 1].split('-').map(Number)
+  const endNext = new Date(Date.UTC(ey, em, 1))
+  const rangeEnd = `${endNext.getUTCFullYear()}-${String(endNext.getUTCMonth() + 1).padStart(2, '0')}-01`
+
+  const target = await env.DB.prepare('SELECT id, name FROM employees WHERE id = ?')
+    .bind(targetId)
+    .first<{ id: string; name: string }>()
+  if (!target) throw new ApiError(404, 'Employee not found')
+
+  const [settings, hoursRows, unitRows, wtRes, overrideRows] = await Promise.all([
+    loadSettings(env),
+    env.DB.prepare(
+      'SELECT substr(work_date,1,7) AS m, SUM(hours) AS h FROM entries WHERE employee_id = ? AND work_date >= ? AND work_date < ? GROUP BY m',
+    )
+      .bind(targetId, rangeStart, rangeEnd)
+      .all<{ m: string; h: number }>(),
+    env.DB.prepare(
+      'SELECT substr(e.work_date,1,7) AS m, ei.work_type_id AS wt, SUM(ei.units) AS u FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date >= ? AND e.work_date < ? GROUP BY m, wt',
+    )
+      .bind(targetId, rangeStart, rangeEnd)
+      .all<{ m: string; wt: string; u: number }>(),
+    env.DB.prepare('SELECT id, name, points_per_unit, active FROM work_types ORDER BY position, created_at')
+      .all<{ id: string; name: string; points_per_unit: number; active: number }>(),
+    env.DB.prepare(
+      'SELECT work_type_id, points_per_unit FROM employee_work_types WHERE employee_id = ? AND points_per_unit IS NOT NULL',
+    )
+      .bind(targetId)
+      .all<{ work_type_id: string; points_per_unit: number }>(),
+  ])
+
+  const overrides: Record<string, number> = {}
+  for (const r of overrideRows.results) overrides[r.work_type_id] = r.points_per_unit
+
+  const hoursByMonth = new Map(hoursRows.results.map((r) => [r.m, r.h]))
+  // month -> { wtId -> units }
+  const unitsByMonth = new Map<string, Record<string, number>>()
+  const typesWithData = new Set<string>()
+  for (const r of unitRows.results) {
+    const rec = unitsByMonth.get(r.m) ?? {}
+    rec[r.wt] = r.u
+    unitsByMonth.set(r.m, rec)
+    typesWithData.add(r.wt)
+  }
+
+  const workTypes = wtRes.results
+    .filter((w) => w.active || typesWithData.has(w.id))
+    .map((w) => ({ id: w.id, name: w.name, points_per_unit: w.points_per_unit }))
+
+  const hours = months.map((m) => Math.round((hoursByMonth.get(m) ?? 0) * 100) / 100)
+  const units: Record<string, number[]> = {}
+  for (const wt of workTypes) {
+    units[wt.id] = months.map((m) => unitsByMonth.get(m)?.[wt.id] ?? 0)
+  }
+
+  const isAdmin = user.role === 'admin'
+  const showMoney =
+    isAdmin || (targetId === user.id && canSeeOwnPay(parseRights(user)))
+
+  const base: Record<string, unknown> = {
+    employee_id: target.id,
+    employee_name: target.name,
+    currency: settings.currency,
+    months,
+    work_types: workTypes.map((w) => ({ id: w.id, name: w.name })),
+    hours,
+    units,
+    show_money: showMoney,
+  }
+  if (showMoney) {
+    const points = months.map((m) =>
+      computePoints(unitsByMonth.get(m) ?? {}, workTypes, overrides),
+    )
+    base.points = points
+    base.remuneration = points.map((p) => computeRemuneration(p, settings))
+  }
+  return json(base)
+}
+
 // ---------------------------------------------------- settings & report routes
 
 async function getSettings(request: Request, env: Env): Promise<Response> {
@@ -1324,6 +1431,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return changeOwnPassword(request, env)
   }
   if (path === '/api/audit' && method === 'GET') return listAudit(request, env)
+  if (path === '/api/trends' && method === 'GET') return trends(request, env)
 
   if (path === '/api/settings' && method === 'GET') return getSettings(request, env)
   if (path === '/api/settings' && method === 'PUT') return putSettings(request, env)

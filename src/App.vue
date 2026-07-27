@@ -142,6 +142,9 @@ async function changePassword() {
         active-class="btn-solid"
         >Payslip</RouterLink
       >
+      <RouterLink :to="{ name: 'trends' }" class="btn" active-class="btn-solid"
+        >Trends</RouterLink
+      >
       <template v-if="auth.isAdmin">
         <RouterLink :to="{ name: 'employees' }" class="btn" active-class="btn-solid"
           >Employees</RouterLink

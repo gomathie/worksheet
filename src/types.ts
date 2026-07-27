@@ -127,6 +127,19 @@ export interface Adjustment {
   created_at: string
 }
 
+export interface TrendData {
+  employee_id: string
+  employee_name: string
+  currency: string
+  months: string[]
+  work_types: WorkTypeInfo[]
+  hours: number[]
+  units: Record<string, number[]>
+  show_money: boolean
+  points?: number[]
+  remuneration?: number[]
+}
+
 export interface MyRemuneration {
   month: string
   employee_id: string

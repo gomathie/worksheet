@@ -29,6 +29,7 @@ export interface Me {
   role: 'admin' | 'employee'
   rights: Rights
   work_types: WorkTypeInfo[]
+  entry_limit: number // 0 = unlimited
   today: string
 }
 
@@ -41,6 +42,7 @@ export interface Employee {
   rights: Rights
   work_type_ids: string[]
   rate_overrides: Record<string, number>
+  max_entries_per_day: number | null
   has_password?: number
   active: number
   created_at?: string

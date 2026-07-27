@@ -32,6 +32,7 @@ const form = ref({
   rights: blankRights(),
   work_type_ids: [] as string[],
   rate_overrides: {} as Record<string, number | ''>,
+  max_entries_per_day: '' as number | '',
 })
 
 async function load() {
@@ -53,6 +54,7 @@ function startEdit(e: Employee) {
     rights: { ...e.rights },
     work_type_ids: [...e.work_type_ids],
     rate_overrides: { ...e.rate_overrides },
+    max_entries_per_day: e.max_entries_per_day ?? '',
   }
 }
 
@@ -67,6 +69,7 @@ function resetForm() {
     rights: blankRights(),
     work_type_ids: activeTypes.value.map((w) => w.id),
     rate_overrides: {},
+    max_entries_per_day: '',
   }
 }
 
@@ -86,6 +89,8 @@ async function submit() {
           ([id, v]) => form.value.work_type_ids.includes(id) && v !== '' && v !== null,
         ),
       ),
+      max_entries_per_day:
+        form.value.max_entries_per_day === '' ? null : form.value.max_entries_per_day,
     }
     if (form.value.password) payload.password = form.value.password
     if (editingId.value) {
@@ -189,6 +194,18 @@ function rightsSummary(e: Employee): string {
               minlength="8"
               class="field-input"
               placeholder="min. 8 characters"
+            />
+          </div>
+          <div>
+            <label class="field-label" for="maxpd">Max entries/day</label>
+            <input
+              id="maxpd"
+              v-model.number="form.max_entries_per_day"
+              type="number"
+              min="0"
+              step="1"
+              class="field-input mono"
+              placeholder="use default"
             />
           </div>
         </div>

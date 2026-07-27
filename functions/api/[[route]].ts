@@ -271,10 +271,21 @@ function publicEmployee(
     rights: parseRights(e),
     work_type_ids: workTypeIds,
     rate_overrides: rateOverrides,
+    max_entries_per_day: e.max_entries_per_day,
     has_password: e.password_hash ? 1 : 0,
     active: e.active,
     created_at: e.created_at,
   }
+}
+
+/** Parse an optional per-day entry limit: null clears it, else an int ≥ 0. */
+function normalizeEntryLimit(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return null
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 0) {
+    throw new ApiError(400, 'max_entries_per_day must be a whole number ≥ 0')
+  }
+  return n
 }
 
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,31}$/
@@ -320,6 +331,7 @@ interface EmployeeBody {
   rights?: Partial<Rights>
   work_type_ids?: string[]
   rate_overrides?: Record<string, number | null>
+  max_entries_per_day?: number | null
   active?: number | boolean
 }
 
@@ -383,12 +395,14 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     view_payslip: false,
   })
 
+  const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
+
   const id = crypto.randomUUID()
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, name, email, username, password_hash, role, rights) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (id, name, email, username, password_hash, role, rights, max_entries_per_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
-      .bind(id, name, email, username, passwordHash, role, rights)
+      .bind(id, name, email, username, passwordHash, role, rights, maxPerDay)
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -467,6 +481,10 @@ async function patchEmployee(
     body.rights !== undefined
       ? rightsToJson(body.rights, parseRights(existing))
       : existing.rights
+  const maxPerDay =
+    body.max_entries_per_day !== undefined
+      ? normalizeEntryLimit(body.max_entries_per_day)
+      : existing.max_entries_per_day
 
   // Admins cannot demote or deactivate themselves — avoids locking everyone out.
   if (existing.id === admin.id && (role !== 'admin' || !active)) {
@@ -475,9 +493,9 @@ async function patchEmployee(
 
   try {
     await env.DB.prepare(
-      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, active = ? WHERE id = ?',
+      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, active = ? WHERE id = ?',
     )
-      .bind(name, email, username, passwordHash, role, rights, active, id)
+      .bind(name, email, username, passwordHash, role, rights, maxPerDay, active, id)
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -622,6 +640,38 @@ async function writeEntryItems(
   await env.DB.batch(statements)
 }
 
+/** An employee's effective per-day entry limit (override else global); 0 = unlimited. */
+async function effectiveEntryLimit(env: Env, employee: Employee): Promise<number> {
+  if (employee.max_entries_per_day !== null) return employee.max_entries_per_day
+  return (await loadSettings(env)).max_entries_per_day
+}
+
+/** Throw if `employee` already has their allowed number of entries on `workDate`. */
+async function enforceEntryLimit(
+  env: Env,
+  employee: Employee,
+  workDate: string,
+  excludeEntryId?: string,
+): Promise<void> {
+  const limit = await effectiveEntryLimit(env, employee)
+  if (limit <= 0) return // unlimited
+  let sql = 'SELECT COUNT(*) AS n FROM entries WHERE employee_id = ? AND work_date = ?'
+  const binds: unknown[] = [employee.id, workDate]
+  if (excludeEntryId) {
+    sql += ' AND id != ?'
+    binds.push(excludeEntryId)
+  }
+  const row = await env.DB.prepare(sql)
+    .bind(...binds)
+    .first<{ n: number }>()
+  if ((row?.n ?? 0) >= limit) {
+    throw new ApiError(
+      429,
+      `Daily limit reached: you can log at most ${limit} ${limit === 1 ? 'entry' : 'entries'} per day.`,
+    )
+  }
+}
+
 async function createEntry(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   requireRight(user, 'add_entries')
@@ -640,6 +690,11 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
   }
 
   validateEntryInput(body)
+  // Enforce the per-day entry limit for employees logging their own time.
+  // Admins are exempt (they manage/correct entries).
+  if (user.role !== 'admin') {
+    await enforceEntryLimit(env, user, body.work_date!)
+  }
   const items = await normalizeItems(env, employeeId, body.items)
   const hours = computeHours(body.time_start!, body.time_end!)
 
@@ -698,6 +753,10 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
     notes: body.notes !== undefined ? body.notes?.trim() || null : entry.notes,
   }
   validateEntryInput(next)
+  // Moving an entry to a different day counts against that day's limit.
+  if (user.role !== 'admin' && next.work_date !== entry.work_date) {
+    await enforceEntryLimit(env, user, next.work_date, id)
+  }
   const hours = computeHours(next.time_start, next.time_end)
 
   await env.DB.prepare(
@@ -1199,6 +1258,7 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
   const body = await readJson<{
     point_value?: number
     currency?: string
+    max_entries_per_day?: number
   }>(request)
   const num = (v: unknown, field: string) => {
     const n = Number(v)
@@ -1208,6 +1268,7 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
   const next = {
     point_value: num(body.point_value, 'point_value'),
     currency: String(body.currency ?? '$').slice(0, 4) || '$',
+    max_entries_per_day: Math.floor(num(body.max_entries_per_day ?? 0, 'max_entries_per_day')),
   }
   await saveSettings(env, next)
   await audit(env, admin.id, 'update_settings', null, next)
@@ -1383,6 +1444,8 @@ async function route(request: Request, env: Env): Promise<Response> {
       role: user.role,
       rights: parseRights(user),
       work_types: myTypes,
+      // 0 = unlimited; admins are exempt from the per-day cap.
+      entry_limit: user.role === 'admin' ? 0 : await effectiveEntryLimit(env, user),
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
     })
   }

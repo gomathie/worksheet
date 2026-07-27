@@ -12,6 +12,7 @@ export interface Employee {
   password_hash: string | null
   role: 'admin' | 'employee'
   rights: string // JSON — see Rights in auth.ts
+  max_entries_per_day: number | null // per-employee override; NULL = use global
   active: number
   created_at: string
 }

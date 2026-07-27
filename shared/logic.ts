@@ -3,6 +3,8 @@
 export interface RateSettings {
   point_value: number
   currency: string
+  /** Global cap on entries an employee may log per day; 0 = unlimited. */
+  max_entries_per_day: number
 }
 
 export interface WorkType {

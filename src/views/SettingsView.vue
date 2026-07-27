@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import type { RateSettings, WorkTypeInfo } from '../types'
 
-const form = ref<RateSettings>({ point_value: 1, currency: '$' })
+const form = ref<RateSettings>({ point_value: 1, currency: '$', max_entries_per_day: 0 })
 const workTypes = ref<WorkTypeInfo[]>([])
 const newType = ref({ name: '', points_per_unit: 1 })
 const error = ref('')
@@ -179,6 +179,22 @@ function toggleType(wt: WorkTypeInfo) {
             required
             class="field-input mono"
           />
+        </div>
+        <div class="col-span-2">
+          <label class="field-label" for="maxpd">Max entries per employee per day (0 = unlimited)</label>
+          <input
+            id="maxpd"
+            v-model.number="form.max_entries_per_day"
+            type="number"
+            min="0"
+            step="1"
+            required
+            class="field-input mono"
+          />
+          <p class="mt-1 text-xs text-muted">
+            The default cap on how many times an employee can log per day. Set a
+            per-person override in the Employees tab. Admins are never capped.
+          </p>
         </div>
         <div class="col-span-2">
           <button class="btn btn-solid" :disabled="busy">

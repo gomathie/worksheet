@@ -6,6 +6,7 @@ import type { RateSettings } from '../shared/logic'
 const DEFAULTS: RateSettings = {
   point_value: 1,
   currency: '$',
+  max_entries_per_day: 0,
 }
 
 export async function loadSettings(env: Env): Promise<RateSettings> {
@@ -16,6 +17,9 @@ export async function loadSettings(env: Env): Promise<RateSettings> {
   return {
     point_value: Number(map.get('point_value') ?? DEFAULTS.point_value),
     currency: map.get('currency') ?? DEFAULTS.currency,
+    max_entries_per_day: Number(
+      map.get('max_entries_per_day') ?? DEFAULTS.max_entries_per_day,
+    ),
   }
 }
 
@@ -26,5 +30,6 @@ export async function saveSettings(env: Env, s: RateSettings): Promise<void> {
   await env.DB.batch([
     stmt.bind('point_value', String(s.point_value)),
     stmt.bind('currency', s.currency),
+    stmt.bind('max_entries_per_day', String(s.max_entries_per_day)),
   ])
 }

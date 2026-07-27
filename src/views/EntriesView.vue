@@ -158,6 +158,23 @@ function exportCsv() {
   downloadCsv(`entries-${month.value}.csv`, [header, ...rows])
 }
 
+// Per-day entry cap (0 = unlimited; admins exempt). Best-effort client guard;
+// the server is authoritative.
+const entryLimit = computed(() => auth.user!.entry_limit)
+const usedOnFormDate = computed(
+  () =>
+    entries.value.filter(
+      (e) => e.work_date === form.value.work_date && e.employee_id === form.value.employee_id,
+    ).length,
+)
+const limitReached = computed(
+  () =>
+    !auth.isAdmin &&
+    !editingId.value &&
+    entryLimit.value > 0 &&
+    usedOnFormDate.value >= entryLimit.value,
+)
+
 const showActions = computed(
   () => auth.rights.edit_entries || auth.rights.delete_entries,
 )
@@ -256,13 +273,21 @@ const tableColspan = computed(
             placeholder="Anything worth remembering about this shift"
           />
         </div>
-        <div class="col-span-2 flex gap-2 md:col-span-4">
-          <button class="btn btn-solid" :disabled="busy">
+        <div class="col-span-2 flex flex-wrap items-center gap-2 md:col-span-4">
+          <button class="btn btn-solid" :disabled="busy || limitReached">
             {{ busy ? 'Saving…' : editingId ? 'Save changes' : 'Add entry' }}
           </button>
           <button v-if="editingId" type="button" class="btn" @click="resetForm">
             Cancel
           </button>
+          <span v-if="!auth.isAdmin && entryLimit > 0" class="text-xs text-muted">
+            <template v-if="limitReached">
+              Daily limit reached ({{ entryLimit }}/day) for this date.
+            </template>
+            <template v-else>
+              {{ usedOnFormDate }} of {{ entryLimit }} entries used for this date.
+            </template>
+          </span>
         </div>
       </form>
       <p v-if="error" class="mt-3 rounded-lg border border-red bg-red-soft p-3 text-sm text-red">

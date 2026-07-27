@@ -204,6 +204,7 @@ async function setAssignedTypes(
   env: Env,
   employeeId: string,
   ids: string[],
+  rateOverrides: Record<string, number | null> = {},
 ): Promise<void> {
   const { results } = await env.DB.prepare(
     'SELECT id FROM work_types',
@@ -213,23 +214,53 @@ async function setAssignedTypes(
   for (const id of unique) {
     if (!known.has(id)) throw new ApiError(400, `Unknown work type: ${id}`)
   }
+  const rateFor = (id: string): number | null => {
+    const raw = rateOverrides[id]
+    if (raw === undefined || raw === null || raw === ('' as unknown)) return null
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0) {
+      throw new ApiError(400, 'custom rate must be a number ≥ 0')
+    }
+    return n
+  }
   const statements = [
     env.DB.prepare('DELETE FROM employee_work_types WHERE employee_id = ?').bind(
       employeeId,
     ),
     ...unique.map((id) =>
       env.DB.prepare(
-        'INSERT INTO employee_work_types (employee_id, work_type_id) VALUES (?, ?)',
-      ).bind(employeeId, id),
+        'INSERT INTO employee_work_types (employee_id, work_type_id, points_per_unit) VALUES (?, ?, ?)',
+      ).bind(employeeId, id, rateFor(id)),
     ),
   ]
   await env.DB.batch(statements)
 }
 
+/** Non-null per-employee rate overrides, keyed by employee then work type. */
+async function allRateOverrides(
+  env: Env,
+): Promise<Map<string, Record<string, number>>> {
+  const { results } = await env.DB.prepare(
+    'SELECT employee_id, work_type_id, points_per_unit FROM employee_work_types WHERE points_per_unit IS NOT NULL',
+  ).all<{ employee_id: string; work_type_id: string; points_per_unit: number }>()
+  const map = new Map<string, Record<string, number>>()
+  for (const r of results) {
+    const rec = map.get(r.employee_id) ?? {}
+    rec[r.work_type_id] = r.points_per_unit
+    map.set(r.employee_id, rec)
+  }
+  return map
+}
+
 // ----------------------------------------------------------- employee routes
 
 // Never expose password_hash; return rights parsed into an object.
-function publicEmployee(e: Employee, workTypeIds: string[] = []) {
+// rate_overrides is admin-facing data (rates are hidden from non-admins).
+function publicEmployee(
+  e: Employee,
+  workTypeIds: string[] = [],
+  rateOverrides: Record<string, number> = {},
+) {
   return {
     id: e.id,
     name: e.name,
@@ -238,6 +269,7 @@ function publicEmployee(e: Employee, workTypeIds: string[] = []) {
     role: e.role,
     rights: parseRights(e),
     work_type_ids: workTypeIds,
+    rate_overrides: rateOverrides,
     has_password: e.password_hash ? 1 : 0,
     active: e.active,
     created_at: e.created_at,
@@ -284,6 +316,7 @@ interface EmployeeBody {
   role?: string
   rights?: Partial<Rights>
   work_type_ids?: string[]
+  rate_overrides?: Record<string, number | null>
   active?: number | boolean
 }
 
@@ -295,17 +328,28 @@ async function listEmployees(request: Request, env: Env): Promise<Response> {
       env.DB.prepare('SELECT * FROM employee_work_types').all<{
         employee_id: string
         work_type_id: string
+        points_per_unit: number | null
       }>(),
     ])
     const byEmployee = new Map<string, string[]>()
+    const overridesByEmployee = new Map<string, Record<string, number>>()
     for (const a of assignments.results) {
       const list = byEmployee.get(a.employee_id) ?? []
       list.push(a.work_type_id)
       byEmployee.set(a.employee_id, list)
+      if (a.points_per_unit !== null) {
+        const rec = overridesByEmployee.get(a.employee_id) ?? {}
+        rec[a.work_type_id] = a.points_per_unit
+        overridesByEmployee.set(a.employee_id, rec)
+      }
     }
-    return json(results.map((e) => publicEmployee(e, byEmployee.get(e.id) ?? [])))
+    return json(
+      results.map((e) =>
+        publicEmployee(e, byEmployee.get(e.id) ?? [], overridesByEmployee.get(e.id) ?? {}),
+      ),
+    )
   }
-  // Employees only need names for display of their own data.
+  // Employees only need names for display of their own data (no rates).
   return json([publicEmployee(user, await assignedTypeIds(env, user.id))])
 }
 
@@ -358,7 +402,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     ).all<{ id: string }>()
     typeIds = results.map((r) => r.id)
   }
-  await setAssignedTypes(env, id, typeIds)
+  await setAssignedTypes(env, id, typeIds, body.rate_overrides ?? {})
 
   await audit(env, admin.id, 'create_employee', id, {
     name,
@@ -367,6 +411,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     role,
     rights,
     work_type_ids: typeIds,
+    rate_overrides: body.rate_overrides,
   })
   const created = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
     .bind(id)
@@ -430,7 +475,7 @@ async function patchEmployee(
     throw e
   }
   if (body.work_type_ids !== undefined) {
-    await setAssignedTypes(env, id, body.work_type_ids)
+    await setAssignedTypes(env, id, body.work_type_ids, body.rate_overrides ?? {})
   }
 
   await audit(env, admin.id, 'update_employee', id, {
@@ -1034,10 +1079,15 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     hours: e.hours,
     units: entryUnits.get(e.id) ?? {},
   }))
+  const overrides = await allRateOverrides(env)
+  const employeeLikes = employeesRes.results.map((e) => ({
+    ...e,
+    rate_overrides: overrides.get(e.id),
+  }))
   const report = aggregateMonthly(
     month,
     entryLikes,
-    employeesRes.results,
+    employeeLikes,
     workTypes,
     settings,
   )

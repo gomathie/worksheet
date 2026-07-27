@@ -21,6 +21,8 @@ export interface EntryLike {
 export interface EmployeeLike {
   id: string
   name: string
+  /** Per-employee points_per_unit overrides, keyed by work_type_id. */
+  rate_overrides?: Record<string, number>
 }
 
 export interface PersonSummary {
@@ -70,14 +72,19 @@ export function computeHours(start: string, end: string): number {
   return round2(diff / 60)
 }
 
-/** Points for a set of logged units at the given work-type rates. */
+/**
+ * Points for a set of logged units. Each work type's general rate applies
+ * unless the employee has a custom rate override for it.
+ */
 export function computePoints(
   units: Record<string, number>,
   workTypes: WorkType[],
+  rateOverrides?: Record<string, number>,
 ): number {
   let points = 0
   for (const wt of workTypes) {
-    points += (units[wt.id] ?? 0) * wt.points_per_unit
+    const rate = rateOverrides?.[wt.id] ?? wt.points_per_unit
+    points += (units[wt.id] ?? 0) * rate
   }
   return round2(points)
 }
@@ -101,6 +108,7 @@ export function aggregateMonthly(
   settings: RateSettings,
 ): MonthlyReport {
   const names = new Map(employees.map((e) => [e.id, e.name]))
+  const overridesBy = new Map(employees.map((e) => [e.id, e.rate_overrides]))
   const perPerson = new Map<string, PersonSummary & { dates: Set<string> }>()
   const daily = new Map<string, DailyTotal>()
   const allDates = new Set<string>()
@@ -136,7 +144,7 @@ export function aggregateMonthly(
 
   const per_person: PersonSummary[] = [...perPerson.values()]
     .map(({ dates, ...p }) => {
-      const points = computePoints(p.units, workTypes)
+      const points = computePoints(p.units, workTypes, overridesBy.get(p.employee_id))
       return {
         ...p,
         days_worked: dates.size,

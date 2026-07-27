@@ -70,6 +70,38 @@ describe('points & remuneration', () => {
   it('ignores units for unknown work types', () => {
     expect(computePoints({ ghost: 10 }, workTypes)).toBe(0)
   })
+  it('applies per-employee rate overrides over the general rate', () => {
+    const units = { 'wt-classification': 4, 'wt-qap': 2 }
+    // Override classification to 3 pts; QAP keeps its general 1 pt.
+    expect(computePoints(units, workTypes, { 'wt-classification': 3 })).toBe(14)
+  })
+})
+
+describe('aggregateMonthly with rate overrides', () => {
+  it('uses each employee’s own rates', () => {
+    const emps = [
+      { id: 'a', name: 'Ama', rate_overrides: { 'wt-classification': 2 } },
+      { id: 'b', name: 'Kojo' },
+    ]
+    const entries = [
+      {
+        employee_id: 'a',
+        work_date: '2026-07-01',
+        hours: 8,
+        units: { 'wt-classification': 3 },
+      },
+      {
+        employee_id: 'b',
+        work_date: '2026-07-01',
+        hours: 8,
+        units: { 'wt-classification': 3 },
+      },
+    ]
+    const r = aggregateMonthly('2026-07', entries, emps, workTypes, rates)
+    expect(r.per_person.find((p) => p.employee_id === 'a')!.points).toBe(6)
+    expect(r.per_person.find((p) => p.employee_id === 'b')!.points).toBe(3)
+    expect(r.totals.points).toBe(9)
+  })
 })
 
 describe('aggregateMonthly', () => {

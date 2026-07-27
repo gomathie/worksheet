@@ -82,7 +82,7 @@ async function changePassword() {
           class="btn btn-sm flex items-center gap-2"
           @click="menuOpen = !menuOpen"
         >
-          <span>{{ auth.user.name }}</span>
+          <span>Account</span>
           <span class="text-muted">▾</span>
         </button>
 

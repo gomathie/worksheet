@@ -30,6 +30,12 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/payslip',
+      name: 'payslip',
+      component: () => import('../views/PayslipView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/employees',
       name: 'employees',
       component: () => import('../views/EmployeesView.vue'),

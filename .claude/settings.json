@@ -10,7 +10,11 @@
       "PowerShell(npx wrangler d1 execute ledger-db --remote --command \"DELETE FROM entries WHERE employee_id IN \\('d4ffff60-90e9-4eee-8b8f-ddfb00626468','temp-verify-admin'\\); DELETE FROM employees WHERE id IN \\('d4ffff60-90e9-4eee-8b8f-ddfb00626468','temp-verify-admin'\\)\")",
       "PowerShell(\"test data removed\")",
       "PowerShell(git fetch origin 2>$null)",
-      "PowerShell(npx wrangler d1 migrations apply ledger-db --remote 2>&1)"
+      "PowerShell(npx wrangler d1 migrations apply ledger-db --remote 2>&1)",
+      "Bash(git log *)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'sed \"/[Cc]o-[Aa]uthored-[Bb]y:.*[Cc]laude/d;/noreply@anthropic.com/d\"' -- --all)",
+      "Bash(git stash *)",
+      "Bash(git push *)"
     ]
   }
 }

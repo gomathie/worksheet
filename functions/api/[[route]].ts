@@ -974,27 +974,19 @@ async function listAudit(request: Request, env: Env): Promise<Response> {
   return json(results)
 }
 
-/**
- * The viewer's own pay summary for a month. Available to every signed-in
- * user regardless of dashboard/report rights — it only exposes their own
- * figures.
- */
-async function myRemuneration(request: Request, env: Env): Promise<Response> {
-  const user = await requireUser(request, env)
-  const url = new URL(request.url)
-  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
-
+/** A single employee's pay summary for a month (used for payslips too). */
+async function remunerationFor(env: Env, employee: Employee, month: string) {
   const [settings, hoursRow, unitRows, wtRes, adjRes, payment] = await Promise.all([
     loadSettings(env),
     env.DB.prepare(
       'SELECT SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ?',
     )
-      .bind(user.id, `${month}-%`)
+      .bind(employee.id, `${month}-%`)
       .first<{ hours: number | null }>(),
     env.DB.prepare(
       'SELECT ei.work_type_id, SUM(ei.units) AS units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date LIKE ? GROUP BY ei.work_type_id',
     )
-      .bind(user.id, `${month}-%`)
+      .bind(employee.id, `${month}-%`)
       .all<{ work_type_id: string; units: number }>(),
     env.DB.prepare('SELECT id, name, points_per_unit FROM work_types').all<{
       id: string
@@ -1004,23 +996,23 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
     env.DB.prepare(
       'SELECT * FROM adjustments WHERE employee_id = ? AND month = ? ORDER BY created_at DESC',
     )
-      .bind(user.id, month)
+      .bind(employee.id, month)
       .all<AdjustmentRow>(),
     env.DB.prepare('SELECT * FROM payments WHERE employee_id = ? AND month = ?')
-      .bind(user.id, month)
+      .bind(employee.id, month)
       .first<PaymentRow>(),
   ])
 
   const units: Record<string, number> = {}
   for (const r of unitRows.results) units[r.work_type_id] = r.units
-  const { results: ownOverrideRows } = await env.DB.prepare(
+  const { results: overrideRows } = await env.DB.prepare(
     'SELECT work_type_id, points_per_unit FROM employee_work_types WHERE employee_id = ? AND points_per_unit IS NOT NULL',
   )
-    .bind(user.id)
+    .bind(employee.id)
     .all<{ work_type_id: string; points_per_unit: number }>()
-  const ownOverrides: Record<string, number> = {}
-  for (const r of ownOverrideRows) ownOverrides[r.work_type_id] = r.points_per_unit
-  const points = computePoints(units, wtRes.results, ownOverrides)
+  const overrides: Record<string, number> = {}
+  for (const r of overrideRows) overrides[r.work_type_id] = r.points_per_unit
+  const points = computePoints(units, wtRes.results, overrides)
   const base = computeRemuneration(points, settings)
   const bonus = adjRes.results
     .filter((a) => a.type === 'bonus' && a.status === 'approved')
@@ -1029,8 +1021,10 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
     .filter((a) => a.type === 'reimbursement' && a.status === 'approved')
     .reduce((s, a) => s + a.amount, 0)
 
-  return json({
+  return {
     month,
+    employee_id: employee.id,
+    employee_name: employee.name,
     currency: settings.currency,
     hours: hoursRow?.hours ?? 0,
     units,
@@ -1043,7 +1037,35 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
     paid_at: payment?.paid_at ?? null,
     confirmed_at: payment?.confirmed_at ?? null,
     adjustments: adjRes.results,
-  })
+  }
+}
+
+/**
+ * The viewer's own pay summary for a month. Available to every signed-in
+ * user regardless of dashboard/report rights — it only exposes their own
+ * figures.
+ */
+async function myRemuneration(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const url = new URL(request.url)
+  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+  return json(await remunerationFor(env, user, month))
+}
+
+/** Admin-only: any employee's pay summary for a month (for payslips). */
+async function employeeRemuneration(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  await requireAdmin(request, env)
+  const employee = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
+    .bind(id)
+    .first<Employee>()
+  if (!employee) throw new ApiError(404, 'Employee not found')
+  const url = new URL(request.url)
+  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+  return json(await remunerationFor(env, employee, month))
 }
 
 // ---------------------------------------------------- settings & report routes
@@ -1256,6 +1278,10 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/employees' && method === 'GET') return listEmployees(request, env)
   if (path === '/api/employees' && method === 'POST') return createEmployee(request, env)
+  const empRemMatch = /^\/api\/employees\/([\w-]+)\/remuneration$/.exec(path)
+  if (empRemMatch && method === 'GET') {
+    return employeeRemuneration(request, env, empRemMatch[1])
+  }
   const empMatch = /^\/api\/employees\/([\w-]+)$/.exec(path)
   if (empMatch) {
     if (method === 'PATCH') return patchEmployee(request, env, empMatch[1])

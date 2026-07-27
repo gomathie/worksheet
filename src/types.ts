@@ -127,6 +127,8 @@ export interface Adjustment {
 
 export interface MyRemuneration {
   month: string
+  employee_id: string
+  employee_name: string
   currency: string
   hours: number
   units: Record<string, number>

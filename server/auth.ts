@@ -78,6 +78,7 @@ export interface Rights {
   delete_entries: boolean
   view_dashboard: boolean
   view_reports: boolean
+  view_payslip: boolean
 }
 
 export const DEFAULT_RIGHTS: Rights = {
@@ -86,6 +87,7 @@ export const DEFAULT_RIGHTS: Rights = {
   delete_entries: true,
   view_dashboard: false,
   view_reports: false,
+  view_payslip: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -94,6 +96,7 @@ const ALL_RIGHTS: Rights = {
   delete_entries: true,
   view_dashboard: true,
   view_reports: true,
+  view_payslip: true,
 }
 
 export function parseRights(employee: Employee): Rights {
@@ -108,6 +111,7 @@ export function parseRights(employee: Employee): Rights {
       delete_entries: Boolean(raw.delete_entries ?? raw.edit_entries ?? true),
       view_dashboard: Boolean(raw.view_dashboard),
       view_reports: Boolean(raw.view_reports),
+      view_payslip: Boolean(raw.view_payslip),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

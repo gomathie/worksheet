@@ -33,7 +33,7 @@ const router = createRouter({
       path: '/payslip',
       name: 'payslip',
       component: () => import('../views/PayslipView.vue'),
-      meta: { auth: true },
+      meta: { auth: true, right: 'view_payslip' },
     },
     {
       path: '/employees',

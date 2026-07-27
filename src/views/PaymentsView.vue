@@ -19,13 +19,20 @@ const employees = ref<Employee[]>([])
 const bonusForm = ref({ employee_id: '', amount: '', description: '' })
 const reimbForm = ref({ amount: '', description: '' })
 
-const currency = computed(() => mine.value?.currency ?? '')
+const settingsCurrency = ref('')
+const currency = computed(() => mine.value?.currency ?? settingsCurrency.value)
 const money = (n: number) => `${currency.value}${n.toFixed(2)}`
 
 async function load() {
   error.value = ''
   try {
-    mine.value = await api<MyRemuneration>(`/api/me/remuneration?month=${month.value}`)
+    // Currency is safe for everyone; pay figures require the payslip right.
+    settingsCurrency.value = (
+      await api<{ currency: string }>('/api/settings')
+    ).currency
+    mine.value = auth.rights.view_payslip
+      ? await api<MyRemuneration>(`/api/me/remuneration?month=${month.value}`)
+      : null
     if (auth.isAdmin) {
       ;[report.value, adjustments.value] = await Promise.all([
         api<ReportPayload>(`/api/reports/monthly?month=${month.value}`),
@@ -124,6 +131,12 @@ const pendingRequests = computed(() =>
   adjustments.value.filter((a) => a.type === 'reimbursement' && a.status === 'pending'),
 )
 
+// The signed-in employee's own reimbursement requests (any status) — shown in
+// the request panel so staff without the payslip right can still track them.
+const myReimbursements = computed(() =>
+  adjustments.value.filter((a) => a.type === 'reimbursement'),
+)
+
 const statusLabel = (a: Adjustment) =>
   a.status === 'pending' ? 'Pending' : a.status === 'approved' ? 'Approved' : 'Rejected'
 </script>
@@ -137,8 +150,8 @@ const statusLabel = (a: Adjustment) =>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
 
-    <!-- ======================== own pay summary (everyone) -->
-    <div v-if="mine" class="panel mb-6">
+    <!-- ======================== own pay summary (requires payslip right) -->
+    <div v-if="auth.rights.view_payslip && mine" class="panel mb-6">
       <h3 class="display mb-3 text-xl">Your remuneration</h3>
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div>
@@ -250,6 +263,36 @@ const statusLabel = (a: Adjustment) =>
           <button class="btn btn-solid" :disabled="busy">Submit request</button>
         </div>
       </form>
+
+      <!-- Own reimbursement requests — shown here for staff who can't see the
+           full pay panel above (no payslip right). -->
+      <div v-if="!auth.rights.view_payslip && myReimbursements.length" class="mt-5">
+        <p class="field-label mb-2">Your requests this month</p>
+        <ul class="space-y-1 text-sm">
+          <li
+            v-for="a in myReimbursements"
+            :key="a.id"
+            class="flex flex-wrap items-center gap-2"
+          >
+            <span class="mono">{{ money(a.amount) }}</span>
+            <span class="text-muted">{{ a.description }}</span>
+            <span
+              class="text-xs"
+              :class="a.status === 'approved' ? 'text-teal' : a.status === 'rejected' ? 'text-red' : 'text-muted'"
+            >
+              {{ statusLabel(a) }}
+            </span>
+            <button
+              v-if="a.status === 'pending'"
+              class="btn btn-sm"
+              :disabled="busy"
+              @click="withdrawRequest(a)"
+            >
+              Withdraw
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
 
     <!-- ======================== admin: bonuses, approvals, paid status -->

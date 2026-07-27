@@ -1024,6 +1024,36 @@ async function changeOwnPassword(request: Request, env: Env): Promise<Response> 
   return json({ ok: true })
 }
 
+/** Admin-only full-database export for backup/archive. Excludes password hashes. */
+async function exportData(request: Request, env: Env): Promise<Response> {
+  await requireAdmin(request, env)
+  const tables = [
+    'settings',
+    'work_types',
+    'employees',
+    'employee_work_types',
+    'entries',
+    'entry_items',
+    'adjustments',
+    'payments',
+    'audit_log',
+  ]
+  const data: Record<string, unknown[]> = {}
+  for (const t of tables) {
+    const { results } = await env.DB.prepare(`SELECT * FROM ${t}`).all<Record<string, unknown>>()
+    if (t === 'employees') {
+      // Never export credential hashes; keep a flag instead.
+      data[t] = results.map(({ password_hash, ...rest }) => ({
+        ...rest,
+        has_password: password_hash ? 1 : 0,
+      }))
+    } else {
+      data[t] = results
+    }
+  }
+  return json({ exported_at: new Date().toISOString(), version: 1, tables: data })
+}
+
 async function listAudit(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env)
   const url = new URL(request.url)
@@ -1494,6 +1524,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return changeOwnPassword(request, env)
   }
   if (path === '/api/audit' && method === 'GET') return listAudit(request, env)
+  if (path === '/api/export' && method === 'GET') return exportData(request, env)
   if (path === '/api/trends' && method === 'GET') return trends(request, env)
 
   if (path === '/api/settings' && method === 'GET') return getSettings(request, env)

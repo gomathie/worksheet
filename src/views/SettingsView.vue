@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
+import { downloadJson } from '../csv'
 import type { RateSettings, WorkTypeInfo } from '../types'
 
 const form = ref<RateSettings>({ point_value: 1, currency: '$', max_entries_per_day: 0 })
@@ -66,6 +67,14 @@ function toggleType(wt: WorkTypeInfo) {
       json: { active: wt.active ? 0 : 1 },
     })
     await loadTypes()
+  })
+}
+
+function downloadBackup() {
+  return run(async () => {
+    const data = await api<unknown>('/api/export')
+    const date = new Date().toISOString().slice(0, 10)
+    downloadJson(`ledger-backup-${date}.json`, data)
   })
 }
 </script>
@@ -203,6 +212,18 @@ function toggleType(wt: WorkTypeInfo) {
           <span v-if="saved" class="ml-3 text-sm text-teal">Saved.</span>
         </div>
       </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Backup</h2>
+      <p class="mb-4 text-sm text-muted">
+        Download a full snapshot of all data (employees, entries, work types,
+        payments, bonuses, reimbursements, settings, and activity log) as a JSON
+        file. Passwords are never included.
+      </p>
+      <button class="btn btn-solid" :disabled="busy" @click="downloadBackup">
+        {{ busy ? 'Preparing…' : 'Download backup (JSON)' }}
+      </button>
     </div>
 
     <p v-if="error" class="rounded-lg border border-red bg-red-soft p-3 text-sm text-red">

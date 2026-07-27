@@ -7,14 +7,24 @@ function escapeCell(v: Cell): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
-export function downloadCsv(filename: string, rows: Cell[][]): void {
-  const csv = rows.map((r) => r.map(escapeCell).join(',')).join('\r\n')
-  // BOM so Excel opens UTF-8 (currency symbols, names) correctly.
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+export function downloadCsv(filename: string, rows: Cell[][]): void {
+  const csv = rows.map((r) => r.map(escapeCell).join(',')).join('\r\n')
+  // BOM so Excel opens UTF-8 (currency symbols, names) correctly.
+  triggerDownload(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), filename)
+}
+
+export function downloadJson(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json',
+  })
+  triggerDownload(blob, filename)
 }

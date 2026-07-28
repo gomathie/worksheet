@@ -68,7 +68,8 @@ approval to payment.
 - **No receipt:** the form reveals a **reason** box and the **employee declaration**, which must be
   explicitly accepted before submission. The accepted wording is snapshotted onto the voucher, so
   later edits to the template can't rewrite what somebody agreed to.
-- **Receipts:** PDF / JPG / JPEG / PNG up to 10 MB, stored in R2 (see *Receipt attachments* below).
+- **Receipts:** file upload (PDF / JPG / JPEG / PNG, max 10 MB) is built but **currently switched
+  off** — see *Receipt attachments* below to enable it.
 - **Workflow:** Draft → Submitted → Manager Review → Finance Review → Approved → Paid, with
   Rejected reachable from either review stage and a *request more information* path back to draft.
   Every decision records approver, date, decision, and comments. Rejections require a comment.
@@ -92,17 +93,22 @@ approval to payment.
 - **Notifications:** in-app (header bell) plus email on submission, approval, rejection, payment,
   and requests for more information.
 
-### Receipt attachments (R2)
-Receipt files live in an R2 bucket bound as `ATTACHMENTS`. Create it once before the first deploy:
+### Receipt attachments (R2) — currently off
+Receipt **file uploads are disabled**: no R2 bucket is bound in `wrangler.toml`. Everything else
+in the module works unchanged — vouchers still record whether a receipt exists, and the
+missing-receipt reason + declaration flow is unaffected. With uploads off, ticking *receipt
+available* means "a paper or emailed receipt exists"; the UI hides the upload control rather than
+offering one that would fail.
+
+To enable it later, create the bucket and uncomment the `[[r2_buckets]]` block in `wrangler.toml`:
 
 ```bash
 wrangler r2 bucket create ledger-receipts
 wrangler r2 bucket create ledger-receipts-preview   # for preview deployments
 ```
 
-`wrangler pages dev` creates a local stand-in automatically, so local development needs nothing.
-The binding is **optional in code**: without it every other part of the module works and only
-uploads fail, with an explicit "receipt storage is not configured" message rather than a crash.
+No code changes are needed — the API detects the binding at runtime (`/api/me` reports
+`attachments_enabled`), and `wrangler pages dev` creates a local stand-in automatically.
 
 ### Email notifications (SMTP)
 Point the app at any SMTP server (port 587 STARTTLS or 465 TLS) in Settings. It emails employees
@@ -162,7 +168,6 @@ One-time setup — requires a logged-in wrangler (`npx wrangler login`) or `CLOU
 ```bash
 npx wrangler d1 create ledger-db            # paste database_id into wrangler.toml
 npx wrangler kv namespace create SESSIONS   # paste id into wrangler.toml
-npx wrangler r2 bucket create ledger-receipts   # expense receipt storage
 npm run db:migrate:prod
 npm run deploy                              # builds + wrangler pages deploy
 ```
@@ -170,7 +175,7 @@ npm run deploy                              # builds + wrangler pages deploy
 **Auto-deploy from GitHub:** Cloudflare dashboard → Workers & Pages → ledger → Settings → Builds →
 connect the repo; production branch `main`, build command `npm run build`, output directory `dist`.
 Pushing to `main` then builds and deploys automatically. The committed `wrangler.toml` carries the
-bindings (`DB`, `SESSIONS`, `ATTACHMENTS`) and the `TEAM_TZ` var.
+bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
 
 ## Migrations
 

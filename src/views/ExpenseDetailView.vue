@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, ApiClientError } from '../api'
+import { useAuthStore } from '../stores/auth'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
 import {
   PAYMENT_METHOD_LABELS,
@@ -12,6 +13,11 @@ import type { ExpenseVoucherDetail } from '../types'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
+
+// Receipt storage is optional deployment-side; hide the whole attachment
+// panel when there is no bucket rather than offering an upload that fails.
+const attachmentsEnabled = computed(() => auth.user?.attachments_enabled ?? false)
 
 const voucher = ref<ExpenseVoucherDetail | null>(null)
 const error = ref('')
@@ -250,7 +256,10 @@ const printPage = () => window.print()
     </div>
 
     <!-- ======================================================= attachments -->
-    <div class="panel no-print mb-6">
+    <div
+      v-if="attachmentsEnabled || voucher.attachments.length"
+      class="panel no-print mb-6"
+    >
       <h3 class="display mb-3 text-xl">Receipts &amp; attachments</h3>
       <ul v-if="voucher.attachments.length" class="mb-4 space-y-2 text-sm">
         <li
@@ -281,7 +290,7 @@ const printPage = () => window.print()
       </ul>
       <p v-else class="mb-4 text-sm text-muted">No files attached.</p>
 
-      <div v-if="can('add_attachment')">
+      <div v-if="can('add_attachment') && attachmentsEnabled">
         <label class="field-label" for="v-file">Attach a receipt (PDF, JPG, PNG — max 10 MB)</label>
         <input
           id="v-file"

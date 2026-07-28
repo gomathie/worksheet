@@ -132,6 +132,23 @@ async function buildActor(
   }
 }
 
+/** Readable phrasing for refusals — "add attachment this voucher" reads badly. */
+const ACTION_PHRASES: Record<ExpenseAction, string> = {
+  edit: 'edit this voucher',
+  delete: 'delete this voucher',
+  submit: 'submit this voucher',
+  start_review: 'start reviewing this voucher',
+  manager_approve: 'approve this voucher as a manager',
+  manager_reject: 'reject this voucher as a manager',
+  finance_approve: 'approve this voucher as finance',
+  finance_reject: 'reject this voucher as finance',
+  return: 'return this voucher for more information',
+  mark_paid: 'mark this voucher paid',
+  reopen: 'reopen this voucher',
+  add_attachment: 'attach a receipt to this voucher',
+  remove_attachment: 'remove a receipt from this voucher',
+}
+
 function requireAction(
   action: ExpenseAction,
   voucher: ExpenseVoucherRow,
@@ -142,7 +159,7 @@ function requireAction(
     reopened: Boolean(voucher.reopened_at),
   }
   if (!allowedActions(state, actor).includes(action)) {
-    throw new ApiError(403, `You cannot ${action.replace(/_/g, ' ')} this voucher`)
+    throw new ApiError(403, `You cannot ${ACTION_PHRASES[action]}`)
   }
 }
 

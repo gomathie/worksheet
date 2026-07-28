@@ -22,6 +22,10 @@ const router = useRouter()
 
 const editingId = computed(() => (route.params.id as string | undefined) ?? null)
 
+// No receipt-storage bucket bound means "receipt available" is a declaration
+// that a paper copy exists, not a promise of an uploaded file.
+const attachmentsEnabled = computed(() => auth.user?.attachments_enabled ?? false)
+
 const departments = ref<Department[]>([])
 const categories = ref<ExpenseCategory[]>([])
 const employees = ref<Employee[]>([])
@@ -287,11 +291,16 @@ async function save(submit: boolean) {
           A receipt is available for this expense
         </label>
         <p class="mt-1 text-xs text-muted">
-          {{
-            editingId
-              ? 'Attach the receipt file on the voucher page after saving.'
-              : 'Save the voucher first, then attach the receipt file on its page.'
-          }}
+          <template v-if="!attachmentsEnabled">
+            Tick this if you hold a physical or emailed receipt — keep it for the
+            finance team. File uploads are not enabled on this deployment.
+          </template>
+          <template v-else-if="editingId">
+            Attach the receipt file on the voucher page after saving.
+          </template>
+          <template v-else>
+            Save the voucher first, then attach the receipt file on its page.
+          </template>
         </p>
 
         <!-- Shown only when no receipt exists, per the declaration rules. -->

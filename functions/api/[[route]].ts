@@ -1809,6 +1809,9 @@ async function route(request: Request, env: Env): Promise<Response> {
       entry_approval: (await loadSettings(env)).require_entry_approval === 1,
       department_id: user.department_id,
       manager_id: user.manager_id,
+      // Receipt uploads need the ATTACHMENTS R2 binding. When it is absent
+      // the UI hides the upload control instead of offering one that fails.
+      attachments_enabled: Boolean(env.ATTACHMENTS),
       // Drives the header bell without a second round trip on page load.
       unread_notifications:
         (

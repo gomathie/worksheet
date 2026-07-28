@@ -46,6 +46,8 @@ export interface Me {
   department_id: string | null
   manager_id: string | null
   unread_notifications: number
+  /** False when no receipt-storage bucket is bound; uploads are hidden. */
+  attachments_enabled: boolean
   today: string
 }
 

@@ -8,9 +8,10 @@ export const EXPENSE_STATUSES = [
   'submitted',
   'manager_review',
   'finance_review',
+  'admin_approval',
   'approved',
   'rejected',
-  'paid',
+  'recorded',
 ] as const
 
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number]
@@ -38,9 +39,10 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
   submitted: 'Submitted',
   manager_review: 'Manager Review',
   finance_review: 'Finance Review',
+  admin_approval: 'Awaiting Admin Approval',
   approved: 'Approved',
   rejected: 'Rejected',
-  paid: 'Paid',
+  recorded: 'Recorded',
 }
 
 /** Statuses that still need somebody to act. Drives the "pending" counters. */
@@ -48,6 +50,7 @@ export const OPEN_STATUSES: ExpenseStatus[] = [
   'submitted',
   'manager_review',
   'finance_review',
+  'admin_approval',
 ]
 
 export const DEFAULT_DECLARATION =
@@ -83,6 +86,10 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
  * Where a voucher lands when the employee submits it. A manager step is only
  * taken when the workflow asks for one *and* the employee actually has a
  * manager assigned — otherwise it would sit in a queue nobody owns.
+ *
+ * Note that no path here reaches 'approved': final approval always requires an
+ * administrator holding `approve_expenses` to act. Switching both optional
+ * steps off shortens the chain, it does not auto-approve.
  */
 export function statusAfterSubmit(
   workflow: WorkflowConfig,
@@ -90,12 +97,12 @@ export function statusAfterSubmit(
 ): ExpenseStatus {
   if (workflow.require_manager && hasManager) return 'submitted'
   if (workflow.require_finance) return 'finance_review'
-  return 'approved'
+  return 'admin_approval'
 }
 
 /** Where a voucher lands once the manager has approved it. */
 export function statusAfterManagerApproval(workflow: WorkflowConfig): ExpenseStatus {
-  return workflow.require_finance ? 'finance_review' : 'approved'
+  return workflow.require_finance ? 'finance_review' : 'admin_approval'
 }
 
 // -------------------------------------------------------------- permissions
@@ -108,10 +115,20 @@ export interface ExpenseActor {
   is_admin: boolean
   /** Holds the `add_expenses` right. */
   can_create: boolean
-  /** Holds the `review_expenses` right (manager-side approvals). */
+  /** Holds the `review_expenses` right (manager-side review). */
   can_review: boolean
-  /** Holds the `finance_expenses` right (verification and payment). */
+  /**
+   * Holds the `finance_expenses` right. Finance does not approve: it escalates
+   * to an approver and, once approved, records the expense in the external
+   * accounting system.
+   */
   can_finance: boolean
+  /**
+   * Holds the `approve_expenses` right — final approval authority. This is
+   * granted explicitly and is NOT implied by the admin role; an approver is an
+   * administrator who also holds it.
+   */
+  can_approve: boolean
   /** The voucher belongs to this user. */
   is_owner: boolean
   /** This user is the voucher owner's assigned manager. */
@@ -125,10 +142,11 @@ export type ExpenseAction =
   | 'start_review'
   | 'manager_approve'
   | 'manager_reject'
-  | 'finance_approve'
-  | 'finance_reject'
+  | 'request_approval'
+  | 'admin_approve'
+  | 'admin_reject'
   | 'return'
-  | 'mark_paid'
+  | 'mark_recorded'
   | 'reopen'
   | 'add_attachment'
   | 'remove_attachment'
@@ -148,10 +166,24 @@ function canActAsManager(actor: ExpenseActor, status: ExpenseStatus): boolean {
   return actor.can_review && actor.is_manager_of_owner && !actor.is_owner
 }
 
-/** May this user take a finance decision right now? */
-function canActAsFinance(actor: ExpenseActor, status: ExpenseStatus): boolean {
-  if (status !== 'finance_review') return false
-  return actor.is_admin || (actor.can_finance && !actor.is_owner)
+/**
+ * Final approval authority. Deliberately requires BOTH the admin role and the
+ * `approve_expenses` right, so approval is something granted rather than
+ * something every administrator holds by virtue of being one.
+ */
+export function isApprover(actor: ExpenseActor): boolean {
+  return actor.is_admin && actor.can_approve
+}
+
+/** May this user give or refuse final approval right now? */
+function canApprove(actor: ExpenseActor, status: ExpenseStatus): boolean {
+  if (status !== 'finance_review' && status !== 'admin_approval') return false
+  return isApprover(actor)
+}
+
+/** Does this user hold the finance desk (escalation and recording)? */
+function isFinance(actor: ExpenseActor): boolean {
+  return actor.is_admin || actor.can_finance
 }
 
 /**
@@ -164,13 +196,13 @@ export function allowedActions(
 ): ExpenseAction[] {
   const actions: ExpenseAction[] = []
   const { status } = state
-  const decided = status === 'approved' || status === 'paid'
+  const decided = status === 'approved' || status === 'recorded'
 
   // --- owner-side
   if (status === 'draft' && (actor.is_owner ? actor.can_create : actor.is_admin)) {
     actions.push('edit', 'submit', 'delete', 'add_attachment', 'remove_attachment')
   } else if (actor.is_admin) {
-    // Administrators hold full CRUD, but an approved or paid voucher is
+    // Administrators hold full CRUD, but an approved or recorded voucher is
     // frozen until it is explicitly reopened — that is the audit boundary.
     if (!decided || state.reopened) {
       actions.push('edit', 'add_attachment', 'remove_attachment')
@@ -184,12 +216,19 @@ export function allowedActions(
     actions.push('manager_approve', 'manager_reject', 'return')
   }
 
-  // --- finance-side
-  if (canActAsFinance(actor, status)) {
-    actions.push('finance_approve', 'finance_reject', 'return')
+  // --- finance desk: escalate and record, but never approve
+  if (status === 'finance_review' && isFinance(actor)) {
+    actions.push('request_approval', 'return')
   }
-  if (status === 'approved' && (actor.is_admin || actor.can_finance)) {
-    actions.push('mark_paid')
+  // Recording is only ever possible once an approver has approved, which is
+  // the only route into the 'approved' state.
+  if (status === 'approved' && isFinance(actor)) {
+    actions.push('mark_recorded')
+  }
+
+  // --- final approval
+  if (canApprove(actor, status)) {
+    actions.push('admin_approve', 'admin_reject', 'return')
   }
 
   // --- administrator override
@@ -221,16 +260,18 @@ export function statusAfter(
       return 'manager_review'
     case 'manager_approve':
       return statusAfterManagerApproval(workflow)
-    case 'finance_approve':
+    case 'request_approval':
+      return 'admin_approval'
+    case 'admin_approve':
       return 'approved'
     case 'manager_reject':
-    case 'finance_reject':
+    case 'admin_reject':
       return 'rejected'
     case 'return':
     case 'reopen':
       return 'draft'
-    case 'mark_paid':
-      return 'paid'
+    case 'mark_recorded':
+      return 'recorded'
     default:
       return null
   }
@@ -383,9 +424,10 @@ export interface Bucket {
 export interface ExpenseSummary {
   counts: Record<ExpenseStatus, number>
   pending_approval: number
+  /** Approved but not yet entered into the external accounting system. */
   approved: number
   rejected: number
-  paid: number
+  recorded: number
   total_this_month: number
   missing_receipt_count: number
   by_category: Bucket[]
@@ -433,7 +475,7 @@ export function summarize(vouchers: VoucherLike[], month: string): ExpenseSummar
     pending_approval: OPEN_STATUSES.reduce((n, s) => n + counts[s], 0),
     approved: counts.approved,
     rejected: counts.rejected,
-    paid: counts.paid,
+    recorded: counts.recorded,
     total_this_month: round2(thisMonth.reduce((s, v) => s + v.amount, 0)),
     missing_receipt_count: vouchers.filter((v) => !v.receipt_available).length,
     by_category: bucketBy(

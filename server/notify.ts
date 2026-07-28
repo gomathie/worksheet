@@ -65,19 +65,24 @@ export async function notifyUsers(
 /** Active employees holding a given right, for queue notifications. */
 export async function employeesWithRight(
   env: Env,
-  right: 'review_expenses' | 'finance_expenses',
+  right: 'review_expenses' | 'finance_expenses' | 'approve_expenses',
 ): Promise<string[]> {
   const { results } = await env.DB.prepare(
     "SELECT id, role, rights FROM employees WHERE active = 1",
   ).all<{ id: string; role: string; rights: string }>()
+  const has = (e: { rights: string }) => {
+    try {
+      return Boolean((JSON.parse(e.rights || '{}') as Record<string, unknown>)[right])
+    } catch {
+      return false
+    }
+  }
   return results
     .filter((e) => {
-      if (e.role === 'admin') return true
-      try {
-        return Boolean((JSON.parse(e.rights || '{}') as Record<string, unknown>)[right])
-      } catch {
-        return false
-      }
+      // approve_expenses is never implied by the admin role — an approver is
+      // an admin who also holds it. Every other right admins get for free.
+      if (right === 'approve_expenses') return e.role === 'admin' && has(e)
+      return e.role === 'admin' || has(e)
     })
     .map((e) => e.id)
 }

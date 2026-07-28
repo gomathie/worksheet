@@ -87,6 +87,11 @@ export interface Rights {
   add_expenses: boolean
   review_expenses: boolean
   finance_expenses: boolean
+  // Final approval authority. Unlike every other right, this one is NOT
+  // implied by the admin role — see parseRights. An approver is an
+  // administrator who has also been granted this explicitly, so approval is
+  // something delegated rather than something the role carries.
+  approve_expenses: boolean
 }
 
 export const DEFAULT_RIGHTS: Rights = {
@@ -101,6 +106,7 @@ export const DEFAULT_RIGHTS: Rights = {
   add_expenses: true,
   review_expenses: false,
   finance_expenses: false,
+  approve_expenses: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -115,10 +121,25 @@ const ALL_RIGHTS: Rights = {
   add_expenses: true,
   review_expenses: true,
   finance_expenses: true,
+  // Not granted here — see the carve-out in parseRights.
+  approve_expenses: false,
+}
+
+/** Read one right straight from the stored JSON, ignoring role shortcuts. */
+function rawRight(employee: Employee, key: keyof Rights): boolean {
+  try {
+    return Boolean((JSON.parse(employee.rights || '{}') as Partial<Rights>)[key])
+  } catch {
+    return false
+  }
 }
 
 export function parseRights(employee: Employee): Rights {
-  if (employee.role === 'admin') return { ...ALL_RIGHTS }
+  if (employee.role === 'admin') {
+    // Admins hold everything implicitly *except* expense approval, which must
+    // be granted deliberately so it can also be withheld from an admin.
+    return { ...ALL_RIGHTS, approve_expenses: rawRight(employee, 'approve_expenses') }
+  }
   try {
     const raw = JSON.parse(employee.rights || '{}') as Partial<Rights>
     return {
@@ -139,6 +160,9 @@ export function parseRights(employee: Employee): Rights {
       add_expenses: Boolean(raw.add_expenses ?? true),
       review_expenses: Boolean(raw.review_expenses),
       finance_expenses: Boolean(raw.finance_expenses),
+      // Only meaningful alongside the admin role; kept here so the stored
+      // value survives a round trip through the Employees form.
+      approve_expenses: Boolean(raw.approve_expenses),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

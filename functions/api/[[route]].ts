@@ -41,6 +41,33 @@ import {
   parseTime,
 } from '../../shared/logic'
 import { getCookie } from '../../server/http'
+import {
+  listNotifications,
+  markNotificationsRead,
+} from '../../server/notify'
+import {
+  createCategory,
+  createDepartment,
+  createVoucher,
+  decideVoucher,
+  deleteAttachment,
+  deleteVoucher,
+  downloadAttachment,
+  expenseDashboard,
+  expenseReport,
+  getVoucher,
+  getWorkflow,
+  listCategories,
+  listDepartments,
+  listQueue,
+  listVouchers,
+  patchCategory,
+  patchDepartment,
+  patchVoucher,
+  putWorkflow,
+  submitVoucher,
+  uploadAttachment,
+} from '../../server/expenses'
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
@@ -281,6 +308,8 @@ function publicEmployee(
     rate_overrides: rateOverrides,
     max_entries_per_day: e.max_entries_per_day,
     leave_allowance: e.leave_allowance,
+    department_id: e.department_id,
+    manager_id: e.manager_id,
     has_password: e.password_hash ? 1 : 0,
     active: e.active,
     created_at: e.created_at,
@@ -329,6 +358,9 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     view_remuneration: Boolean(raw?.view_remuneration ?? fallback.view_remuneration),
     view_payslip: Boolean(raw?.view_payslip ?? fallback.view_payslip),
     log_leave: Boolean(raw?.log_leave ?? fallback.log_leave),
+    add_expenses: Boolean(raw?.add_expenses ?? fallback.add_expenses),
+    review_expenses: Boolean(raw?.review_expenses ?? fallback.review_expenses),
+    finance_expenses: Boolean(raw?.finance_expenses ?? fallback.finance_expenses),
   })
 }
 
@@ -343,7 +375,23 @@ interface EmployeeBody {
   rate_overrides?: Record<string, number | null>
   max_entries_per_day?: number | null
   leave_allowance?: number | null
+  department_id?: string | null
+  manager_id?: string | null
   active?: number | boolean
+}
+
+/** Validate an optional FK, returning null when cleared. */
+async function normalizeRef(
+  env: Env,
+  table: 'departments' | 'employees',
+  value: unknown,
+  label: string,
+): Promise<string | null> {
+  const id = String(value ?? '').trim()
+  if (!id) return null
+  const row = await env.DB.prepare(`SELECT id FROM ${table} WHERE id = ?`).bind(id).first()
+  if (!row) throw new ApiError(400, `Unknown ${label}`)
+  return id
 }
 
 async function listEmployees(request: Request, env: Env): Promise<Response> {
@@ -405,17 +453,34 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     view_remuneration: false,
     view_payslip: false,
     log_leave: false,
+    add_expenses: true,
+    review_expenses: false,
+    finance_expenses: false,
   })
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
   const leaveAllowance = normalizeEntryLimit(body.leave_allowance)
+  const departmentId = await normalizeRef(env, 'departments', body.department_id, 'department')
+  const managerId = await normalizeRef(env, 'employees', body.manager_id, 'manager')
 
   const id = crypto.randomUUID()
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (id, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
-      .bind(id, name, email, username, passwordHash, role, rights, maxPerDay, leaveAllowance)
+      .bind(
+        id,
+        name,
+        email,
+        username,
+        passwordHash,
+        role,
+        rights,
+        maxPerDay,
+        leaveAllowance,
+        departmentId,
+        managerId,
+      )
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -502,6 +567,18 @@ async function patchEmployee(
     body.leave_allowance !== undefined
       ? normalizeEntryLimit(body.leave_allowance)
       : existing.leave_allowance
+  const departmentId =
+    body.department_id !== undefined
+      ? await normalizeRef(env, 'departments', body.department_id, 'department')
+      : existing.department_id
+  let managerId =
+    body.manager_id !== undefined
+      ? await normalizeRef(env, 'employees', body.manager_id, 'manager')
+      : existing.manager_id
+  // Self-management would make an employee their own approver.
+  if (managerId === id) {
+    throw new ApiError(400, 'An employee cannot be their own manager')
+  }
 
   // Admins cannot demote or deactivate themselves — avoids locking everyone out.
   if (existing.id === admin.id && (role !== 'admin' || !active)) {
@@ -510,9 +587,22 @@ async function patchEmployee(
 
   try {
     await env.DB.prepare(
-      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, active = ? WHERE id = ?',
+      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, department_id = ?, manager_id = ?, active = ? WHERE id = ?',
     )
-      .bind(name, email, username, passwordHash, role, rights, maxPerDay, leaveAllowance, active, id)
+      .bind(
+        name,
+        email,
+        username,
+        passwordHash,
+        role,
+        rights,
+        maxPerDay,
+        leaveAllowance,
+        departmentId,
+        managerId,
+        active,
+        id,
+      )
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -1717,6 +1807,17 @@ async function route(request: Request, env: Env): Promise<Response> {
       entry_limit: user.role === 'admin' ? 0 : await effectiveEntryLimit(env, user),
       leave_allowance: user.leave_allowance,
       entry_approval: (await loadSettings(env)).require_entry_approval === 1,
+      department_id: user.department_id,
+      manager_id: user.manager_id,
+      // Drives the header bell without a second round trip on page load.
+      unread_notifications:
+        (
+          await env.DB.prepare(
+            'SELECT COUNT(*) AS n FROM notifications WHERE employee_id = ? AND read_at IS NULL',
+          )
+            .bind(user.id)
+            .first<{ n: number }>()
+        )?.n ?? 0,
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
     })
   }
@@ -1785,6 +1886,71 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/reports/monthly' && method === 'GET') {
     return monthlyReport(request, env)
+  }
+
+  // ------------------------------------------------------- expense vouchers
+
+  if (path === '/api/departments' && method === 'GET') return listDepartments(request, env)
+  if (path === '/api/departments' && method === 'POST') return createDepartment(request, env)
+  const deptMatch = /^\/api\/departments\/([\w-]+)$/.exec(path)
+  if (deptMatch && method === 'PATCH') return patchDepartment(request, env, deptMatch[1])
+
+  if (path === '/api/expense-categories' && method === 'GET') {
+    return listCategories(request, env)
+  }
+  if (path === '/api/expense-categories' && method === 'POST') {
+    return createCategory(request, env)
+  }
+  const catMatch = /^\/api\/expense-categories\/([\w-]+)$/.exec(path)
+  if (catMatch && method === 'PATCH') return patchCategory(request, env, catMatch[1])
+
+  if (path === '/api/expenses/workflow' && method === 'GET') return getWorkflow(request, env)
+  if (path === '/api/expenses/workflow' && method === 'PUT') return putWorkflow(request, env)
+  if (path === '/api/expenses/dashboard' && method === 'GET') {
+    return expenseDashboard(request, env)
+  }
+  if (path === '/api/expenses/reports' && method === 'GET') return expenseReport(request, env)
+  if (path === '/api/expenses/queue' && method === 'GET') return listQueue(request, env)
+
+  if (path === '/api/expenses' && method === 'GET') return listVouchers(request, env)
+  if (path === '/api/expenses' && method === 'POST') return createVoucher(request, env)
+
+  const attachMatch = /^\/api\/expenses\/([\w-]+)\/attachments\/([\w-]+)$/.exec(path)
+  if (attachMatch) {
+    if (method === 'GET') {
+      return downloadAttachment(request, env, attachMatch[1], attachMatch[2])
+    }
+    if (method === 'DELETE') {
+      return deleteAttachment(request, env, attachMatch[1], attachMatch[2])
+    }
+  }
+  const uploadMatch = /^\/api\/expenses\/([\w-]+)\/attachments$/.exec(path)
+  if (uploadMatch && method === 'POST') return uploadAttachment(request, env, uploadMatch[1])
+
+  const submitMatch = /^\/api\/expenses\/([\w-]+)\/submit$/.exec(path)
+  if (submitMatch && method === 'POST') return submitVoucher(request, env, submitMatch[1])
+
+  const decideMatch = /^\/api\/expenses\/([\w-]+)\/decision$/.exec(path)
+  if (decideMatch && method === 'POST') return decideVoucher(request, env, decideMatch[1])
+
+  const voucherMatch = /^\/api\/expenses\/([\w-]+)$/.exec(path)
+  if (voucherMatch) {
+    if (method === 'GET') return getVoucher(request, env, voucherMatch[1])
+    if (method === 'PATCH') return patchVoucher(request, env, voucherMatch[1])
+    if (method === 'DELETE') return deleteVoucher(request, env, voucherMatch[1])
+  }
+
+  // ---------------------------------------------------------- notifications
+
+  if (path === '/api/notifications' && method === 'GET') {
+    const user = await requireUser(request, env)
+    return json(await listNotifications(env, user.id))
+  }
+  if (path === '/api/notifications/read' && method === 'POST') {
+    const user = await requireUser(request, env)
+    const body = await readJson<{ ids?: string[]; all?: boolean }>(request)
+    await markNotificationsRead(env, user.id, body.all ? 'all' : (body.ids ?? []))
+    return json({ ok: true })
   }
 
   throw new ApiError(404, 'Not found')

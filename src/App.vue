@@ -1,11 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from './api'
 import { useAuthStore } from './stores/auth'
+import NotificationBell from './components/NotificationBell.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+
+// Expense reporting is open to anyone who can see beyond their own vouchers.
+const canSeeExpenseReports = computed(
+  () =>
+    auth.isAdmin || auth.rights.finance_expenses || auth.rights.review_expenses,
+)
 
 const menuOpen = ref(false)
 
@@ -77,7 +84,9 @@ async function changePassword() {
           </p>
         </div>
       </div>
-      <div v-if="auth.user" class="relative text-sm">
+      <div v-if="auth.user" class="flex items-center gap-2 text-sm">
+        <NotificationBell />
+        <div class="relative">
         <button
           class="btn btn-sm flex items-center gap-2"
           @click="menuOpen = !menuOpen"
@@ -111,6 +120,7 @@ async function changePassword() {
           >
             Sign out
           </button>
+        </div>
         </div>
       </div>
     </header>
@@ -186,6 +196,30 @@ async function changePassword() {
       >
       <RouterLink :to="{ name: 'absences' }" class="btn" active-class="btn-solid"
         >Absences</RouterLink
+      >
+      <RouterLink :to="{ name: 'expenses' }" class="btn" active-class="btn-solid"
+        >Expenses</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.review_expenses"
+        :to="{ name: 'expense-approvals' }"
+        class="btn"
+        active-class="btn-solid"
+        >Approvals</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.finance_expenses"
+        :to="{ name: 'expense-finance' }"
+        class="btn"
+        active-class="btn-solid"
+        >Finance</RouterLink
+      >
+      <RouterLink
+        v-if="canSeeExpenseReports"
+        :to="{ name: 'expense-reports' }"
+        class="btn"
+        active-class="btn-solid"
+        >Expense Reports</RouterLink
       >
       <template v-if="auth.isAdmin">
         <RouterLink :to="{ name: 'employees' }" class="btn" active-class="btn-solid"

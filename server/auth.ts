@@ -81,6 +81,12 @@ export interface Rights {
   view_remuneration: boolean
   view_payslip: boolean
   log_leave: boolean
+  // Expense vouchers. "Manager" and "finance" are rights rather than roles:
+  // review_expenses only bites for the holder's own direct reports
+  // (employees.manager_id), finance_expenses is organization-wide.
+  add_expenses: boolean
+  review_expenses: boolean
+  finance_expenses: boolean
 }
 
 export const DEFAULT_RIGHTS: Rights = {
@@ -92,6 +98,9 @@ export const DEFAULT_RIGHTS: Rights = {
   view_remuneration: false,
   view_payslip: false,
   log_leave: false,
+  add_expenses: true,
+  review_expenses: false,
+  finance_expenses: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -103,6 +112,9 @@ const ALL_RIGHTS: Rights = {
   view_remuneration: true,
   view_payslip: true,
   log_leave: true,
+  add_expenses: true,
+  review_expenses: true,
+  finance_expenses: true,
 }
 
 export function parseRights(employee: Employee): Rights {
@@ -122,6 +134,11 @@ export function parseRights(employee: Employee): Rights {
       view_remuneration: Boolean(raw.view_remuneration ?? raw.view_payslip),
       view_payslip: Boolean(raw.view_payslip),
       log_leave: Boolean(raw.log_leave),
+      // Filing your own expenses is the baseline, like logging your own time:
+      // rows written before the expense module default to allowed.
+      add_expenses: Boolean(raw.add_expenses ?? true),
+      review_expenses: Boolean(raw.review_expenses),
+      finance_expenses: Boolean(raw.finance_expenses),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

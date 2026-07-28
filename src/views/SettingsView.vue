@@ -2,7 +2,13 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { downloadJson } from '../csv'
-import type { RateSettings, WorkTypeInfo } from '../types'
+import type {
+  Department,
+  ExpenseCategory,
+  RateSettings,
+  WorkflowConfig,
+  WorkTypeInfo,
+} from '../types'
 
 const form = ref<RateSettings>({
   point_value: 1,
@@ -16,8 +22,24 @@ const error = ref('')
 const saved = ref(false)
 const busy = ref(false)
 
+// ---------------------------------------------------------- expense module
+const departments = ref<Department[]>([])
+const categories = ref<ExpenseCategory[]>([])
+const newDepartment = ref('')
+const newCategory = ref('')
+const workflow = ref<WorkflowConfig>({ require_manager: true, require_finance: true })
+const workflowSaved = ref(false)
+
 async function loadTypes() {
   workTypes.value = await api<WorkTypeInfo[]>('/api/work-types')
+}
+
+async function loadExpenseConfig() {
+  ;[departments.value, categories.value, workflow.value] = await Promise.all([
+    api<Department[]>('/api/departments'),
+    api<ExpenseCategory[]>('/api/expense-categories'),
+    api<WorkflowConfig>('/api/expenses/workflow'),
+  ])
 }
 
 onMounted(async () => {
@@ -25,6 +47,7 @@ onMounted(async () => {
     api<RateSettings>('/api/settings'),
     loadTypes(),
     loadSmtp(),
+    loadExpenseConfig(),
   ])
 })
 
@@ -56,6 +79,72 @@ function addType() {
     await api('/api/work-types', { method: 'POST', json: newType.value })
     newType.value = { name: '', points_per_unit: 1 }
     await loadTypes()
+  })
+}
+
+// ---------------------------------------------------- departments & categories
+
+function addDepartment() {
+  return run(async () => {
+    await api('/api/departments', { method: 'POST', json: { name: newDepartment.value } })
+    newDepartment.value = ''
+    await loadExpenseConfig()
+  })
+}
+
+function saveDepartment(d: Department) {
+  return run(async () => {
+    await api(`/api/departments/${d.id}`, { method: 'PATCH', json: { name: d.name } })
+    await loadExpenseConfig()
+  })
+}
+
+function toggleDepartment(d: Department) {
+  return run(async () => {
+    await api(`/api/departments/${d.id}`, {
+      method: 'PATCH',
+      json: { active: d.active ? 0 : 1 },
+    })
+    await loadExpenseConfig()
+  })
+}
+
+function addCategory() {
+  return run(async () => {
+    await api('/api/expense-categories', {
+      method: 'POST',
+      json: { name: newCategory.value },
+    })
+    newCategory.value = ''
+    await loadExpenseConfig()
+  })
+}
+
+function saveCategory(c: ExpenseCategory) {
+  return run(async () => {
+    await api(`/api/expense-categories/${c.id}`, { method: 'PATCH', json: { name: c.name } })
+    await loadExpenseConfig()
+  })
+}
+
+function toggleCategory(c: ExpenseCategory) {
+  return run(async () => {
+    await api(`/api/expense-categories/${c.id}`, {
+      method: 'PATCH',
+      json: { active: c.active ? 0 : 1 },
+    })
+    await loadExpenseConfig()
+  })
+}
+
+function saveWorkflow() {
+  workflowSaved.value = false
+  return run(async () => {
+    workflow.value = await api<WorkflowConfig>('/api/expenses/workflow', {
+      method: 'PUT',
+      json: workflow.value,
+    })
+    workflowSaved.value = true
   })
 }
 
@@ -347,6 +436,144 @@ function sendTest() {
         <button class="btn" :disabled="busy" @click="sendTest">Send test</button>
         <span v-if="testMsg" class="text-sm text-teal">{{ testMsg }}</span>
       </div>
+    </div>
+
+    <!-- ================================================== expense vouchers -->
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Expense approval workflow</h2>
+      <p class="mb-4 text-sm text-muted">
+        Which steps a submitted voucher passes through. Turning a step off
+        routes vouchers past it — with both off, a submitted voucher is
+        approved immediately.
+      </p>
+      <div class="mb-4 space-y-2 text-sm">
+        <label class="flex items-center gap-2">
+          <input v-model="workflow.require_manager" type="checkbox" />
+          Manager review — the employee's <em>Reports to</em> approves first
+        </label>
+        <label class="flex items-center gap-2">
+          <input v-model="workflow.require_finance" type="checkbox" />
+          Finance review — a finance holder verifies before payment
+        </label>
+      </div>
+      <p class="mb-4 text-xs text-muted">
+        Employees with no manager assigned skip the manager step regardless of
+        this setting, so vouchers never wait in a queue nobody owns.
+      </p>
+      <button class="btn btn-solid" :disabled="busy" @click="saveWorkflow">
+        {{ busy ? 'Saving…' : 'Save workflow' }}
+      </button>
+      <span v-if="workflowSaved" class="ml-3 text-sm text-teal">Saved.</span>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Departments</h2>
+      <p class="mb-4 text-sm text-muted">
+        Assign employees to a department in the Employees tab. Vouchers inherit
+        the filer's department for reporting.
+      </p>
+      <div class="table-wrap mb-4">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in departments" :key="d.id" :class="{ 'opacity-50': !d.active }">
+              <td><input v-model="d.name" class="field-input !w-56" /></td>
+              <td>{{ d.active ? 'Active' : 'Inactive' }}</td>
+              <td class="whitespace-nowrap">
+                <button class="btn btn-sm mr-1" :disabled="busy" @click="saveDepartment(d)">
+                  Save
+                </button>
+                <button
+                  class="btn btn-sm"
+                  :class="d.active ? 'btn-danger' : ''"
+                  :disabled="busy"
+                  @click="toggleDepartment(d)"
+                >
+                  {{ d.active ? 'Deactivate' : 'Reactivate' }}
+                </button>
+              </td>
+            </tr>
+            <tr v-if="departments.length === 0">
+              <td colspan="3" class="py-4 text-center text-muted">
+                No departments yet.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <form class="flex flex-wrap items-end gap-3" @submit.prevent="addDepartment">
+        <div>
+          <label class="field-label" for="nd-name">New department</label>
+          <input
+            id="nd-name"
+            v-model="newDepartment"
+            required
+            maxlength="80"
+            class="field-input"
+            placeholder="e.g. Operations"
+          />
+        </div>
+        <button class="btn btn-solid" :disabled="busy">Add department</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Expense categories</h2>
+      <p class="mb-4 text-sm text-muted">
+        Categories offered on the voucher form and used to group the expense
+        reports. Deactivating one keeps it on existing vouchers but hides it
+        from new ones.
+      </p>
+      <div class="table-wrap mb-4">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in categories" :key="c.id" :class="{ 'opacity-50': !c.active }">
+              <td><input v-model="c.name" class="field-input !w-56" /></td>
+              <td>{{ c.active ? 'Active' : 'Inactive' }}</td>
+              <td class="whitespace-nowrap">
+                <button class="btn btn-sm mr-1" :disabled="busy" @click="saveCategory(c)">
+                  Save
+                </button>
+                <button
+                  class="btn btn-sm"
+                  :class="c.active ? 'btn-danger' : ''"
+                  :disabled="busy"
+                  @click="toggleCategory(c)"
+                >
+                  {{ c.active ? 'Deactivate' : 'Reactivate' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <form class="flex flex-wrap items-end gap-3" @submit.prevent="addCategory">
+        <div>
+          <label class="field-label" for="nc-name">New category</label>
+          <input
+            id="nc-name"
+            v-model="newCategory"
+            required
+            maxlength="80"
+            class="field-input"
+            placeholder="e.g. Training"
+          />
+        </div>
+        <button class="btn btn-solid" :disabled="busy">Add category</button>
+      </form>
     </div>
 
     <div class="panel">

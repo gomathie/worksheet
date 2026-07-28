@@ -4,7 +4,8 @@ import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
 import DailyBarChart from '../components/DailyBarChart.vue'
-import type { ReportPayload } from '../types'
+import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
+import type { ExpenseVoucher, ReportPayload } from '../types'
 
 const auth = useAuthStore()
 const month = ref(auth.user!.today.slice(0, 7))
@@ -21,12 +22,27 @@ const visibleTypes = computed(() => {
   )
 })
 
+// Recent expense activity, scoped server-side to what this viewer may see.
+const recentExpenses = ref<ExpenseVoucher[]>([])
+
 async function load() {
   error.value = ''
   try {
     report.value = await api<ReportPayload>(`/api/reports/monthly?month=${month.value}`)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load report'
+  }
+  try {
+    const [y, m] = month.value.split('-').map(Number)
+    const params = new URLSearchParams({
+      from: `${month.value}-01`,
+      to: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10),
+    })
+    recentExpenses.value = (await api<ExpenseVoucher[]>(`/api/expenses?${params}`)).slice(0, 8)
+  } catch {
+    // The expense panel is supplementary — a failure here must not blank the
+    // rest of the dashboard.
+    recentExpenses.value = []
   }
 }
 
@@ -137,6 +153,45 @@ const money = (n: number) =>
                 >
                   No activity this month.
                 </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div v-if="recentExpenses.length" class="panel mb-6">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 class="display text-xl">Recent expense vouchers</h3>
+          <RouterLink :to="{ name: 'expenses' }" class="btn btn-sm">View all</RouterLink>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Voucher</th>
+                <th>Date</th>
+                <th>Employee</th>
+                <th>Description</th>
+                <th class="num">Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="v in recentExpenses" :key="v.id">
+                <td class="mono whitespace-nowrap text-[13px]">
+                  <RouterLink
+                    :to="{ name: 'expense-detail', params: { id: v.id } }"
+                    class="underline"
+                    >{{ v.voucher_number }}</RouterLink
+                  >
+                </td>
+                <td class="mono whitespace-nowrap">{{ v.expense_date }}</td>
+                <td>{{ v.employee_name }}</td>
+                <td class="max-w-56 truncate" :title="v.description">{{ v.description }}</td>
+                <td class="num whitespace-nowrap">
+                  {{ v.currency }}{{ v.amount.toFixed(2) }}
+                </td>
+                <td><ExpenseStatusChip :status="v.status" /></td>
               </tr>
             </tbody>
           </table>

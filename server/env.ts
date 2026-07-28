@@ -2,6 +2,10 @@ export interface Env {
   DB: D1Database
   SESSIONS: KVNamespace
   TEAM_TZ?: string
+  // Receipt storage for expense vouchers. Optional: without the binding the
+  // module works in full except uploads, which return a clear 503 rather
+  // than failing obscurely. See README "Receipt attachments".
+  ATTACHMENTS?: R2Bucket
 }
 
 export interface Employee {
@@ -14,7 +18,95 @@ export interface Employee {
   rights: string // JSON — see Rights in auth.ts
   max_entries_per_day: number | null // per-employee override; NULL = use global
   leave_allowance: number | null // annual paid-leave days; NULL = not tracked
+  department_id: string | null
+  manager_id: string | null // who reviews this employee's expense vouchers
   active: number
+  created_at: string
+}
+
+export interface DepartmentRow {
+  id: string
+  name: string
+  active: number
+  created_at: string
+}
+
+export interface ExpenseCategoryRow {
+  id: string
+  name: string
+  active: number
+  position: number
+  created_at: string
+}
+
+export interface ExpenseVoucherRow {
+  id: string
+  voucher_number: string
+  employee_id: string
+  department_id: string | null
+  expense_date: string
+  submission_date: string | null
+  category_id: string | null
+  description: string
+  vendor: string | null
+  amount: number
+  currency: string
+  payment_method: string
+  receipt_available: number
+  missing_receipt_reason: string | null
+  declaration_accepted: number
+  declaration_text: string | null
+  status: string
+  created_by: string | null
+  paid_at: string | null
+  paid_by: string | null
+  paid_reference: string | null
+  reopened_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ExpenseAttachmentRow {
+  id: string
+  voucher_id: string
+  file_name: string
+  file_path: string
+  content_type: string | null
+  size_bytes: number | null
+  uploaded_by: string | null
+  uploaded_at: string
+}
+
+export interface ExpenseApprovalRow {
+  id: string
+  voucher_id: string
+  approver_id: string | null
+  role: string
+  decision: string
+  comments: string | null
+  approved_at: string
+}
+
+export interface ExpenseAuditRow {
+  id: string
+  voucher_id: string
+  user_id: string | null
+  action: string
+  field: string | null
+  old_value: string | null
+  new_value: string | null
+  timestamp: string
+}
+
+export interface NotificationRow {
+  id: string
+  employee_id: string
+  kind: string
+  title: string
+  body: string | null
+  voucher_id: string | null
+  read_at: string | null
+  emailed_at: string | null
   created_at: string
 }
 

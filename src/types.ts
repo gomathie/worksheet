@@ -1,6 +1,13 @@
 import type { DailyTotal, MonthlyReport, RateSettings } from '../shared/logic'
+import type {
+  ExpenseAction,
+  ExpenseStatus,
+  ExpenseSummary,
+  WorkflowConfig,
+} from '../shared/expenses'
 
 export type { MonthlyReport, RateSettings }
+export type { ExpenseAction, ExpenseStatus, ExpenseSummary, WorkflowConfig }
 
 export interface Rights {
   add_entries: boolean
@@ -11,6 +18,9 @@ export interface Rights {
   view_remuneration: boolean
   view_payslip: boolean
   log_leave: boolean
+  add_expenses: boolean
+  review_expenses: boolean
+  finance_expenses: boolean
 }
 
 export interface WorkTypeInfo {
@@ -33,6 +43,9 @@ export interface Me {
   entry_limit: number // 0 = unlimited
   leave_allowance: number | null
   entry_approval: boolean // employee entries need admin approval
+  department_id: string | null
+  manager_id: string | null
+  unread_notifications: number
   today: string
 }
 
@@ -47,6 +60,8 @@ export interface Employee {
   rate_overrides: Record<string, number>
   max_entries_per_day: number | null
   leave_allowance: number | null
+  department_id: string | null
+  manager_id: string | null
   has_password?: number
   active: number
   created_at?: string
@@ -154,6 +169,121 @@ export interface TrendData {
   show_money: boolean
   points?: number[]
   remuneration?: number[]
+}
+
+// ------------------------------------------------------------ expense module
+
+export interface Department {
+  id: string
+  name: string
+  active: number
+  created_at?: string
+}
+
+export interface ExpenseCategory {
+  id: string
+  name: string
+  active: number
+  position: number
+}
+
+export interface ExpenseVoucher {
+  id: string
+  voucher_number: string
+  employee_id: string
+  employee_name?: string
+  department_id: string | null
+  department_name?: string | null
+  expense_date: string
+  submission_date: string | null
+  category_id: string | null
+  category_name?: string | null
+  description: string
+  vendor: string | null
+  amount: number
+  currency: string
+  payment_method: string
+  receipt_available: number
+  missing_receipt_reason: string | null
+  declaration_accepted: number
+  declaration_text: string | null
+  status: ExpenseStatus
+  created_by: string | null
+  paid_at: string | null
+  paid_by: string | null
+  paid_by_name?: string | null
+  paid_reference: string | null
+  reopened_at: string | null
+  attachment_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ExpenseApproval {
+  id: string
+  voucher_id: string
+  approver_id: string | null
+  approver_name: string | null
+  role: string
+  decision: string
+  comments: string | null
+  approved_at: string
+}
+
+export interface ExpenseAttachment {
+  id: string
+  voucher_id: string
+  file_name: string
+  content_type: string | null
+  size_bytes: number | null
+  uploaded_by: string | null
+  uploaded_by_name?: string | null
+  uploaded_at: string
+}
+
+export interface ExpenseAuditEntry {
+  id: string
+  voucher_id: string
+  user_id: string | null
+  user_name: string | null
+  action: string
+  field: string | null
+  old_value: string | null
+  new_value: string | null
+  timestamp: string
+}
+
+/** A single voucher with everything the detail page renders. */
+export interface ExpenseVoucherDetail extends ExpenseVoucher {
+  approvals: ExpenseApproval[]
+  attachments: ExpenseAttachment[]
+  audit_trail: ExpenseAuditEntry[]
+  /** What the current user may do — computed server-side. */
+  actions: ExpenseAction[]
+}
+
+export interface ExpenseDashboard extends ExpenseSummary {
+  month: string
+  currency: string
+  scope: 'full' | 'team' | 'own'
+}
+
+export interface ExpenseReport {
+  type: string
+  from: string
+  to: string
+  currency: string
+  rows: Record<string, string | number | null>[]
+}
+
+export interface AppNotification {
+  id: string
+  kind: string
+  title: string
+  body: string | null
+  voucher_id: string | null
+  read_at: string | null
+  created_at: string
 }
 
 export interface MyRemuneration {

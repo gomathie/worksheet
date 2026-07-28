@@ -48,6 +48,48 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/expenses',
+      name: 'expenses',
+      component: () => import('../views/ExpensesView.vue'),
+      meta: { auth: true },
+    },
+    {
+      path: '/expenses/new',
+      name: 'expense-new',
+      component: () => import('../views/ExpenseFormView.vue'),
+      meta: { auth: true },
+    },
+    {
+      path: '/expenses/approvals',
+      name: 'expense-approvals',
+      component: () => import('../views/ExpenseApprovalsView.vue'),
+      meta: { auth: true, right: 'review_expenses' },
+    },
+    {
+      path: '/expenses/finance',
+      name: 'expense-finance',
+      component: () => import('../views/ExpenseFinanceView.vue'),
+      meta: { auth: true, right: 'finance_expenses' },
+    },
+    {
+      path: '/expenses/reports',
+      name: 'expense-reports',
+      component: () => import('../views/ExpenseReportsView.vue'),
+      meta: { auth: true },
+    },
+    {
+      path: '/expenses/:id',
+      name: 'expense-detail',
+      component: () => import('../views/ExpenseDetailView.vue'),
+      meta: { auth: true },
+    },
+    {
+      path: '/expenses/:id/edit',
+      name: 'expense-edit',
+      component: () => import('../views/ExpenseFormView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/employees',
       name: 'employees',
       component: () => import('../views/EmployeesView.vue'),

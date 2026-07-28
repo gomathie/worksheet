@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
-import type { Employee, WorkTypeInfo } from '../types'
+import type { Department, Employee, WorkTypeInfo } from '../types'
 
 const employees = ref<Employee[]>([])
 const workTypes = ref<WorkTypeInfo[]>([])
+const departments = ref<Department[]>([])
 const error = ref('')
 const busy = ref(false)
 const editingId = ref<string | null>(null)
 
 const activeTypes = computed(() =>
   workTypes.value.filter((w) => w.active === undefined || w.active),
+)
+
+const activeDepartments = computed(() => departments.value.filter((d) => d.active))
+
+// A manager can be anyone active except the employee being edited — that
+// would make them their own approver.
+const managerOptions = computed(() =>
+  employees.value.filter((e) => e.active && e.id !== editingId.value),
 )
 
 const blankRights = () => ({
@@ -22,6 +31,9 @@ const blankRights = () => ({
   view_remuneration: false,
   view_payslip: false,
   log_leave: false,
+  add_expenses: true,
+  review_expenses: false,
+  finance_expenses: false,
 })
 
 const form = ref({
@@ -35,12 +47,15 @@ const form = ref({
   rate_overrides: {} as Record<string, number | ''>,
   max_entries_per_day: '' as number | '',
   leave_allowance: '' as number | '',
+  department_id: '' as string,
+  manager_id: '' as string,
 })
 
 async function load() {
-  ;[employees.value, workTypes.value] = await Promise.all([
+  ;[employees.value, workTypes.value, departments.value] = await Promise.all([
     api<Employee[]>('/api/employees'),
     api<WorkTypeInfo[]>('/api/work-types'),
+    api<Department[]>('/api/departments'),
   ])
 }
 onMounted(load)
@@ -58,6 +73,8 @@ function startEdit(e: Employee) {
     rate_overrides: { ...e.rate_overrides },
     max_entries_per_day: e.max_entries_per_day ?? '',
     leave_allowance: e.leave_allowance ?? '',
+    department_id: e.department_id ?? '',
+    manager_id: e.manager_id ?? '',
   }
 }
 
@@ -74,6 +91,8 @@ function resetForm() {
     rate_overrides: {},
     max_entries_per_day: '',
     leave_allowance: '',
+    department_id: '',
+    manager_id: '',
   }
 }
 
@@ -97,6 +116,8 @@ async function submit() {
         form.value.max_entries_per_day === '' ? null : form.value.max_entries_per_day,
       leave_allowance:
         form.value.leave_allowance === '' ? null : form.value.leave_allowance,
+      department_id: form.value.department_id || null,
+      manager_id: form.value.manager_id || null,
     }
     if (form.value.password) payload.password = form.value.password
     if (editingId.value) {
@@ -149,10 +170,19 @@ function rightsSummary(e: Employee): string {
     ['view_remuneration', 'Remuneration'],
     ['view_payslip', 'Payslip'],
     ['log_leave', 'Leave'],
+    ['add_expenses', 'File expenses'],
+    ['review_expenses', 'Review expenses'],
+    ['finance_expenses', 'Expense finance'],
   ]
   const granted = labels.filter(([key]) => e.rights[key]).map(([, label]) => label)
   return granted.length ? granted.join(', ') : 'View own entries only'
 }
+
+const departmentName = (e: Employee) =>
+  departments.value.find((d) => d.id === e.department_id)?.name ?? '—'
+
+const managerName = (e: Employee) =>
+  employees.value.find((m) => m.id === e.manager_id)?.name ?? '—'
 </script>
 
 <template>
@@ -177,6 +207,28 @@ function rightsSummary(e: Employee): string {
               <option value="employee">Employee</option>
               <option value="admin">Admin</option>
             </select>
+          </div>
+          <div>
+            <label class="field-label" for="dept">Department</label>
+            <select id="dept" v-model="form.department_id" class="field-input">
+              <option value="">—</option>
+              <option v-for="d in activeDepartments" :key="d.id" :value="d.id">
+                {{ d.name }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-muted">Manage the list in Settings.</p>
+          </div>
+          <div>
+            <label class="field-label" for="mgr">Reports to (expense approver)</label>
+            <select id="mgr" v-model="form.manager_id" class="field-input">
+              <option value="">— no manager —</option>
+              <option v-for="m in managerOptions" :key="m.id" :value="m.id">
+                {{ m.name }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-muted">
+              Without a manager, their vouchers skip straight to finance.
+            </p>
           </div>
           <div>
             <label class="field-label" for="username">Username (for login)</label>
@@ -299,7 +351,23 @@ function rightsSummary(e: Employee): string {
               <input v-model="form.rights.log_leave" type="checkbox" />
               Record paid leave
             </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.add_expenses" type="checkbox" />
+              File expense vouchers
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.review_expenses" type="checkbox" />
+              Review expenses (their direct reports)
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.finance_expenses" type="checkbox" />
+              Expense finance (verify &amp; mark paid)
+            </label>
           </div>
+          <p class="mt-2 text-xs text-muted">
+            "Review expenses" only covers employees whose <em>Reports to</em> is set to
+            this person. "Expense finance" applies organization-wide.
+          </p>
         </fieldset>
 
         <div class="mt-5 flex gap-2">
@@ -325,6 +393,8 @@ function rightsSummary(e: Employee): string {
               <th>Name</th>
               <th>Username</th>
               <th>Role</th>
+              <th>Department</th>
+              <th>Reports to</th>
               <th>Work</th>
               <th>Rights</th>
               <th>Login</th>
@@ -346,6 +416,8 @@ function rightsSummary(e: Employee): string {
                   >{{ e.role }}</span
                 >
               </td>
+              <td class="text-xs">{{ departmentName(e) }}</td>
+              <td class="text-xs">{{ managerName(e) }}</td>
               <td class="text-xs">{{ workSummary(e) }}</td>
               <td class="text-xs">{{ rightsSummary(e) }}</td>
               <td class="text-xs">

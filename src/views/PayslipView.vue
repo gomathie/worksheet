@@ -144,7 +144,7 @@ const printPage = () => window.print()
           <table class="data">
             <tbody>
               <tr>
-                <td>Base pay ({{ slip.points }} points)</td>
+                <td>Base pay</td>
                 <td class="num">{{ money(slip.base) }}</td>
               </tr>
               <tr v-for="b in bonuses" :key="b.id">

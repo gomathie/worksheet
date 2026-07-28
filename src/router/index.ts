@@ -63,7 +63,9 @@ const router = createRouter({
       path: '/expenses/approvals',
       name: 'expense-approvals',
       component: () => import('../views/ExpenseApprovalsView.vue'),
-      meta: { auth: true, right: 'review_expenses' },
+      // Serves two audiences: managers reviewing their direct reports, and
+      // approvers giving final approval. Either right opens the page.
+      meta: { auth: true, anyRight: ['review_expenses', 'approve_expenses'] },
     },
     {
       path: '/expenses/finance',
@@ -125,6 +127,11 @@ router.beforeEach(async (to) => {
     to.meta.right &&
     !auth.rights[to.meta.right as keyof typeof auth.rights]
   ) {
+    return { name: 'entries' }
+  }
+  // anyRight: the page opens if the user holds at least one of them.
+  const anyRight = to.meta.anyRight as (keyof typeof auth.rights)[] | undefined
+  if (anyRight && !anyRight.some((r) => auth.rights[r])) {
     return { name: 'entries' }
   }
   if (to.name === 'login' && auth.user) return { name: 'entries' }

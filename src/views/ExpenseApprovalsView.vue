@@ -1,35 +1,67 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
+import { useAuthStore } from '../stores/auth'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
 import type { ExpenseVoucher } from '../types'
 
-// Manager queue: vouchers filed by the reviewer's direct reports that are
-// waiting on a manager decision. Scoping happens server-side.
+// Two queues on one page:
+//   manager  — vouchers from the reviewer's direct reports awaiting review
+//   approver — vouchers awaiting final approval (admin + approve_expenses)
+// Both are scoped server-side.
+
+const auth = useAuthStore()
 
 const vouchers = ref<ExpenseVoucher[]>([])
+const approvals = ref<ExpenseVoucher[]>([])
 const error = ref('')
 const notice = ref('')
 const busy = ref('')
 const comments = ref<Record<string, string>>({})
 
+const isManager = computed(() => auth.rights.review_expenses)
+// Approval requires the admin role as well as the right.
+const isApprover = computed(() => auth.isAdmin && auth.rights.approve_expenses)
+
 async function load() {
   error.value = ''
   try {
-    vouchers.value = await api<ExpenseVoucher[]>('/api/expenses/queue?queue=manager')
+    if (isManager.value) {
+      vouchers.value = await api<ExpenseVoucher[]>('/api/expenses/queue?queue=manager')
+    }
+    if (isApprover.value) {
+      approvals.value = await api<ExpenseVoucher[]>('/api/expenses/queue?queue=approver')
+    }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load the approval queue'
   }
 }
 onMounted(load)
 
-async function decide(v: ExpenseVoucher, action: 'manager_approve' | 'manager_reject' | 'return') {
+type Decision =
+  | 'manager_approve'
+  | 'manager_reject'
+  | 'admin_approve'
+  | 'admin_reject'
+  | 'return'
+
+const PAST_TENSE: Record<Decision, string> = {
+  manager_approve: 'approved',
+  admin_approve: 'approved',
+  manager_reject: 'rejected',
+  admin_reject: 'rejected',
+  return: 'returned',
+}
+
+async function decide(v: ExpenseVoucher, action: Decision) {
   const comment = (comments.value[v.id] ?? '').trim()
-  if ((action === 'manager_reject' || action === 'return') && !comment) {
+  const needsComment =
+    action === 'manager_reject' || action === 'admin_reject' || action === 'return'
+  if (needsComment && !comment) {
     error.value =
-      action === 'manager_reject'
-        ? 'A comment is required when rejecting a voucher.'
-        : 'Say what additional information is needed.'
+      action === 'return'
+        ? 'Say what additional information is needed.'
+        : 'A comment is required when rejecting a voucher.'
     return
   }
   error.value = ''
@@ -41,9 +73,7 @@ async function decide(v: ExpenseVoucher, action: 'manager_approve' | 'manager_re
       json: { action, comments: comment || undefined },
     })
     delete comments.value[v.id]
-    notice.value = `${v.voucher_number} ${
-      action === 'manager_approve' ? 'approved' : action === 'manager_reject' ? 'rejected' : 'returned'
-    }.`
+    notice.value = `${v.voucher_number} ${PAST_TENSE[action]}.`
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
@@ -55,7 +85,9 @@ async function decide(v: ExpenseVoucher, action: 'manager_approve' | 'manager_re
 const total = computed(() =>
   vouchers.value.reduce((s, v) => s + v.amount, 0).toFixed(2),
 )
-const currency = computed(() => vouchers.value[0]?.currency ?? '')
+const currency = computed(
+  () => vouchers.value[0]?.currency ?? approvals.value[0]?.currency ?? '',
+)
 </script>
 
 <template>

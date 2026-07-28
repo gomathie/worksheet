@@ -180,9 +180,29 @@ bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
 ## Migrations
 
 Plain SQL in `migrations/`, applied with wrangler's migration tracking
-(`npm run db:migrate:local` / `npm run db:migrate:prod`). Tables: employees, work types and
-assignments, entries and their per-type items, adjustments (bonuses/reimbursements), payments,
-absences, settings, and the audit log. Money-sensitive data is filtered server-side for non-admins.
+(`npm run db:migrate:local` / `npm run db:migrate:prod`). Tables: employees, departments, work
+types and assignments, entries and their per-type items, adjustments (bonuses/reimbursements),
+payments, absences, expense vouchers (with categories, approvals, attachments, audit logs), in-app
+notifications, settings, and the audit log. Money-sensitive data is filtered server-side for
+non-admins.
+
+> **Migrations that contain `CREATE TRIGGER` (or other `BEGIN … END` blocks) fail on
+> `db:migrate:prod`.** The remote endpoint used by `wrangler d1 migrations apply --remote` splits SQL
+> naively on `;` and reports `incomplete input: SQLITE_ERROR [code: 7500]` on the semicolon inside
+> the trigger body. `--local` is unaffected (it uses a proper splitter). Workaround for such a
+> migration:
+>
+> ```bash
+> # 1) apply it with the file path (this splitter handles triggers)
+> npx wrangler d1 execute ledger-db --remote --file migrations/NNNN_name.sql
+> # 2) record it so wrangler won't retry it
+> npx wrangler d1 execute ledger-db --remote \
+>   --command "INSERT INTO d1_migrations (name, applied_at) VALUES ('NNNN_name.sql', datetime('now'))"
+> # 3) confirm
+> npx wrangler d1 migrations list ledger-db --remote   # "No migrations to apply!"
+> ```
+>
+> Prefer keeping triggers out of migrations where practical to avoid this.
 
 ## Time zone
 

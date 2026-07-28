@@ -17,7 +17,9 @@
       "Bash(git push *)",
       "PowerShell($out = node \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\genhash.mjs\"; $cred = $out | ConvertFrom-Json; $cred.password | Out-File \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\temppass.txt\" -Encoding utf8; npx wrangler d1 execute ledger-db --remote --command \"INSERT INTO employees \\(id, name, username, password_hash, role\\) VALUES \\('temp-verify-admin', 'Temp Verify', 'tempverify', '$\\($cred.hash\\)', 'admin'\\)\" | Out-Null; \"temp admin ready\")",
       "PowerShell(npm test 2>&1)",
-      "PowerShell(npm run build 2>&1)"
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell(npx wrangler d1 migrations list ledger-db --remote 2>&1)",
+      "PowerShell(npx wrangler d1 execute ledger-db --local --file \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\trigtest.sql\" 2>&1)"
     ]
   }
 }

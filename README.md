@@ -57,6 +57,53 @@ Record days not worked by type — **Leave, Sick, Holiday, Unpaid, Other**. Sick
 are open to all; **paid Leave requires the assigned right**. Each employee can have an **annual leave
 allowance** with used/remaining balance.
 
+### Expense vouchers
+Employees declare business expenses — including those with **no receipt** — and route them through
+approval to payment.
+
+- **Filing:** voucher number is auto-generated (`EV-2026-0007`); fields are employee, department,
+  date of expense, date submitted, category, purpose, vendor (optional), amount, currency, payment
+  method (Cash / Mobile Money / Bank / Card / Other), and whether a receipt exists. Vouchers can be
+  saved as a **draft** and submitted later.
+- **No receipt:** the form reveals a **reason** box and the **employee declaration**, which must be
+  explicitly accepted before submission. The accepted wording is snapshotted onto the voucher, so
+  later edits to the template can't rewrite what somebody agreed to.
+- **Receipts:** PDF / JPG / JPEG / PNG up to 10 MB, stored in R2 (see *Receipt attachments* below).
+- **Workflow:** Draft → Submitted → Manager Review → Finance Review → Approved → Paid, with
+  Rejected reachable from either review stage and a *request more information* path back to draft.
+  Every decision records approver, date, decision, and comments. Rejections require a comment.
+- **Roles** reuse the existing rights model rather than adding new account types:
+  *file expenses*, *review expenses* (manager — scoped to that person's **direct reports** only,
+  and never their own voucher), and *expense finance* (verify and mark paid, organization-wide).
+  Admins hold everything. Set a person's **Reports to** in the Employees tab to make them a manager.
+- **Which steps apply** is configurable in Settings (manager and/or finance can each be switched
+  off). Employees with no manager assigned skip the manager step, so nothing waits in an unowned queue.
+- **Dashboard & reports:** pending / approved / rejected / paid counts, month-to-date total,
+  breakdowns by category and employee, and a missing-receipt count. Six reports — monthly,
+  department, employee, missing receipts, outstanding reimbursements, approved vs rejected — each
+  exportable as **CSV**, **Excel**, or **PDF** (print).
+- **Search & filter** by employee, department, date range, category, status, receipt availability,
+  amount range, and free text over voucher number / description / vendor.
+- **Audit trail:** every create, edit (field-by-field, with previous and new value), submit,
+  decision, payment, and attachment change. The table is **append-only, enforced by SQLite
+  triggers** — `UPDATE` and `DELETE` are rejected by the database, not merely avoided in code.
+- **Editing lock:** approved and paid vouchers are frozen; an administrator must explicitly
+  **reopen** one before it can change again.
+- **Notifications:** in-app (header bell) plus email on submission, approval, rejection, payment,
+  and requests for more information.
+
+### Receipt attachments (R2)
+Receipt files live in an R2 bucket bound as `ATTACHMENTS`. Create it once before the first deploy:
+
+```bash
+wrangler r2 bucket create ledger-receipts
+wrangler r2 bucket create ledger-receipts-preview   # for preview deployments
+```
+
+`wrangler pages dev` creates a local stand-in automatically, so local development needs nothing.
+The binding is **optional in code**: without it every other part of the module works and only
+uploads fail, with an explicit "receipt storage is not configured" message rather than a crash.
+
 ### Email notifications (SMTP)
 Point the app at any SMTP server (port 587 STARTTLS or 465 TLS) in Settings. It emails employees
 when marked paid or a reimbursement is decided, and alerts admins on new requests. Password is
@@ -80,12 +127,16 @@ Only **approved** entries count. Changing a rate recomputes figures (no historic
 ## Repo layout
 
 ```
-functions/api/[[route]].ts   Pages Functions catch-all — the whole JSON API
+functions/api/[[route]].ts   Pages Functions catch-all — routing + the core JSON API
 server/                      Worker-side helpers (auth, settings, email/SMTP, http)
+server/expenses.ts           Expense voucher handlers (workflow, attachments, reports)
+server/notify.ts             In-app notifications, with email layered on top
 shared/logic.ts              Pure calculation logic (hours, points, aggregation)
+shared/expenses.ts           Pure expense rules (state machine, validation, summaries)
 src/                         Vue 3 app (views, stores, router, components)
+src/csv.ts, src/xls.ts       Dependency-free CSV and Excel (SpreadsheetML) writers
 migrations/                  D1 SQL migrations
-tests/                       Vitest tests for shared/logic.ts
+tests/                       Vitest tests for shared/logic.ts and shared/expenses.ts
 scripts/                     Helpers (seed admin, generate PWA icons)
 ```
 
@@ -111,6 +162,7 @@ One-time setup — requires a logged-in wrangler (`npx wrangler login`) or `CLOU
 ```bash
 npx wrangler d1 create ledger-db            # paste database_id into wrangler.toml
 npx wrangler kv namespace create SESSIONS   # paste id into wrangler.toml
+npx wrangler r2 bucket create ledger-receipts   # expense receipt storage
 npm run db:migrate:prod
 npm run deploy                              # builds + wrangler pages deploy
 ```
@@ -118,7 +170,7 @@ npm run deploy                              # builds + wrangler pages deploy
 **Auto-deploy from GitHub:** Cloudflare dashboard → Workers & Pages → ledger → Settings → Builds →
 connect the repo; production branch `main`, build command `npm run build`, output directory `dist`.
 Pushing to `main` then builds and deploys automatically. The committed `wrangler.toml` carries the
-bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
+bindings (`DB`, `SESSIONS`, `ATTACHMENTS`) and the `TEAM_TZ` var.
 
 ## Migrations
 

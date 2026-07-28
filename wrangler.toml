@@ -18,6 +18,15 @@ database_id = "76d95171-eb36-446a-9853-e022547397ea"
 binding = "SESSIONS"
 id = "7d711a1014234ceca37d94c4ccec91da"
 
+# Expense-voucher receipts. Create the bucket once before the first deploy:
+#   wrangler r2 bucket create ledger-receipts
+# `wrangler pages dev` creates a local stand-in automatically, so nothing is
+# needed for development. The binding is optional in code — without it the
+# app runs in full except uploads, which return a clear 503.
+[[r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "ledger-receipts"
+
 # Preview environment (Pages preview deployments) gets its own database,
 # created with `wrangler d1 create ledger-db-preview`.
 [env.preview]
@@ -33,3 +42,7 @@ database_id = "f4f9ca94-f418-47f4-a191-457c8f7e03bf"
 [[env.preview.kv_namespaces]]
 binding = "SESSIONS"
 id = "684d82e9405f411ab027ec4338d27c34"
+
+[[env.preview.r2_buckets]]
+binding = "ATTACHMENTS"
+bucket_name = "ledger-receipts-preview"

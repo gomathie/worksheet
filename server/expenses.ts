@@ -127,6 +127,7 @@ async function buildActor(
     can_create: rights.add_expenses,
     can_review: rights.review_expenses,
     can_finance: rights.finance_expenses,
+    can_approve: rights.approve_expenses,
     is_owner: voucher.employee_id === user.id,
     is_manager_of_owner: isManagerOfOwner,
   }
@@ -140,10 +141,11 @@ const ACTION_PHRASES: Record<ExpenseAction, string> = {
   start_review: 'start reviewing this voucher',
   manager_approve: 'approve this voucher as a manager',
   manager_reject: 'reject this voucher as a manager',
-  finance_approve: 'approve this voucher as finance',
-  finance_reject: 'reject this voucher as finance',
+  request_approval: 'send this voucher for administrator approval',
+  admin_approve: 'give final approval on this voucher',
+  admin_reject: 'reject this voucher',
   return: 'return this voucher for more information',
-  mark_paid: 'mark this voucher paid',
+  mark_recorded: 'mark this voucher as recorded',
   reopen: 'reopen this voucher',
   add_attachment: 'attach a receipt to this voucher',
   remove_attachment: 'remove a receipt from this voucher',
@@ -339,13 +341,13 @@ const SELECT_VOUCHER = `
          emp.name  AS employee_name,
          d.name    AS department_name,
          c.name    AS category_name,
-         payer.name AS paid_by_name,
+         recorder.name AS recorded_by_name,
          (SELECT COUNT(*) FROM expense_attachments a WHERE a.voucher_id = v.id) AS attachment_count
   FROM expense_vouchers v
   JOIN employees emp ON emp.id = v.employee_id
   LEFT JOIN departments d ON d.id = v.department_id
   LEFT JOIN expense_categories c ON c.id = v.category_id
-  LEFT JOIN employees payer ON payer.id = v.paid_by
+  LEFT JOIN employees recorder ON recorder.id = v.recorded_by
 `
 
 /**
@@ -477,13 +479,28 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     if (!rights.finance_expenses && user.role !== 'admin') {
       throw new ApiError(403, 'You do not have permission for this')
     }
+    // Finance handles two piles: vouchers to escalate for approval, and
+    // approved ones still to be entered into the external accounting records.
     const { results } = await env.DB.prepare(
-      `${SELECT_VOUCHER} WHERE v.status IN ('finance_review', 'approved') ORDER BY v.status DESC, v.submission_date, v.created_at`,
+      `${SELECT_VOUCHER} WHERE v.status IN ('finance_review', 'admin_approval', 'approved')
+       ORDER BY v.status, v.submission_date, v.created_at`,
     ).all()
     return json(results)
   }
 
-  throw new ApiError(400, "queue must be 'manager' or 'finance'")
+  if (which === 'approver') {
+    // Approval is admin + the explicit right; neither alone is enough.
+    if (!(user.role === 'admin' && rights.approve_expenses)) {
+      throw new ApiError(403, 'You do not have expense approval rights')
+    }
+    const { results } = await env.DB.prepare(
+      `${SELECT_VOUCHER} WHERE v.status IN ('admin_approval', 'finance_review')
+       ORDER BY CASE v.status WHEN 'admin_approval' THEN 0 ELSE 1 END, v.submission_date, v.created_at`,
+    ).all()
+    return json(results)
+  }
+
+  throw new ApiError(400, "queue must be 'manager', 'finance', or 'approver'")
 }
 
 export async function getVoucher(request: Request, env: Env, id: string): Promise<Response> {

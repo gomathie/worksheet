@@ -34,6 +34,7 @@ const blankRights = () => ({
   add_expenses: true,
   review_expenses: false,
   finance_expenses: false,
+  approve_expenses: false,
 })
 
 const form = ref({
@@ -160,7 +161,12 @@ function workSummary(e: Employee): string {
 }
 
 function rightsSummary(e: Employee): string {
-  if (e.role === 'admin') return 'All rights'
+  if (e.role === 'admin') {
+    // Approval is the one right the role does not carry, so spell it out.
+    return e.rights.approve_expenses
+      ? 'All rights, incl. expense approval'
+      : 'All rights, except expense approval'
+  }
   const labels: [keyof Employee['rights'], string][] = [
     ['add_entries', 'Add time'],
     ['edit_entries', 'Edit time'],
@@ -173,6 +179,7 @@ function rightsSummary(e: Employee): string {
     ['add_expenses', 'File expenses'],
     ['review_expenses', 'Review expenses'],
     ['finance_expenses', 'Expense finance'],
+    ['approve_expenses', 'Approve expenses'],
   ]
   const granted = labels.filter(([key]) => e.rights[key]).map(([, label]) => label)
   return granted.length ? granted.join(', ') : 'View own entries only'
@@ -313,10 +320,37 @@ const managerName = (e: Employee) =>
           </p>
         </fieldset>
 
+        <!-- Expense approval sits outside the Rights fieldset below because
+             that fieldset is disabled for admins — and this is the one right
+             an admin does *not* get automatically. -->
+        <fieldset class="mt-4 rounded-lg border border-teal bg-teal-soft p-3">
+          <legend class="field-label px-1">Expense approval authority</legend>
+          <label class="flex items-start gap-2 text-sm">
+            <input
+              v-model="form.rights.approve_expenses"
+              type="checkbox"
+              class="mt-1"
+              :disabled="form.role !== 'admin'"
+            />
+            <span>
+              Give final approval on expense vouchers
+              <span v-if="form.role !== 'admin'" class="block text-xs text-muted">
+                Only available to admins — change the role above to grant it.
+              </span>
+              <span v-else class="block text-xs text-muted">
+                Not granted by the admin role on its own. Without this, this
+                admin can see vouchers but cannot approve them, and nothing can
+                be recorded in the finance records.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
         <fieldset class="mt-4" :disabled="form.role === 'admin'">
           <legend class="field-label">Rights</legend>
           <p v-if="form.role === 'admin'" class="mb-2 text-xs text-muted">
-            Admins hold every right, plus employee and settings management.
+            Admins hold every right except expense approval (above), plus
+            employee and settings management.
           </p>
           <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <label class="flex items-center gap-2">

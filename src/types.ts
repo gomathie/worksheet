@@ -21,6 +21,8 @@ export interface Rights {
   add_expenses: boolean
   review_expenses: boolean
   finance_expenses: boolean
+  /** Final approval; requires the admin role too. Never implicit. */
+  approve_expenses: boolean
 }
 
 export interface WorkTypeInfo {
@@ -211,10 +213,10 @@ export interface ExpenseVoucher {
   declaration_text: string | null
   status: ExpenseStatus
   created_by: string | null
-  paid_at: string | null
-  paid_by: string | null
-  paid_by_name?: string | null
-  paid_reference: string | null
+  recorded_at: string | null
+  recorded_by: string | null
+  recorded_by_name?: string | null
+  recorded_reference: string | null
   reopened_at: string | null
   attachment_count?: number
   created_at: string

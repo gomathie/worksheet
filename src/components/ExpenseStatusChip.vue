@@ -11,9 +11,10 @@ const TONE: Record<ExpenseStatus, string> = {
   submitted: 'border-amber text-amber',
   manager_review: 'border-amber text-amber',
   finance_review: 'border-amber text-amber',
+  admin_approval: 'border-amber bg-amber-soft text-amber',
   approved: 'border-teal text-teal',
   rejected: 'border-red text-red',
-  paid: 'border-teal bg-teal-soft text-teal',
+  recorded: 'border-teal bg-teal-soft text-teal',
 }
 
 const label = computed(() => STATUS_LABELS[props.status] ?? props.status)

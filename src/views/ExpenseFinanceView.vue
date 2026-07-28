@@ -7,8 +7,10 @@ import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
 import { PAYMENT_METHOD_LABELS, type PaymentMethod } from '../../shared/expenses'
 import type { ExpenseVoucher } from '../types'
 
-// Finance screen: verify vouchers the managers passed on, then record payment.
-// The queue endpoint returns both stages so finance sees the whole pipeline.
+// Finance screen. Finance does not approve: it escalates a voucher to an
+// administrator holding the approval right, and once approved records it in
+// the external accounting system. The queue returns every stage finance
+// touches so the whole pipeline is visible.
 
 const vouchers = ref<ExpenseVoucher[]>([])
 const error = ref('')
@@ -27,22 +29,24 @@ async function load() {
 }
 onMounted(load)
 
-const toVerify = computed(() => vouchers.value.filter((v) => v.status === 'finance_review'))
-const toPay = computed(() => vouchers.value.filter((v) => v.status === 'approved'))
+const toEscalate = computed(() =>
+  vouchers.value.filter((v) => v.status === 'finance_review'),
+)
+const awaitingApproval = computed(() =>
+  vouchers.value.filter((v) => v.status === 'admin_approval'),
+)
+const toRecord = computed(() => vouchers.value.filter((v) => v.status === 'approved'))
 
 const sum = (list: ExpenseVoucher[]) => list.reduce((s, v) => s + v.amount, 0).toFixed(2)
 const currency = computed(() => vouchers.value[0]?.currency ?? '')
 
 async function decide(
   v: ExpenseVoucher,
-  action: 'finance_approve' | 'finance_reject' | 'return' | 'mark_paid',
+  action: 'request_approval' | 'return' | 'mark_recorded',
 ) {
   const comment = (comments.value[v.id] ?? '').trim()
-  if ((action === 'finance_reject' || action === 'return') && !comment) {
-    error.value =
-      action === 'finance_reject'
-        ? 'A comment is required when rejecting a voucher.'
-        : 'Say what additional information is needed.'
+  if (action === 'return' && !comment) {
+    error.value = 'Say what additional information is needed.'
     return
   }
   error.value = ''
@@ -54,7 +58,8 @@ async function decide(
       json: {
         action,
         comments: comment || undefined,
-        paid_reference: action === 'mark_paid' ? references.value[v.id] || undefined : undefined,
+        recorded_reference:
+          action === 'mark_recorded' ? references.value[v.id] || undefined : undefined,
       },
     })
     delete comments.value[v.id]
@@ -115,7 +120,7 @@ const exportXls = () =>
 <template>
   <div>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="display text-2xl">Finance — expense payments</h2>
+      <h2 class="display text-2xl">Finance — expense records</h2>
       <div class="flex flex-wrap gap-2">
         <button class="btn btn-sm" :disabled="vouchers.length === 0" @click="exportCsv">
           Export CSV
@@ -129,26 +134,37 @@ const exportXls = () =>
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
-    <div class="mb-6 grid grid-cols-2 gap-4">
+    <div class="mb-6 grid grid-cols-3 gap-4">
       <div class="panel">
-        <p class="field-label">Awaiting verification</p>
-        <p class="mono text-3xl font-semibold">{{ toVerify.length }}</p>
-        <p class="mono text-sm text-muted">{{ currency }}{{ sum(toVerify) }}</p>
+        <p class="field-label">To send for approval</p>
+        <p class="mono text-3xl font-semibold">{{ toEscalate.length }}</p>
+        <p class="mono text-sm text-muted">{{ currency }}{{ sum(toEscalate) }}</p>
       </div>
       <div class="panel">
-        <p class="field-label">Approved, awaiting payment</p>
-        <p class="mono text-3xl font-semibold text-teal">{{ toPay.length }}</p>
-        <p class="mono text-sm text-muted">{{ currency }}{{ sum(toPay) }}</p>
+        <p class="field-label">With the approver</p>
+        <p class="mono text-3xl font-semibold text-amber">
+          {{ awaitingApproval.length }}
+        </p>
+        <p class="mono text-sm text-muted">{{ currency }}{{ sum(awaitingApproval) }}</p>
+      </div>
+      <div class="panel">
+        <p class="field-label">Approved, to record</p>
+        <p class="mono text-3xl font-semibold text-teal">{{ toRecord.length }}</p>
+        <p class="mono text-sm text-muted">{{ currency }}{{ sum(toRecord) }}</p>
       </div>
     </div>
 
-    <!-- ==================================================== verification -->
-    <h3 class="display mb-3 text-xl">To verify</h3>
-    <p v-if="toVerify.length === 0" class="panel mb-6 text-muted">
-      Nothing waiting for finance verification.
+    <!-- ================================================ send for approval -->
+    <h3 class="display mb-1 text-xl">To send for approval</h3>
+    <p class="mb-3 text-sm text-muted">
+      Finance does not approve expenses. Check the voucher, then send it to an
+      administrator holding approval rights — or return it for more information.
+    </p>
+    <p v-if="toEscalate.length === 0" class="panel mb-6 text-muted">
+      Nothing waiting to be sent for approval.
     </p>
 
-    <div v-for="v in toVerify" :key="v.id" class="panel mb-4">
+    <div v-for="v in toEscalate" :key="v.id" class="panel mb-4">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-3">
           <RouterLink
@@ -200,29 +216,69 @@ const exportXls = () =>
           <button
             class="btn btn-solid"
             :disabled="busy === v.id"
-            @click="decide(v, 'finance_approve')"
+            @click="decide(v, 'request_approval')"
           >
-            Verify &amp; approve
+            Request approval
           </button>
           <button class="btn" :disabled="busy === v.id" @click="decide(v, 'return')">
             Request more info
-          </button>
-          <button
-            class="btn btn-danger"
-            :disabled="busy === v.id"
-            @click="decide(v, 'finance_reject')"
-          >
-            Reject
           </button>
         </div>
       </div>
     </div>
 
-    <!-- ========================================================= payment -->
-    <h3 class="display mb-3 text-xl">Approved — ready to pay</h3>
-    <p v-if="toPay.length === 0" class="panel text-muted">Nothing awaiting payment.</p>
+    <!-- ================================================ with the approver -->
+    <template v-if="awaitingApproval.length">
+      <h3 class="display mb-1 text-xl">With the approver</h3>
+      <p class="mb-3 text-sm text-muted">
+        Sent for administrator approval. Nothing can be recorded until it is
+        approved.
+      </p>
+      <div class="panel mb-6">
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Voucher</th>
+                <th>Employee</th>
+                <th>Date</th>
+                <th class="num">Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="v in awaitingApproval" :key="v.id">
+                <td class="mono whitespace-nowrap text-[13px]">
+                  <RouterLink
+                    :to="{ name: 'expense-detail', params: { id: v.id } }"
+                    class="underline"
+                    >{{ v.voucher_number }}</RouterLink
+                  >
+                </td>
+                <td>{{ v.employee_name }}</td>
+                <td class="mono whitespace-nowrap">{{ v.expense_date }}</td>
+                <td class="num whitespace-nowrap">
+                  {{ v.currency }}{{ v.amount.toFixed(2) }}
+                </td>
+                <td><ExpenseStatusChip :status="v.status" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
 
-    <div v-if="toPay.length" class="panel">
+    <!-- ======================================================== recording -->
+    <h3 class="display mb-1 text-xl">Approved — to record</h3>
+    <p class="mb-3 text-sm text-muted">
+      Approved by an administrator. Enter each into the external finance records,
+      then mark it recorded here.
+    </p>
+    <p v-if="toRecord.length === 0" class="panel text-muted">
+      Nothing awaiting recording.
+    </p>
+
+    <div v-if="toRecord.length" class="panel">
       <div class="table-wrap">
         <table class="data">
           <thead>
@@ -232,12 +288,12 @@ const exportXls = () =>
               <th>Date</th>
               <th>Category</th>
               <th class="num">Amount</th>
-              <th>Payment reference</th>
+              <th>Finance record reference</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="v in toPay" :key="v.id">
+            <tr v-for="v in toRecord" :key="v.id">
               <td class="mono whitespace-nowrap text-[13px]">
                 <RouterLink
                   :to="{ name: 'expense-detail', params: { id: v.id } }"
@@ -256,23 +312,23 @@ const exportXls = () =>
                   v-model="references[v.id]"
                   maxlength="120"
                   class="field-input mono !w-40"
-                  placeholder="optional"
-                  :aria-label="`Payment reference for ${v.voucher_number}`"
+                  placeholder="e.g. JE-2026-114"
+                  :aria-label="`Finance record reference for ${v.voucher_number}`"
                 />
               </td>
               <td>
                 <button
                   class="btn btn-sm btn-solid whitespace-nowrap"
                   :disabled="busy === v.id"
-                  @click="decide(v, 'mark_paid')"
+                  @click="decide(v, 'mark_recorded')"
                 >
-                  Mark paid
+                  Mark recorded
                 </button>
               </td>
             </tr>
             <tr class="totals">
               <td colspan="4">Total</td>
-              <td class="num">{{ currency }}{{ sum(toPay) }}</td>
+              <td class="num">{{ currency }}{{ sum(toRecord) }}</td>
               <td colspan="2"></td>
             </tr>
           </tbody>

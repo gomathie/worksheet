@@ -908,12 +908,12 @@ export async function submitVoucher(
 interface DecisionBody {
   action?: ExpenseAction
   comments?: string
-  paid_reference?: string
+  recorded_reference?: string
 }
 
 /**
  * Every review decision funnels through here: manager and finance approve /
- * reject, return-for-information, mark-as-paid, and the administrator
+ * reject, escalate to approval, record externally, and the administrator
  * reopen override. One place to record the approval row, the audit entry,
  * and the notification.
  */
@@ -928,10 +928,11 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     'start_review',
     'manager_approve',
     'manager_reject',
-    'finance_approve',
-    'finance_reject',
+    'request_approval',
+    'admin_approve',
+    'admin_reject',
     'return',
-    'mark_paid',
+    'mark_recorded',
     'reopen',
   ]
   if (!action || !DECISIONS.includes(action)) {
@@ -941,7 +942,7 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
 
   const comments = (body.comments ?? '').trim().slice(0, 1000) || null
   // A rejection without a reason is not reviewable after the fact.
-  if ((action === 'manager_reject' || action === 'finance_reject') && !comments) {
+  if ((action === 'manager_reject' || action === 'admin_reject') && !comments) {
     throw new ApiError(400, 'A comment is required when rejecting a voucher')
   }
   if (action === 'return' && !comments) {
@@ -955,24 +956,26 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
   const next = statusAfter(action, workflow, Boolean(owner?.manager_id))
   if (!next) throw new ApiError(400, 'Unsupported action')
 
-  const role = actor.is_admin
-    ? 'admin'
-    : action.startsWith('finance') || action === 'mark_paid'
-      ? 'finance'
-      : 'manager'
+  // Which desk the actor was sitting at, for the approval record.
+  const role =
+    action === 'admin_approve' || action === 'admin_reject' || action === 'reopen'
+      ? 'approver'
+      : action === 'request_approval' || action === 'mark_recorded'
+        ? 'finance'
+        : 'manager'
 
   const now = new Date().toISOString()
 
-  if (action === 'mark_paid') {
-    const reference = (body.paid_reference ?? '').trim().slice(0, 120) || null
+  if (action === 'mark_recorded') {
+    const reference = (body.recorded_reference ?? '').trim().slice(0, 120) || null
     await env.DB.prepare(
-      "UPDATE expense_vouchers SET status = ?, paid_at = ?, paid_by = ?, paid_reference = ?, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE expense_vouchers SET status = ?, recorded_at = ?, recorded_by = ?, recorded_reference = ?, updated_at = datetime('now') WHERE id = ?",
     )
       .bind(next, now, user.id, reference, id)
       .run()
   } else if (action === 'reopen') {
     await env.DB.prepare(
-      "UPDATE expense_vouchers SET status = ?, reopened_at = ?, paid_at = NULL, paid_by = NULL, paid_reference = NULL, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE expense_vouchers SET status = ?, reopened_at = ?, recorded_at = NULL, recorded_by = NULL, recorded_reference = NULL, updated_at = datetime('now') WHERE id = ?",
     )
       .bind(next, now, id)
       .run()
@@ -987,13 +990,15 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
   // 'start_review' is a claim, not a decision — no approval row for it.
   if (action !== 'start_review') {
     const decision =
-      action === 'mark_paid'
-        ? 'paid'
-        : action === 'return' || action === 'reopen'
-          ? 'returned'
-          : action.endsWith('reject')
-            ? 'rejected'
-            : 'approved'
+      action === 'mark_recorded'
+        ? 'recorded'
+        : action === 'request_approval'
+          ? 'escalated'
+          : action === 'return' || action === 'reopen'
+            ? 'returned'
+            : action.endsWith('reject')
+              ? 'rejected'
+              : 'approved'
     await env.DB.prepare(
       `INSERT INTO expense_approvals (id, voucher_id, approver_id, role, decision, comments)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1054,17 +1059,42 @@ async function announceDecision(
         voucherId: d.voucherId,
       })
       break
-    case 'finance_approve':
+    case 'request_approval':
+      // Finance has escalated: only admins holding approve_expenses can act.
+      await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
+        kind: 'expense_needs_approval',
+        title: `Expense voucher ${d.number} needs your approval`,
+        body: `Finance has sent ${d.number} for ${money} for approval.${tail}`,
+        voucherId: d.voucherId,
+      })
+      break
+    case 'admin_approve':
       await notifyUser(env, {
         employeeId: d.ownerId,
         kind: 'expense_approved',
         title: `Expense voucher ${d.number} approved`,
-        body: `${d.number} for ${money} was approved by finance and is awaiting payment.${tail}`,
+        body: `${d.number} for ${money} has been approved.${tail}`,
+        voucherId: d.voucherId,
+      })
+      // Finance can now enter it into the external accounting records.
+      await notifyUsers(env, await employeesWithRight(env, 'finance_expenses'), {
+        kind: 'expense_ready_to_record',
+        title: `Expense voucher ${d.number} approved — ready to record`,
+        body: `${d.number} for ${money} was approved and can now be recorded in the external finance records.${tail}`,
+        voucherId: d.voucherId,
+      })
+      break
+    case 'mark_recorded':
+      await notifyUser(env, {
+        employeeId: d.ownerId,
+        kind: 'expense_recorded',
+        title: `Expense voucher ${d.number} recorded`,
+        body: `${d.number} for ${money} has been recorded in the external finance records.${tail}`,
         voucherId: d.voucherId,
       })
       break
     case 'manager_reject':
-    case 'finance_reject':
+    case 'admin_reject':
       await notifyUser(env, {
         employeeId: d.ownerId,
         kind: 'expense_rejected',
@@ -1079,15 +1109,6 @@ async function announceDecision(
         kind: 'expense_info_required',
         title: `Expense voucher ${d.number} needs more information`,
         body: `${d.number} was returned to your drafts.${tail}`,
-        voucherId: d.voucherId,
-      })
-      break
-    case 'mark_paid':
-      await notifyUser(env, {
-        employeeId: d.ownerId,
-        kind: 'expense_paid',
-        title: `Expense voucher ${d.number} paid`,
-        body: `${d.number} for ${money} has been marked paid by finance.${tail}`,
         voucherId: d.voucherId,
       })
       break
@@ -1346,7 +1367,7 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
       sql = `SELECT substr(v.expense_date, 1, 7) AS month,
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
-                    SUM(CASE WHEN v.status = 'paid' THEN v.amount ELSE 0 END) AS paid_amount,
+                    SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
                     SUM(CASE WHEN v.receipt_available = 0 THEN 1 ELSE 0 END) AS missing_receipts
              ${base} GROUP BY month ORDER BY month`
       break
@@ -1354,7 +1375,7 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
       sql = `SELECT COALESCE(d.name, 'No department') AS department,
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
-                    SUM(CASE WHEN v.status = 'paid' THEN v.amount ELSE 0 END) AS paid_amount
+                    SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount
              ${base} GROUP BY department ORDER BY amount DESC`
       break
     case 'employee':
@@ -1362,7 +1383,7 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
                     COALESCE(d.name, '—') AS department,
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
-                    SUM(CASE WHEN v.status = 'paid' THEN v.amount ELSE 0 END) AS paid_amount,
+                    SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
                     SUM(CASE WHEN v.receipt_available = 0 THEN 1 ELSE 0 END) AS missing_receipts
              ${base} GROUP BY emp.id ORDER BY amount DESC`
       break
@@ -1376,17 +1397,17 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
              ORDER BY v.expense_date DESC`
       break
     case 'outstanding':
-      // Approved but not yet paid — what finance still owes.
+      // Everything still in flight or approved but not yet recorded.
       sql = `SELECT v.voucher_number, v.expense_date, v.submission_date,
                     emp.name AS employee, COALESCE(d.name, '—') AS department,
                     COALESCE(c.name, '—') AS category, v.amount, v.status
-             ${base} AND v.status IN ('approved', 'finance_review', 'manager_review', 'submitted')
+             ${base} AND v.status IN ('approved', 'admin_approval', 'finance_review', 'manager_review', 'submitted')
              ORDER BY v.expense_date`
       break
     case 'approved_vs_rejected':
       sql = `SELECT substr(v.expense_date, 1, 7) AS month,
-                    SUM(CASE WHEN v.status IN ('approved', 'paid') THEN 1 ELSE 0 END) AS approved_count,
-                    SUM(CASE WHEN v.status IN ('approved', 'paid') THEN v.amount ELSE 0 END) AS approved_amount,
+                    SUM(CASE WHEN v.status IN ('approved', 'recorded') THEN 1 ELSE 0 END) AS approved_count,
+                    SUM(CASE WHEN v.status IN ('approved', 'recorded') THEN v.amount ELSE 0 END) AS approved_amount,
                     SUM(CASE WHEN v.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
                     SUM(CASE WHEN v.status = 'rejected' THEN v.amount ELSE 0 END) AS rejected_amount
              ${base} GROUP BY month ORDER BY month`

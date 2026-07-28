@@ -24,7 +24,7 @@ const error = ref('')
 const notice = ref('')
 const busy = ref(false)
 const comments = ref('')
-const paidReference = ref('')
+const recordedReference = ref('')
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 
@@ -77,7 +77,8 @@ function decide(action: ExpenseAction, successMessage: string) {
         json: {
           action,
           comments: comments.value || undefined,
-          paid_reference: action === 'mark_paid' ? paidReference.value || undefined : undefined,
+          recorded_reference:
+            action === 'mark_recorded' ? recordedReference.value || undefined : undefined,
         },
       }),
     successMessage,
@@ -244,13 +245,16 @@ const printPage = () => window.print()
       </div>
 
       <div
-        v-if="voucher.paid_at"
+        v-if="voucher.recorded_at"
         class="mt-4 rounded-lg border border-teal bg-teal-soft p-4 text-sm"
       >
-        Paid on <span class="mono">{{ voucher.paid_at.slice(0, 10) }}</span>
-        <template v-if="voucher.paid_by_name"> by {{ voucher.paid_by_name }}</template>
-        <template v-if="voucher.paid_reference">
-          · reference <span class="mono">{{ voucher.paid_reference }}</span>
+        Recorded in the external finance records on
+        <span class="mono">{{ voucher.recorded_at.slice(0, 10) }}</span>
+        <template v-if="voucher.recorded_by_name">
+          by {{ voucher.recorded_by_name }}</template
+        >
+        <template v-if="voucher.recorded_reference">
+          · reference <span class="mono">{{ voucher.recorded_reference }}</span>
         </template>
       </div>
     </div>
@@ -315,9 +319,10 @@ const printPage = () => window.print()
       <div
         v-if="
           can('manager_approve') ||
-          can('finance_approve') ||
+          can('admin_approve') ||
           can('manager_reject') ||
-          can('finance_reject') ||
+          can('admin_reject') ||
+          can('request_approval') ||
           can('return')
         "
         class="mb-4"
@@ -333,14 +338,16 @@ const printPage = () => window.print()
         />
       </div>
 
-      <div v-if="can('mark_paid')" class="mb-4">
-        <label class="field-label" for="v-ref">Payment reference (optional)</label>
+      <div v-if="can('mark_recorded')" class="mb-4">
+        <label class="field-label" for="v-ref">
+          External finance reference (optional)
+        </label>
         <input
           id="v-ref"
-          v-model="paidReference"
+          v-model="recordedReference"
           maxlength="120"
           class="field-input mono"
-          placeholder="e.g. MoMo txn 883910"
+          placeholder="e.g. journal entry JE-2026-114"
         />
       </div>
 
@@ -370,20 +377,28 @@ const printPage = () => window.print()
           Approve (manager)
         </button>
         <button
-          v-if="can('finance_approve')"
+          v-if="can('request_approval')"
           class="btn btn-solid"
           :disabled="busy"
-          @click="decide('finance_approve', 'Verified and approved.')"
+          @click="decide('request_approval', 'Sent for administrator approval.')"
         >
-          Verify &amp; approve (finance)
+          Request approval
         </button>
         <button
-          v-if="can('mark_paid')"
+          v-if="can('admin_approve')"
           class="btn btn-solid"
           :disabled="busy"
-          @click="decide('mark_paid', 'Marked as paid.')"
+          @click="decide('admin_approve', 'Approved.')"
         >
-          Mark as paid
+          Approve
+        </button>
+        <button
+          v-if="can('mark_recorded')"
+          class="btn btn-solid"
+          :disabled="busy"
+          @click="decide('mark_recorded', 'Marked as recorded.')"
+        >
+          Mark as recorded
         </button>
         <button
           v-if="can('return')"
@@ -402,12 +417,12 @@ const printPage = () => window.print()
           Reject (manager)
         </button>
         <button
-          v-if="can('finance_reject')"
+          v-if="can('admin_reject')"
           class="btn btn-danger"
           :disabled="busy"
-          @click="decide('finance_reject', 'Rejected.')"
+          @click="decide('admin_reject', 'Rejected.')"
         >
-          Reject (finance)
+          Reject
         </button>
         <button
           v-if="can('reopen')"
@@ -450,7 +465,7 @@ const printPage = () => window.print()
               <td
                 class="text-xs"
                 :class="
-                  a.decision === 'approved' || a.decision === 'paid'
+                  a.decision === 'approved' || a.decision === 'recorded'
                     ? 'text-teal'
                     : a.decision === 'rejected'
                       ? 'text-red'

@@ -16,6 +16,7 @@ export interface Employee {
   password_hash: string | null
   role: 'admin' | 'employee'
   rights: string // JSON — see Rights in auth.ts
+  employee_code: string | null // human-readable staff code, e.g. EMP-001
   max_entries_per_day: number | null // per-employee override; NULL = use global
   leave_allowance: number | null // annual paid-leave days; NULL = not tracked
   department_id: string | null

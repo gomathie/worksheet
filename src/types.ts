@@ -55,6 +55,7 @@ export interface Me {
 
 export interface Employee {
   id: string
+  employee_code: string | null
   name: string
   email: string | null
   username: string | null
@@ -294,6 +295,7 @@ export interface MyRemuneration {
   month: string
   employee_id: string
   employee_name: string
+  employee_code?: string | null
   currency: string
   hours: number
   units: Record<string, number>

@@ -424,6 +424,7 @@ const managerName = (e: Employee) =>
         <table class="data">
           <thead>
             <tr>
+              <th>Code</th>
               <th>Name</th>
               <th>Username</th>
               <th>Role</th>
@@ -438,6 +439,7 @@ const managerName = (e: Employee) =>
           </thead>
           <tbody>
             <tr v-for="e in employees" :key="e.id" :class="{ 'opacity-50': !e.active }">
+              <td class="mono text-[13px] whitespace-nowrap">{{ e.employee_code ?? '—' }}</td>
               <td>
                 {{ e.name }}
                 <div v-if="e.email" class="mono text-xs text-muted">{{ e.email }}</div>

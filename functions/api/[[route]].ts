@@ -299,6 +299,7 @@ function publicEmployee(
 ) {
   return {
     id: e.id,
+    employee_code: e.employee_code,
     name: e.name,
     email: e.email,
     username: e.username,
@@ -314,6 +315,25 @@ function publicEmployee(
     active: e.active,
     created_at: e.created_at,
   }
+}
+
+/** The configured employee-code prefix (default 'EMP-'). */
+async function employeeCodePrefix(env: Env): Promise<string> {
+  const row = await env.DB.prepare(
+    "SELECT value FROM settings WHERE key = 'employee_code_prefix'",
+  ).first<{ value: string }>()
+  return row?.value ?? 'EMP-'
+}
+
+/** Next sequential code for the current prefix, e.g. EMP-004. */
+async function nextEmployeeCode(env: Env): Promise<string> {
+  const prefix = await employeeCodePrefix(env)
+  const row = await env.DB.prepare(
+    'SELECT MAX(CAST(substr(employee_code, ?) AS INTEGER)) AS mx FROM employees WHERE employee_code LIKE ?',
+  )
+    .bind(prefix.length + 1, `${prefix}%`)
+    .first<{ mx: number | null }>()
+  return `${prefix}${String((row?.mx ?? 0) + 1).padStart(3, '0')}`
 }
 
 /** Parse an optional per-day entry limit: null clears it, else an int ≥ 0. */
@@ -467,12 +487,14 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   const managerId = await normalizeRef(env, 'employees', body.manager_id, 'manager')
 
   const id = crypto.randomUUID()
+  const code = await nextEmployeeCode(env)
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (id, employee_code, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
       .bind(
         id,
+        code,
         name,
         email,
         username,
@@ -487,7 +509,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
-      throw new ApiError(409, 'Email or username already in use')
+      throw new ApiError(409, 'Email, username, or employee code already in use — try again')
     }
     throw e
   }
@@ -1302,6 +1324,7 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
     month,
     employee_id: employee.id,
     employee_name: employee.name,
+    employee_code: employee.employee_code,
     currency: settings.currency,
     hours: hoursRow?.hours ?? 0,
     units,
@@ -1557,7 +1580,7 @@ async function getSettings(request: Request, env: Env): Promise<Response> {
   const settings = await loadSettings(env)
   // Point rates are money-sensitive; non-admins only get the currency symbol.
   if (user.role !== 'admin') return json({ currency: settings.currency })
-  return json(settings)
+  return json({ ...settings, employee_code_prefix: await employeeCodePrefix(env) })
 }
 
 async function putSettings(request: Request, env: Env): Promise<Response> {
@@ -1567,6 +1590,7 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     currency?: string
     max_entries_per_day?: number
     require_entry_approval?: number | boolean
+    employee_code_prefix?: string
   }>(request)
   const num = (v: unknown, field: string) => {
     const n = Number(v)
@@ -1580,8 +1604,16 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     require_entry_approval: body.require_entry_approval ? 1 : 0,
   }
   await saveSettings(env, next)
+  if (body.employee_code_prefix !== undefined) {
+    const prefix = String(body.employee_code_prefix).trim().slice(0, 12)
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value) VALUES ('employee_code_prefix', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    )
+      .bind(prefix)
+      .run()
+  }
   await audit(env, admin.id, 'update_settings', null, next)
-  return json(next)
+  return json({ ...next, employee_code_prefix: await employeeCodePrefix(env) })
 }
 
 // ------------------------------------------------------------ SMTP settings

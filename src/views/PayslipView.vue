@@ -99,6 +99,7 @@ const printPage = () => window.print()
           <h1 class="display text-3xl">Payslip</h1>
           <p class="mt-1 text-sm text-muted">
             <span class="display mr-2 text-base text-ink">{{ slip.employee_name }}</span>
+            <span v-if="slip.employee_code" class="mono mr-2">{{ slip.employee_code }}</span>
             · {{ monthLabel }}
           </p>
         </div>

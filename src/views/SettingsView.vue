@@ -17,6 +17,7 @@ const form = ref<RateSettings>({
   require_entry_approval: 0,
 })
 const workTypes = ref<WorkTypeInfo[]>([])
+const codePrefix = ref('EMP-')
 const newType = ref({ name: '', points_per_unit: 1 })
 const error = ref('')
 const saved = ref(false)
@@ -43,12 +44,14 @@ async function loadExpenseConfig() {
 }
 
 onMounted(async () => {
-  ;[form.value] = await Promise.all([
-    api<RateSettings>('/api/settings'),
+  const [settings] = await Promise.all([
+    api<RateSettings & { employee_code_prefix?: string }>('/api/settings'),
     loadTypes(),
     loadSmtp(),
     loadExpenseConfig(),
   ])
+  form.value = settings
+  codePrefix.value = settings.employee_code_prefix ?? 'EMP-'
 })
 
 async function run(fn: () => Promise<unknown>) {
@@ -66,10 +69,12 @@ async function run(fn: () => Promise<unknown>) {
 function saveSettings() {
   saved.value = false
   return run(async () => {
-    form.value = await api<RateSettings>('/api/settings', {
+    const res = await api<RateSettings & { employee_code_prefix?: string }>('/api/settings', {
       method: 'PUT',
-      json: form.value,
+      json: { ...form.value, employee_code_prefix: codePrefix.value },
     })
+    form.value = res
+    codePrefix.value = res.employee_code_prefix ?? codePrefix.value
     saved.value = true
   })
 }
@@ -336,6 +341,20 @@ function sendTest() {
             required
             class="field-input mono"
           />
+        </div>
+        <div>
+          <label class="field-label" for="codeprefix">Employee code prefix</label>
+          <input
+            id="codeprefix"
+            v-model="codePrefix"
+            maxlength="12"
+            class="field-input mono"
+            placeholder="EMP-"
+          />
+          <p class="mt-1 text-xs text-muted">
+            New employees get an auto code like {{ codePrefix }}004. Changing this
+            only affects codes assigned from now on.
+          </p>
         </div>
         <div class="col-span-2">
           <label class="field-label" for="maxpd">Max entries per employee per day (0 = unlimited)</label>

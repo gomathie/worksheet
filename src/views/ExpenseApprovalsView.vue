@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
-import type { ExpenseVoucher } from '../types'
+import type { ExpenseVoucher, PendingUser } from '../types'
 
 // Two queues on one page:
 //   manager  — vouchers from the reviewer's direct reports awaiting review
@@ -22,6 +22,13 @@ const comments = ref<Record<string, string>>({})
 const isManager = computed(() => auth.rights.review_expenses)
 // Approval requires the admin role as well as the right.
 const isApprover = computed(() => auth.isAdmin && auth.rights.approve_expenses)
+// New-user approval is a separate authority from expense approval.
+const canApproveUsers = computed(() => auth.canApproveUsers)
+const canSeePendingUsers = computed(
+  () => canApproveUsers.value || auth.rights.add_users,
+)
+const pendingUsers = ref<PendingUser[]>([])
+const userNotes = ref<Record<string, string>>({})
 
 async function load() {
   error.value = ''
@@ -31,6 +38,9 @@ async function load() {
     }
     if (isApprover.value) {
       approvals.value = await api<ExpenseVoucher[]>('/api/expenses/queue?queue=approver')
+    }
+    if (canSeePendingUsers.value) {
+      pendingUsers.value = await api<PendingUser[]>('/api/users/pending')
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load the approval queue'
@@ -82,6 +92,30 @@ async function decide(v: ExpenseVoucher, action: Decision) {
   }
 }
 
+async function decideUser(u: PendingUser, decision: 'approved' | 'rejected') {
+  const note = (userNotes.value[u.id] ?? '').trim()
+  if (decision === 'rejected' && !note) {
+    error.value = 'A note is required when rejecting an account.'
+    return
+  }
+  error.value = ''
+  notice.value = ''
+  busy.value = u.id
+  try {
+    await api(`/api/users/${u.id}/approval`, {
+      method: 'POST',
+      json: { decision, note: note || undefined },
+    })
+    delete userNotes.value[u.id]
+    notice.value = `${u.name} ${decision}.`
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    busy.value = ''
+  }
+}
+
 const total = computed(() =>
   vouchers.value.reduce((s, v) => s + v.amount, 0).toFixed(2),
 )
@@ -101,6 +135,75 @@ const currency = computed(
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
+
+    <!-- ============================================== new user approvals -->
+    <template v-if="canSeePendingUsers && pendingUsers.length">
+      <h3 class="display mb-1 text-xl">New user accounts</h3>
+      <p class="mb-3 text-sm text-muted">
+        {{
+          canApproveUsers
+            ? 'These accounts cannot sign in until you approve them. Set their role, rights, and data scope in the Employees tab afterwards.'
+            : 'Accounts you proposed, waiting for an administrator to approve them.'
+        }}
+      </p>
+
+      <div class="panel mb-8">
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Proposed by</th>
+                <th v-if="canApproveUsers">Note</th>
+                <th v-if="canApproveUsers"></th>
+                <th v-else>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in pendingUsers" :key="u.id">
+                <td>{{ u.name }}</td>
+                <td class="mono text-[13px]">{{ u.username ?? '—' }}</td>
+                <td class="text-xs text-muted">{{ u.email ?? '—' }}</td>
+                <td class="text-xs">{{ u.created_by_name ?? '—' }}</td>
+                <td v-if="canApproveUsers">
+                  <input
+                    v-model="userNotes[u.id]"
+                    class="field-input !w-48"
+                    maxlength="500"
+                    placeholder="Required to reject"
+                    :aria-label="`Note for ${u.name}`"
+                  />
+                </td>
+                <td v-if="canApproveUsers" class="whitespace-nowrap">
+                  <button
+                    class="btn btn-sm btn-solid mr-1"
+                    :disabled="busy === u.id"
+                    @click="decideUser(u, 'approved')"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    class="btn btn-sm btn-danger"
+                    :disabled="busy === u.id"
+                    @click="decideUser(u, 'rejected')"
+                  >
+                    Reject
+                  </button>
+                </td>
+                <td v-else>
+                  <span
+                    class="display rounded-full border border-amber px-2 py-0.5 text-xs tracking-wider text-amber"
+                    >Pending</span
+                  >
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
 
     <!-- ============================================ final approval queue -->
     <template v-if="isApprover">

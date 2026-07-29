@@ -18,6 +18,7 @@ import { ApiError, json, readJson, todayInTz } from './http'
 import { audit, parseRights, requireAdmin, requireUser } from './auth'
 import { loadSettings } from './settings'
 import { employeesWithRight, notifyUser, notifyUsers } from './notify'
+import { scopeClause, visibleEmployeeIds } from './scope'
 import {
   DEFAULT_DECLARATION,
   PAYMENT_METHODS,
@@ -361,16 +362,22 @@ async function visibilityClause(
   user: Employee,
 ): Promise<{ sql: string; binds: unknown[] }> {
   const rights = parseRights(user)
+  // Finance verifies the whole organization's spend, so it is unrestricted
+  // regardless of the assigned data scope.
   if (user.role === 'admin' || rights.finance_expenses) return { sql: '', binds: [] }
-  const ids = new Set<string>([user.id])
+
+  const scoped = await visibleEmployeeIds(env, user)
+  const ids = new Set<string>(scoped ?? [])
+  if (scoped === null) return { sql: '', binds: [] }
+  ids.add(user.id)
+  // Reviewing your reports' vouchers is part of the manager step, so the
+  // right widens visibility even when the data scope is narrower.
   if (rights.review_expenses) {
     for (const id of await directReportIds(env, user.id)) ids.add(id)
   }
-  const list = [...ids]
-  return {
-    sql: ` AND v.employee_id IN (${list.map(() => '?').join(',')})`,
-    binds: list,
-  }
+
+  const clause = scopeClause([...ids], 'v.employee_id')
+  return { sql: clause.sql, binds: clause.binds }
 }
 
 export async function listVouchers(request: Request, env: Env): Promise<Response> {

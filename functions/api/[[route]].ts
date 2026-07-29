@@ -17,8 +17,12 @@ import {
   canSeeOwnPay,
   currentUser,
   hashPassword,
+  defaultRightsForRole,
+  parseDataScope,
   parseRights,
+  parseRole,
   randomToken,
+  sanitizeRightsJson,
   requireAdmin,
   requireRight,
   requireUser,
@@ -46,6 +50,7 @@ import {
   listNotifications,
   markNotificationsRead,
 } from '../../server/notify'
+import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
 import {
   createCategory,
   createDepartment,
@@ -117,7 +122,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   }
 
   const employee = await env.DB.prepare(
-    'SELECT * FROM employees WHERE lower(username) = ? AND active = 1',
+    "SELECT * FROM employees WHERE lower(username) = ? AND active = 1 AND approval_status = 'approved'",
   )
     .bind(normalized)
     .first<Employee>()
@@ -393,6 +398,8 @@ function publicEmployee(
     leave_allowance: e.leave_allowance,
     department_id: e.department_id,
     manager_id: e.manager_id,
+    data_scope: e.data_scope,
+    approval_status: e.approval_status,
     has_password: e.password_hash ? 1 : 0,
     active: e.active,
     created_at: e.created_at,
@@ -464,6 +471,8 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     review_expenses: Boolean(raw?.review_expenses ?? fallback.review_expenses),
     finance_expenses: Boolean(raw?.finance_expenses ?? fallback.finance_expenses),
     approve_expenses: Boolean(raw?.approve_expenses ?? fallback.approve_expenses),
+    add_users: Boolean(raw?.add_users ?? fallback.add_users),
+    approve_users: Boolean(raw?.approve_users ?? fallback.approve_users),
   })
 }
 
@@ -480,6 +489,7 @@ interface EmployeeBody {
   leave_allowance?: number | null
   department_id?: string | null
   manager_id?: string | null
+  data_scope?: string
   active?: number | boolean
 }
 
@@ -501,7 +511,9 @@ async function listEmployees(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   if (user.role === 'admin') {
     const [{ results }, assignments] = await Promise.all([
-      env.DB.prepare('SELECT * FROM employees ORDER BY name').all<Employee>(),
+      env.DB.prepare(
+        "SELECT * FROM employees WHERE approval_status = 'approved' ORDER BY name",
+      ).all<Employee>(),
       env.DB.prepare('SELECT * FROM employee_work_types').all<{
         employee_id: string
         work_type_id: string
@@ -535,7 +547,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   const body = await readJson<EmployeeBody>(request)
   const name = (body.name ?? '').trim()
   const email = (body.email ?? '').trim().toLowerCase() || null
-  const role = body.role === 'admin' ? 'admin' : 'employee'
+  const role = parseRole(body.role)
   if (!name) throw new ApiError(400, 'name is required')
 
   const username = normalizeUsername(body.username)
@@ -547,32 +559,33 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   if (username && !passwordHash) {
     throw new ApiError(400, 'password is required when assigning a username')
   }
-  const rights = rightsToJson(body.rights, {
-    add_entries: true,
-    edit_entries: true,
-    delete_entries: true,
-    view_dashboard: false,
-    view_reports: false,
-    view_remuneration: false,
-    view_payslip: false,
-    log_leave: false,
-    add_expenses: true,
-    review_expenses: false,
-    finance_expenses: false,
-    // Approval is never granted on creation — an admin ticks it deliberately.
-    approve_expenses: false,
-  })
+  // The role seeds the tick-boxes; anything explicitly sent still wins.
+  // Approval rights are never seeded — an admin grants those deliberately —
+  // and are stripped outright for non-admins.
+  const rights = sanitizeRightsJson(
+    rightsToJson(body.rights, defaultRightsForRole(role)),
+    role,
+  )
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
   const leaveAllowance = normalizeEntryLimit(body.leave_allowance)
   const departmentId = await normalizeRef(env, 'departments', body.department_id, 'department')
   const managerId = await normalizeRef(env, 'employees', body.manager_id, 'manager')
+  // Admins are unrestricted anyway; managers default to their direct reports.
+  const dataScope =
+    body.data_scope !== undefined
+      ? parseDataScope(body.data_scope)
+      : role === 'admin'
+        ? 'all'
+        : role === 'manager'
+          ? 'direct_reports'
+          : 'own'
 
   const id = crypto.randomUUID()
   const code = await nextEmployeeCode(env)
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, employee_code, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (id, employee_code, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id, data_scope, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
       .bind(
         id,
@@ -587,6 +600,8 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
         leaveAllowance,
         departmentId,
         managerId,
+        dataScope,
+        admin.id,
       )
       .run()
   } catch (e) {
@@ -649,12 +664,7 @@ async function patchEmployee(
       : existing.email
   const username =
     body.username !== undefined ? normalizeUsername(body.username) : existing.username
-  const role =
-    body.role !== undefined
-      ? body.role === 'admin'
-        ? 'admin'
-        : 'employee'
-      : existing.role
+  const role = body.role !== undefined ? parseRole(body.role) : existing.role
   const active =
     body.active !== undefined ? (body.active ? 1 : 0) : existing.active
   // Empty/absent password means "keep the current one".
@@ -662,10 +672,12 @@ async function patchEmployee(
     body.password !== undefined && body.password !== ''
       ? await hashPassword(assertPassword(body.password))
       : existing.password_hash
-  const rights =
+  const rights = sanitizeRightsJson(
     body.rights !== undefined
       ? rightsToJson(body.rights, parseRights(existing))
-      : existing.rights
+      : existing.rights,
+    role,
+  )
   const maxPerDay =
     body.max_entries_per_day !== undefined
       ? normalizeEntryLimit(body.max_entries_per_day)
@@ -682,6 +694,10 @@ async function patchEmployee(
     body.manager_id !== undefined
       ? await normalizeRef(env, 'employees', body.manager_id, 'manager')
       : existing.manager_id
+  const dataScope =
+    body.data_scope !== undefined
+      ? parseDataScope(body.data_scope)
+      : parseDataScope(existing.data_scope)
   // Self-management would make an employee their own approver.
   if (managerId === id) {
     throw new ApiError(400, 'An employee cannot be their own manager')
@@ -694,7 +710,7 @@ async function patchEmployee(
 
   try {
     await env.DB.prepare(
-      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, department_id = ?, manager_id = ?, active = ? WHERE id = ?',
+      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, department_id = ?, manager_id = ?, data_scope = ?, active = ? WHERE id = ?',
     )
       .bind(
         name,
@@ -707,6 +723,7 @@ async function patchEmployee(
         leaveAllowance,
         departmentId,
         managerId,
+        dataScope,
         active,
         id,
       )
@@ -1967,6 +1984,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       entry_approval: (await loadSettings(env)).require_entry_approval === 1,
       department_id: user.department_id,
       manager_id: user.manager_id,
+      data_scope: user.data_scope,
       // Receipt uploads need the ATTACHMENTS R2 binding. When it is absent
       // the UI hides the upload control instead of offering one that fails.
       attachments_enabled: Boolean(env.ATTACHMENTS),
@@ -2107,6 +2125,25 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   // ---------------------------------------------------------- notifications
+
+  // ------------------------------------------------------- user approval
+
+  if (path === '/api/users/pending' && method === 'GET') {
+    return listPendingUsers(request, env)
+  }
+  if (path === '/api/users/propose' && method === 'POST') {
+    return proposeUser(request, env, {
+      normalizeUsername,
+      assertPassword,
+      hashPassword,
+      rightsToJson,
+      defaultRights: defaultRightsForRole('employee'),
+    })
+  }
+  const userDecisionMatch = /^\/api\/users\/([\w-]+)\/approval$/.exec(path)
+  if (userDecisionMatch && method === 'POST') {
+    return decideUser(request, env, userDecisionMatch[1])
+  }
 
   if (path === '/api/notifications' && method === 'GET') {
     const user = await requireUser(request, env)

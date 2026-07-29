@@ -13,6 +13,13 @@ import {
   type ExpenseActor,
   type VoucherLike,
 } from '../shared/expenses'
+import {
+  defaultRightsForRole,
+  parseDataScope,
+  parseRole,
+  sanitizeRightsJson,
+} from '../server/auth'
+import { scopeClause } from '../server/scope'
 
 const TODAY = '2026-07-28'
 
@@ -400,5 +407,117 @@ describe('summarize', () => {
     expect(empty.total_this_month).toBe(0)
     expect(empty.pending_approval).toBe(0)
     expect(empty.by_category).toEqual([])
+  })
+})
+
+// --------------------------------------------------------- roles & data scope
+
+describe('defaultRightsForRole', () => {
+  it('gives an employee no team visibility', () => {
+    const r = defaultRightsForRole('employee')
+    expect(r.view_dashboard).toBe(false)
+    expect(r.view_reports).toBe(false)
+    expect(r.review_expenses).toBe(false)
+  })
+
+  it('seeds a manager with team visibility and expense review', () => {
+    const r = defaultRightsForRole('manager')
+    expect(r.view_dashboard).toBe(true)
+    expect(r.view_reports).toBe(true)
+    expect(r.review_expenses).toBe(true)
+  })
+
+  it('never seeds approval authority for any role', () => {
+    for (const role of ['employee', 'manager', 'admin'] as const) {
+      expect(defaultRightsForRole(role).approve_expenses).toBe(false)
+      expect(defaultRightsForRole(role).approve_users).toBe(false)
+    }
+  })
+})
+
+describe('parseRole', () => {
+  it('accepts the three known roles', () => {
+    expect(parseRole('admin')).toBe('admin')
+    expect(parseRole('manager')).toBe('manager')
+    expect(parseRole('employee')).toBe('employee')
+  })
+  it('falls back to employee for anything else', () => {
+    // Guards against a client posting role: 'superuser'.
+    expect(parseRole('superuser')).toBe('employee')
+    expect(parseRole(undefined)).toBe('employee')
+    expect(parseRole('')).toBe('employee')
+  })
+})
+
+describe('parseDataScope', () => {
+  it('accepts the four scopes', () => {
+    expect(parseDataScope('own')).toBe('own')
+    expect(parseDataScope('direct_reports')).toBe('direct_reports')
+    expect(parseDataScope('department')).toBe('department')
+    expect(parseDataScope('all')).toBe('all')
+  })
+  it('falls back to the narrowest scope on anything unknown', () => {
+    expect(parseDataScope('everything')).toBe('own')
+    expect(parseDataScope(null)).toBe('own')
+  })
+})
+
+describe('scopeClause', () => {
+  it('produces no filter when unrestricted', () => {
+    expect(scopeClause(null, 'v.employee_id')).toEqual({ sql: '', binds: [] })
+  })
+  it('produces an IN filter for a list', () => {
+    const c = scopeClause(['a', 'b'], 'v.employee_id')
+    expect(c.sql).toBe(' AND v.employee_id IN (?,?)')
+    expect(c.binds).toEqual(['a', 'b'])
+  })
+  it('blocks everything rather than falling through on an empty list', () => {
+    // A bug that produced [] must never widen access to the whole table.
+    expect(scopeClause([], 'v.employee_id').sql).toBe(' AND 1 = 0')
+  })
+})
+
+describe('sanitizeRightsJson', () => {
+  const withApproval = JSON.stringify({
+    view_dashboard: true,
+    approve_expenses: true,
+    approve_users: true,
+  })
+
+  it('leaves an admin untouched', () => {
+    expect(JSON.parse(sanitizeRightsJson(withApproval, 'admin'))).toMatchObject({
+      approve_expenses: true,
+      approve_users: true,
+    })
+  })
+
+  it('strips both approval rights from a manager', () => {
+    // Switching Admin -> Manager with the boxes ticked must not persist an
+    // authority the API will always refuse.
+    const out = JSON.parse(sanitizeRightsJson(withApproval, 'manager'))
+    expect(out.approve_expenses).toBe(false)
+    expect(out.approve_users).toBe(false)
+  })
+
+  it('strips both approval rights from an employee', () => {
+    const out = JSON.parse(sanitizeRightsJson(withApproval, 'employee'))
+    expect(out.approve_expenses).toBe(false)
+    expect(out.approve_users).toBe(false)
+  })
+
+  it('keeps every other right intact', () => {
+    expect(JSON.parse(sanitizeRightsJson(withApproval, 'manager')).view_dashboard).toBe(
+      true,
+    )
+  })
+
+  it('returns the input unchanged when there is nothing to strip', () => {
+    const clean = JSON.stringify({ view_dashboard: true })
+    expect(sanitizeRightsJson(clean, 'employee')).toBe(clean)
+  })
+
+  it('survives malformed JSON rather than throwing', () => {
+    expect(sanitizeRightsJson('not json', 'employee')).toBe('not json')
+    expect(sanitizeRightsJson('', 'employee')).toBe('')
   })
 })

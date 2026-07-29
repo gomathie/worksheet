@@ -23,6 +23,34 @@ export interface Rights {
   finance_expenses: boolean
   /** Final approval; requires the admin role too. Never implicit. */
   approve_expenses: boolean
+  add_users: boolean
+  approve_users: boolean
+}
+
+export type Role = 'admin' | 'manager' | 'employee'
+
+export type DataScope = 'own' | 'direct_reports' | 'department' | 'all'
+
+export const DATA_SCOPE_LABELS: Record<DataScope, string> = {
+  own: 'Own records only',
+  direct_reports: 'Own plus direct reports',
+  department: 'Own department',
+  all: 'Everyone',
+}
+
+export interface PendingUser {
+  id: string
+  name: string
+  email: string | null
+  username: string | null
+  role: Role
+  department_id: string | null
+  manager_id: string | null
+  approval_status: 'pending' | 'approved' | 'rejected'
+  created_by: string | null
+  created_by_name: string | null
+  approval_note: string | null
+  created_at: string
 }
 
 export interface WorkTypeInfo {
@@ -39,7 +67,7 @@ export interface Me {
   name: string
   email: string | null
   username: string | null
-  role: 'admin' | 'employee'
+  role: Role
   rights: Rights
   work_types: WorkTypeInfo[]
   entry_limit: number // 0 = unlimited
@@ -47,6 +75,7 @@ export interface Me {
   entry_approval: boolean // employee entries need admin approval
   department_id: string | null
   manager_id: string | null
+  data_scope: DataScope
   unread_notifications: number
   /** False when no receipt-storage bucket is bound; uploads are hidden. */
   attachments_enabled: boolean
@@ -59,7 +88,7 @@ export interface Employee {
   name: string
   email: string | null
   username: string | null
-  role: 'admin' | 'employee'
+  role: Role
   rights: Rights
   work_type_ids: string[]
   rate_overrides: Record<string, number>
@@ -67,6 +96,8 @@ export interface Employee {
   leave_allowance: number | null
   department_id: string | null
   manager_id: string | null
+  data_scope: DataScope
+  approval_status: 'pending' | 'approved' | 'rejected'
   has_password?: number
   active: number
   created_at?: string

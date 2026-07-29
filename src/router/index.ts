@@ -65,7 +65,15 @@ const router = createRouter({
       component: () => import('../views/ExpenseApprovalsView.vue'),
       // Serves two audiences: managers reviewing their direct reports, and
       // approvers giving final approval. Either right opens the page.
-      meta: { auth: true, anyRight: ['review_expenses', 'approve_expenses'] },
+      meta: {
+        auth: true,
+        anyRight: [
+          'review_expenses',
+          'approve_expenses',
+          'approve_users',
+          'add_users',
+        ],
+      },
     },
     {
       path: '/expenses/finance',

@@ -15,6 +15,8 @@ const NO_RIGHTS: Rights = {
   review_expenses: false,
   finance_expenses: false,
   approve_expenses: false,
+  add_users: false,
+  approve_users: false,
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -24,6 +26,13 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAdmin: (s) => s.user?.role === 'admin',
+    isManager: (s) => s.user?.role === 'manager',
+    // Both approval authorities require the admin role in addition to the
+    // explicitly granted right.
+    canApproveExpenses: (s) =>
+      s.user?.role === 'admin' && Boolean(s.user?.rights.approve_expenses),
+    canApproveUsers: (s) =>
+      s.user?.role === 'admin' && Boolean(s.user?.rights.approve_users),
     rights: (s): Rights => s.user?.rights ?? NO_RIGHTS,
   },
   actions: {

@@ -206,7 +206,12 @@ async function changePassword() {
         >Expenses</RouterLink
       >
       <RouterLink
-        v-if="auth.rights.review_expenses || canApproveExpenses"
+        v-if="
+          auth.rights.review_expenses ||
+          canApproveExpenses ||
+          auth.canApproveUsers ||
+          auth.rights.add_users
+        "
         :to="{ name: 'expense-approvals' }"
         class="btn"
         active-class="btn-solid"

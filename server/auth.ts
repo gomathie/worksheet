@@ -92,6 +92,51 @@ export interface Rights {
   // administrator who has also been granted this explicitly, so approval is
   // something delegated rather than something the role carries.
   approve_expenses: boolean
+  // User administration. `add_users` lets a non-admin propose a new account,
+  // which lands 'pending'; `approve_users` lets its holder activate one.
+  add_users: boolean
+  approve_users: boolean
+}
+
+/** Whose records a person may see. Stored on employees.data_scope. */
+export const DATA_SCOPES = ['own', 'direct_reports', 'department', 'all'] as const
+export type DataScope = (typeof DATA_SCOPES)[number]
+
+export const DATA_SCOPE_LABELS: Record<DataScope, string> = {
+  own: 'Own records only',
+  direct_reports: 'Own plus direct reports',
+  department: 'Own department',
+  all: 'Everyone',
+}
+
+export function parseDataScope(value: unknown): DataScope {
+  const s = String(value ?? 'own')
+  return (DATA_SCOPES as readonly string[]).includes(s) ? (s as DataScope) : 'own'
+}
+
+export type Role = 'admin' | 'manager' | 'employee'
+
+export function parseRole(value: unknown): Role {
+  const r = String(value ?? 'employee')
+  return r === 'admin' || r === 'manager' ? r : 'employee'
+}
+
+/**
+ * Rights pre-ticked when an account of this role is created. The role is a
+ * starting point, not an enforcement mechanism — an administrator can grant
+ * or revoke anything afterwards, which is why only 'admin' is special-cased
+ * in parseRights.
+ */
+export function defaultRightsForRole(role: Role): Rights {
+  if (role === 'manager') {
+    return {
+      ...DEFAULT_RIGHTS,
+      view_dashboard: true,
+      view_reports: true,
+      review_expenses: true,
+    }
+  }
+  return { ...DEFAULT_RIGHTS }
 }
 
 export const DEFAULT_RIGHTS: Rights = {
@@ -107,6 +152,8 @@ export const DEFAULT_RIGHTS: Rights = {
   review_expenses: false,
   finance_expenses: false,
   approve_expenses: false,
+  add_users: false,
+  approve_users: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -121,8 +168,28 @@ const ALL_RIGHTS: Rights = {
   add_expenses: true,
   review_expenses: true,
   finance_expenses: true,
+  add_users: true,
   // Not granted here — see the carve-out in parseRights.
   approve_expenses: false,
+  approve_users: false,
+}
+
+/**
+ * Both approval authorities require the admin role as well as the right, so
+ * storing them on anyone else is dead data that misreports what a person can
+ * do. Clear them on write, keyed off the role the account is being saved with
+ * — switching Admin → Manager with the boxes ticked would otherwise persist
+ * flags the API will always refuse to honour.
+ */
+export function sanitizeRightsJson(rightsJson: string, role: Role): string {
+  if (role === 'admin') return rightsJson
+  try {
+    const obj = JSON.parse(rightsJson || '{}') as Record<string, unknown>
+    if (!obj.approve_expenses && !obj.approve_users) return rightsJson
+    return JSON.stringify({ ...obj, approve_expenses: false, approve_users: false })
+  } catch {
+    return rightsJson
+  }
 }
 
 /** Read one right straight from the stored JSON, ignoring role shortcuts. */
@@ -136,9 +203,14 @@ function rawRight(employee: Employee, key: keyof Rights): boolean {
 
 export function parseRights(employee: Employee): Rights {
   if (employee.role === 'admin') {
-    // Admins hold everything implicitly *except* expense approval, which must
-    // be granted deliberately so it can also be withheld from an admin.
-    return { ...ALL_RIGHTS, approve_expenses: rawRight(employee, 'approve_expenses') }
+    // Admins hold everything implicitly *except* the two approval rights,
+    // which must be granted deliberately so they can also be withheld from
+    // an individual administrator.
+    return {
+      ...ALL_RIGHTS,
+      approve_expenses: rawRight(employee, 'approve_expenses'),
+      approve_users: rawRight(employee, 'approve_users'),
+    }
   }
   try {
     const raw = JSON.parse(employee.rights || '{}') as Partial<Rights>
@@ -163,6 +235,8 @@ export function parseRights(employee: Employee): Rights {
       // Only meaningful alongside the admin role; kept here so the stored
       // value survives a round trip through the Employees form.
       approve_expenses: Boolean(raw.approve_expenses),
+      add_users: Boolean(raw.add_users),
+      approve_users: Boolean(raw.approve_users),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }
@@ -191,8 +265,10 @@ export async function currentUser(
   const raw = await env.SESSIONS.get(`session:${token}`)
   if (!raw) return null
   const { employee_id } = JSON.parse(raw) as { employee_id: string }
+  // approval_status gates the session as well as the login, so revoking an
+  // account mid-session takes effect on the next request.
   const user = await env.DB.prepare(
-    'SELECT * FROM employees WHERE id = ? AND active = 1',
+    "SELECT * FROM employees WHERE id = ? AND active = 1 AND approval_status = 'approved'",
   )
     .bind(employee_id)
     .first<Employee>()

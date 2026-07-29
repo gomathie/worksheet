@@ -14,13 +14,19 @@ export interface Employee {
   email: string | null
   username: string | null
   password_hash: string | null
-  role: 'admin' | 'employee'
+  role: 'admin' | 'manager' | 'employee'
   rights: string // JSON — see Rights in auth.ts
   employee_code: string | null // human-readable staff code, e.g. EMP-001
   max_entries_per_day: number | null // per-employee override; NULL = use global
   leave_allowance: number | null // annual paid-leave days; NULL = not tracked
   department_id: string | null
   manager_id: string | null // who reviews this employee's expense vouchers
+  data_scope: string // 'own' | 'direct_reports' | 'department' | 'all'
+  approval_status: string // 'pending' | 'approved' | 'rejected'
+  created_by: string | null
+  approved_by: string | null
+  approved_at: string | null
+  approval_note: string | null
   active: number
   created_at: string
 }

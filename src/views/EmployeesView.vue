@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
+import { DATA_SCOPE_LABELS, type DataScope } from '../types'
 import type { Department, Employee, WorkTypeInfo } from '../types'
 
 const employees = ref<Employee[]>([])
@@ -35,6 +36,8 @@ const blankRights = () => ({
   review_expenses: false,
   finance_expenses: false,
   approve_expenses: false,
+  add_users: false,
+  approve_users: false,
 })
 
 const form = ref({
@@ -50,6 +53,7 @@ const form = ref({
   leave_allowance: '' as number | '',
   department_id: '' as string,
   manager_id: '' as string,
+  data_scope: 'own' as DataScope,
 })
 
 async function load() {
@@ -76,6 +80,7 @@ function startEdit(e: Employee) {
     leave_allowance: e.leave_allowance ?? '',
     department_id: e.department_id ?? '',
     manager_id: e.manager_id ?? '',
+    data_scope: e.data_scope ?? 'own',
   }
 }
 
@@ -94,6 +99,7 @@ function resetForm() {
     leave_allowance: '',
     department_id: '',
     manager_id: '',
+    data_scope: 'own',
   }
 }
 
@@ -119,6 +125,7 @@ async function submit() {
         form.value.leave_allowance === '' ? null : form.value.leave_allowance,
       department_id: form.value.department_id || null,
       manager_id: form.value.manager_id || null,
+      data_scope: form.value.data_scope,
     }
     if (form.value.password) payload.password = form.value.password
     if (editingId.value) {
@@ -163,9 +170,13 @@ function workSummary(e: Employee): string {
 function rightsSummary(e: Employee): string {
   if (e.role === 'admin') {
     // Approval is the one right the role does not carry, so spell it out.
-    return e.rights.approve_expenses
-      ? 'All rights, incl. expense approval'
-      : 'All rights, except expense approval'
+    const extra = [
+      e.rights.approve_expenses ? 'expense approval' : null,
+      e.rights.approve_users ? 'user approval' : null,
+    ].filter(Boolean)
+    return extra.length
+      ? `All rights, incl. ${extra.join(' & ')}`
+      : 'All rights, no approval authority'
   }
   const labels: [keyof Employee['rights'], string][] = [
     ['add_entries', 'Add time'],
@@ -179,10 +190,35 @@ function rightsSummary(e: Employee): string {
     ['add_expenses', 'File expenses'],
     ['review_expenses', 'Review expenses'],
     ['finance_expenses', 'Expense finance'],
-    ['approve_expenses', 'Approve expenses'],
+    ['add_users', 'Add users'],
   ]
+  // approve_* are deliberately absent: both require the admin role, so for a
+  // non-admin they would claim an authority the API refuses to honour.
   const granted = labels.filter(([key]) => e.rights[key]).map(([, label]) => label)
   return granted.length ? granted.join(', ') : 'View own entries only'
+}
+
+/**
+ * Changing the role re-seeds the rights and scope, mirroring the server's
+ * defaultRightsForRole. Only applied when adding — editing an existing person
+ * must not silently rewrite rights an admin has already tuned.
+ */
+function applyRoleDefaults() {
+  if (editingId.value) return
+  const r = form.value.rights
+  if (form.value.role === 'manager') {
+    r.view_dashboard = true
+    r.view_reports = true
+    r.review_expenses = true
+    form.value.data_scope = 'direct_reports'
+  } else if (form.value.role === 'admin') {
+    form.value.data_scope = 'all'
+  } else {
+    r.view_dashboard = false
+    r.view_reports = false
+    r.review_expenses = false
+    form.value.data_scope = 'own'
+  }
 }
 
 const departmentName = (e: Employee) =>
@@ -210,10 +246,14 @@ const managerName = (e: Employee) =>
           </div>
           <div>
             <label class="field-label" for="role">Role</label>
-            <select id="role" v-model="form.role" class="field-input">
+            <select id="role" v-model="form.role" class="field-input" @change="applyRoleDefaults">
               <option value="employee">Employee</option>
+              <option value="manager">Manager</option>
               <option value="admin">Admin</option>
             </select>
+            <p class="mt-1 text-xs text-muted">
+              The role pre-fills the rights below; adjust any of them afterwards.
+            </p>
           </div>
           <div>
             <label class="field-label" for="dept">Department</label>
@@ -235,6 +275,26 @@ const managerName = (e: Employee) =>
             </select>
             <p class="mt-1 text-xs text-muted">
               Without a manager, their vouchers skip straight to finance.
+            </p>
+          </div>
+          <div>
+            <label class="field-label" for="scope">Data they can see</label>
+            <select
+              id="scope"
+              v-model="form.data_scope"
+              class="field-input"
+              :disabled="form.role === 'admin'"
+            >
+              <option v-for="(label, value) in DATA_SCOPE_LABELS" :key="value" :value="value">
+                {{ label }}
+              </option>
+            </select>
+            <p class="mt-1 text-xs text-muted">
+              {{
+                form.role === 'admin'
+                  ? 'Admins always see everything.'
+                  : 'Applies to the dashboard, reports, and expense lists.'
+              }}
             </p>
           </div>
           <div>
@@ -323,8 +383,37 @@ const managerName = (e: Employee) =>
         <!-- Expense approval sits outside the Rights fieldset below because
              that fieldset is disabled for admins — and this is the one right
              an admin does *not* get automatically. -->
+        <fieldset class="mt-4">
+          <legend class="field-label">User administration</legend>
+          <div class="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.add_users" type="checkbox" />
+              Add new users
+            </label>
+          </div>
+          <p class="mt-1 text-xs text-muted">
+            A non-admin with this right can propose an account. It stays pending
+            and cannot sign in until somebody with approval authority approves
+            it — and they cannot set the new person's role or rights.
+          </p>
+        </fieldset>
+
         <fieldset class="mt-4 rounded-lg border border-teal bg-teal-soft p-3">
-          <legend class="field-label px-1">Expense approval authority</legend>
+          <legend class="field-label px-1">Approval authority</legend>
+          <label class="mb-2 flex items-start gap-2 text-sm">
+            <input
+              v-model="form.rights.approve_users"
+              type="checkbox"
+              class="mt-1"
+              :disabled="form.role !== 'admin'"
+            />
+            <span>
+              Approve new user accounts
+              <span v-if="form.role !== 'admin'" class="block text-xs text-muted">
+                Only available to admins.
+              </span>
+            </span>
+          </label>
           <label class="flex items-start gap-2 text-sm">
             <input
               v-model="form.rights.approve_expenses"
@@ -448,7 +537,13 @@ const managerName = (e: Employee) =>
               <td>
                 <span
                   class="display rounded-full border px-2 py-0.5 text-xs tracking-wider"
-                  :class="e.role === 'admin' ? 'border-teal text-teal' : 'border-line text-muted'"
+                  :class="
+                    e.role === 'admin'
+                      ? 'border-teal text-teal'
+                      : e.role === 'manager'
+                        ? 'border-amber text-amber'
+                        : 'border-line text-muted'
+                  "
                   >{{ e.role }}</span
                 >
               </td>

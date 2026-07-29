@@ -11,6 +11,7 @@ const NO_RIGHTS: Rights = {
   view_remuneration: false,
   view_payslip: false,
   log_leave: false,
+  direct_counts: false,
   add_expenses: false,
   review_expenses: false,
   finance_expenses: false,

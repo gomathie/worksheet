@@ -4,7 +4,7 @@ import { api } from '../api'
 import { computeHours } from '../../shared/logic'
 import { downloadCsv } from '../csv'
 import { useAuthStore } from '../stores/auth'
-import type { Employee, Entry, WorkTypeInfo } from '../types'
+import type { Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
 
 const auth = useAuthStore()
 
@@ -23,6 +23,7 @@ const form = ref({
   time_start: '09:00',
   time_end: '17:00',
   units: {} as Record<string, number>,
+  cards: [] as EntryCard[],
   notes: '',
 })
 
@@ -49,6 +50,27 @@ const formTypes = computed(() => {
   const assigned = new Set(target?.work_type_ids ?? [])
   return activeTypes.value.filter((w) => assigned.has(w.id))
 })
+
+// Card-based types are logged as cards unless the user may enter counts directly.
+const canDirect = computed(() => auth.isAdmin || auth.rights.direct_counts)
+const isCardMode = (w: WorkTypeInfo) => Boolean(w.card_based) && !canDirect.value
+const numericTypes = computed(() => formTypes.value.filter((w) => !isCardMode(w)))
+const cardTypes = computed(() => formTypes.value.filter((w) => isCardMode(w)))
+
+const cardsFor = (typeId: string) =>
+  form.value.cards.filter((c) => c.work_type_id === typeId)
+function addCard(typeId: string) {
+  form.value.cards.push({
+    work_type_id: typeId,
+    card_name: '',
+    total_audits: 0,
+    time_completed: '',
+  })
+}
+function removeCard(card: EntryCard) {
+  const i = form.value.cards.indexOf(card)
+  if (i >= 0) form.value.cards.splice(i, 1)
+}
 
 async function loadEntries() {
   const params = new URLSearchParams({ month: month.value })
@@ -80,6 +102,7 @@ function resetForm() {
     time_start: '09:00',
     time_end: '17:00',
     units: {},
+    cards: [],
     notes: '',
   }
 }
@@ -92,6 +115,7 @@ function startEdit(entry: Entry) {
     time_start: entry.time_start,
     time_end: entry.time_end,
     units: { ...entry.units },
+    cards: (entry.cards ?? []).map((c) => ({ ...c })),
     notes: entry.notes ?? '',
   }
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -101,18 +125,28 @@ async function submit() {
   error.value = ''
   busy.value = true
   try {
-    // Only send units for types the target employee is assigned.
-    const allowed = new Set(formTypes.value.map((w) => w.id))
+    // Typed counts for numeric types only; card-based types go via `cards`.
+    const numericIds = new Set(numericTypes.value.map((w) => w.id))
     const items: Record<string, number> = {}
     for (const [id, n] of Object.entries(form.value.units)) {
-      if (allowed.has(id) && n > 0) items[id] = n
+      if (numericIds.has(id) && n > 0) items[id] = n
     }
+    const cardIds = new Set(cardTypes.value.map((w) => w.id))
+    const cards = form.value.cards
+      .filter((c) => cardIds.has(c.work_type_id) && c.card_name.trim())
+      .map((c) => ({
+        work_type_id: c.work_type_id,
+        card_name: c.card_name.trim(),
+        total_audits: Number(c.total_audits) || 0,
+        time_completed: c.time_completed || null,
+      }))
     const payload = {
       employee_id: form.value.employee_id,
       work_date: form.value.work_date,
       time_start: form.value.time_start,
       time_end: form.value.time_end,
       items,
+      cards,
       notes: form.value.notes || null,
     }
     if (editingId.value) {
@@ -263,7 +297,7 @@ const tableColspan = computed(
           />
         </div>
         <div class="col-span-2 grid grid-cols-2 gap-4 md:col-span-4 md:grid-cols-4">
-          <div v-for="wt in formTypes" :key="wt.id">
+          <div v-for="wt in numericTypes" :key="wt.id">
             <label class="field-label" :for="`wt-${wt.id}`">{{ wt.name }}</label>
             <input
               :id="`wt-${wt.id}`"
@@ -280,6 +314,54 @@ const tableColspan = computed(
             class="col-span-full self-center text-sm text-muted"
           >
             No countable work types assigned — only hours and notes are recorded.
+          </p>
+        </div>
+
+        <!-- Card-based types: one row per card; the count is the number of cards. -->
+        <div
+          v-for="wt in cardTypes"
+          :key="wt.id"
+          class="col-span-2 rounded-lg border border-line p-3 md:col-span-4"
+        >
+          <div class="mb-2 flex items-center justify-between">
+            <span class="field-label">
+              {{ wt.name }} cards
+              <span class="mono ml-2 text-teal">{{ cardsFor(wt.id).length }}</span>
+            </span>
+            <button type="button" class="btn btn-sm" @click="addCard(wt.id)">
+              + Add card
+            </button>
+          </div>
+          <div
+            v-for="(c, i) in cardsFor(wt.id)"
+            :key="i"
+            class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]"
+          >
+            <input
+              v-model="c.card_name"
+              placeholder="Card name"
+              class="field-input"
+            />
+            <input
+              v-model.number="c.total_audits"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="Total audits"
+              class="field-input mono"
+            />
+            <input
+              v-model="c.time_completed"
+              type="time"
+              class="field-input mono"
+              aria-label="Time completed"
+            />
+            <button type="button" class="btn btn-sm btn-danger" @click="removeCard(c)">
+              ✕
+            </button>
+          </div>
+          <p v-if="cardsFor(wt.id).length === 0" class="text-xs text-muted">
+            No cards yet — add one per {{ wt.name }} card completed.
           </p>
         </div>
         <div class="col-span-2 md:col-span-4">

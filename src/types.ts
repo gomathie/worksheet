@@ -116,6 +116,8 @@ export interface ReportPerson {
 export interface ReportPayload {
   month: string
   scope: 'full' | 'limited'
+  locked?: boolean
+  locked_at?: string | null
   work_types: WorkTypeInfo[]
   totals: {
     hours: number

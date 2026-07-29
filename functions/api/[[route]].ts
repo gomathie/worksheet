@@ -5,6 +5,7 @@ import type {
   EntryItemRow,
   EntryRow,
   Env,
+  MonthLockRow,
   PaymentRow,
   WorkTypeRow,
 } from '../../server/env'
@@ -286,6 +287,87 @@ async function allRateOverrides(
     map.set(r.employee_id, rec)
   }
   return map
+}
+
+// ------------------------------------------------------------ month locking
+
+interface ResolvedRates {
+  locked: boolean
+  locked_at: string | null
+  point_value: number
+  currency: string
+  workTypes: { id: string; name: string; points_per_unit: number; active: number; position: number }[]
+  overridesByEmployee: Map<string, Record<string, number>>
+}
+
+async function getMonthLock(env: Env, month: string): Promise<MonthLockRow | null> {
+  return env.DB.prepare('SELECT * FROM month_locks WHERE month = ?')
+    .bind(month)
+    .first<MonthLockRow>()
+}
+
+/** Reject a mutation whose month has been locked. */
+async function assertMonthUnlocked(env: Env, month: string): Promise<void> {
+  if (await getMonthLock(env, month)) {
+    throw new ApiError(423, `${month} is locked — unlock it to make changes`)
+  }
+}
+
+/**
+ * The rates to use for a month: the frozen snapshot if the month is locked,
+ * otherwise the live work-type rates, per-employee overrides, and settings.
+ */
+async function ratesForMonth(env: Env, month: string): Promise<ResolvedRates> {
+  const lock = await getMonthLock(env, month)
+  if (lock) {
+    const snap = JSON.parse(lock.rates_json) as {
+      work_types: { id: string; name: string; points_per_unit: number }[]
+      overrides: Record<string, Record<string, number>>
+    }
+    return {
+      locked: true,
+      locked_at: lock.locked_at,
+      point_value: lock.point_value,
+      currency: lock.currency,
+      workTypes: snap.work_types.map((w, i) => ({ ...w, active: 1, position: i })),
+      overridesByEmployee: new Map(Object.entries(snap.overrides ?? {})),
+    }
+  }
+  const [settings, wtRes, overrides] = await Promise.all([
+    loadSettings(env),
+    env.DB.prepare('SELECT * FROM work_types ORDER BY position, created_at').all<WorkTypeRow>(),
+    allRateOverrides(env),
+  ])
+  return {
+    locked: false,
+    locked_at: null,
+    point_value: settings.point_value,
+    currency: settings.currency,
+    workTypes: wtRes.results.map((w) => ({
+      id: w.id,
+      name: w.name,
+      points_per_unit: w.points_per_unit,
+      active: w.active,
+      position: w.position,
+    })),
+    overridesByEmployee: overrides,
+  }
+}
+
+/** Capture the current rates as the JSON snapshot stored when locking a month. */
+async function buildRateSnapshot(env: Env): Promise<string> {
+  const [wtRes, overrides] = await Promise.all([
+    env.DB.prepare('SELECT id, name, points_per_unit FROM work_types ORDER BY position, created_at').all<{
+      id: string
+      name: string
+      points_per_unit: number
+    }>(),
+    allRateOverrides(env),
+  ])
+  return JSON.stringify({
+    work_types: wtRes.results,
+    overrides: Object.fromEntries(overrides),
+  })
 }
 
 // ----------------------------------------------------------- employee routes
@@ -822,6 +904,7 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
   }
 
   validateEntryInput(body)
+  await assertMonthUnlocked(env, body.work_date!.slice(0, 7))
   // Enforce the per-day entry limit for employees logging their own time.
   // Admins are exempt (they manage/correct entries).
   if (user.role !== 'admin') {
@@ -894,6 +977,11 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
     notes: body.notes !== undefined ? body.notes?.trim() || null : entry.notes,
   }
   validateEntryInput(next)
+  // Neither the old nor the new month may be locked.
+  await assertMonthUnlocked(env, entry.work_date.slice(0, 7))
+  if (next.work_date.slice(0, 7) !== entry.work_date.slice(0, 7)) {
+    await assertMonthUnlocked(env, next.work_date.slice(0, 7))
+  }
   // Moving an entry to a different day counts against that day's limit.
   if (user.role !== 'admin' && next.work_date !== entry.work_date) {
     await enforceEntryLimit(env, user, next.work_date, id)
@@ -943,8 +1031,9 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
 }
 
 async function deleteEntry(request: Request, env: Env, id: string): Promise<Response> {
-  const { user } = await loadOwnedEntry(request, env, id)
+  const { user, entry } = await loadOwnedEntry(request, env, id)
   requireRight(user, 'delete_entries')
+  await assertMonthUnlocked(env, entry.work_date.slice(0, 7))
   await env.DB.prepare('DELETE FROM entries WHERE id = ?').bind(id).run()
   await audit(env, user.id, 'delete_entry', id)
   return json({ ok: true })
@@ -957,10 +1046,11 @@ async function setEntryStatus(request: Request, env: Env, id: string): Promise<R
   if (body.status !== 'approved' && body.status !== 'rejected') {
     throw new ApiError(400, "status must be 'approved' or 'rejected'")
   }
-  const entry = await env.DB.prepare('SELECT id FROM entries WHERE id = ?')
+  const entry = await env.DB.prepare('SELECT work_date FROM entries WHERE id = ?')
     .bind(id)
-    .first()
+    .first<{ work_date: string }>()
   if (!entry) throw new ApiError(404, 'Entry not found')
+  await assertMonthUnlocked(env, entry.work_date.slice(0, 7))
   await env.DB.prepare('UPDATE entries SET status = ? WHERE id = ?')
     .bind(body.status, id)
     .run()
@@ -1007,6 +1097,7 @@ async function createAdjustment(request: Request, env: Env): Promise<Response> {
     description?: string
   }>(request)
   const month = assertMonth(body.month ?? currentMonth(env))
+  await assertMonthUnlocked(env, month)
   const amount = assertAmount(body.amount)
   const description = (body.description ?? '').trim().slice(0, 200) || null
 
@@ -1094,6 +1185,7 @@ async function decideAdjustment(
     .first<AdjustmentRow>()
   if (!existing) throw new ApiError(404, 'Adjustment not found')
 
+  await assertMonthUnlocked(env, existing.month)
   const body = await readJson<{ status?: string }>(request)
   if (body.status !== 'approved' && body.status !== 'rejected') {
     throw new ApiError(400, "status must be 'approved' or 'rejected'")
@@ -1138,6 +1230,7 @@ async function deleteAdjustment(
   ) {
     throw new ApiError(403, 'You can only withdraw your own pending requests')
   }
+  await assertMonthUnlocked(env, existing.month)
   await env.DB.prepare('DELETE FROM adjustments WHERE id = ?').bind(id).run()
   await audit(env, user.id, 'delete_adjustment', id)
   return json({ ok: true })
@@ -1275,8 +1368,9 @@ async function listAudit(request: Request, env: Env): Promise<Response> {
 
 /** A single employee's pay summary for a month (used for payslips too). */
 async function remunerationFor(env: Env, employee: Employee, month: string) {
-  const [settings, hoursRow, unitRows, wtRes, adjRes, payment] = await Promise.all([
-    loadSettings(env),
+  // Locked months use their frozen rate snapshot.
+  const rates = await ratesForMonth(env, month)
+  const [hoursRow, unitRows, adjRes, payment] = await Promise.all([
     env.DB.prepare(
       "SELECT SUM(hours) AS hours FROM entries WHERE employee_id = ? AND work_date LIKE ? AND status = 'approved'",
     )
@@ -1287,11 +1381,6 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
     )
       .bind(employee.id, `${month}-%`)
       .all<{ work_type_id: string; units: number }>(),
-    env.DB.prepare('SELECT id, name, points_per_unit FROM work_types').all<{
-      id: string
-      name: string
-      points_per_unit: number
-    }>(),
     env.DB.prepare(
       'SELECT * FROM adjustments WHERE employee_id = ? AND month = ? ORDER BY created_at DESC',
     )
@@ -1304,15 +1393,9 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
 
   const units: Record<string, number> = {}
   for (const r of unitRows.results) units[r.work_type_id] = r.units
-  const { results: overrideRows } = await env.DB.prepare(
-    'SELECT work_type_id, points_per_unit FROM employee_work_types WHERE employee_id = ? AND points_per_unit IS NOT NULL',
-  )
-    .bind(employee.id)
-    .all<{ work_type_id: string; points_per_unit: number }>()
-  const overrides: Record<string, number> = {}
-  for (const r of overrideRows) overrides[r.work_type_id] = r.points_per_unit
-  const points = computePoints(units, wtRes.results, overrides)
-  const base = computeRemuneration(points, settings)
+  const overrides = rates.overridesByEmployee.get(employee.id) ?? {}
+  const points = computePoints(units, rates.workTypes, overrides)
+  const base = Math.round(points * rates.point_value * 100) / 100
   const bonus = adjRes.results
     .filter((a) => a.type === 'bonus' && a.status === 'approved')
     .reduce((s, a) => s + a.amount, 0)
@@ -1325,10 +1408,11 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
     employee_id: employee.id,
     employee_name: employee.name,
     employee_code: employee.employee_code,
-    currency: settings.currency,
+    currency: rates.currency,
+    locked: rates.locked,
     hours: hoursRow?.hours ?? 0,
     units,
-    work_types: wtRes.results.map((w) => ({ id: w.id, name: w.name })),
+    work_types: rates.workTypes.map((w) => ({ id: w.id, name: w.name })),
     points,
     base,
     bonus: Math.round(bonus * 100) / 100,
@@ -1669,6 +1753,40 @@ async function testSmtp(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, to })
 }
 
+async function listLocks(request: Request, env: Env): Promise<Response> {
+  await requireAdmin(request, env)
+  const { results } = await env.DB.prepare(
+    'SELECT month, locked_at, locked_by FROM month_locks ORDER BY month DESC',
+  ).all()
+  return json(results)
+}
+
+async function lockMonth(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{ month?: string }>(request)
+  const month = assertMonth(body.month ?? currentMonth(env))
+  if (await getMonthLock(env, month)) {
+    throw new ApiError(409, `${month} is already locked`)
+  }
+  const settings = await loadSettings(env)
+  const ratesJson = await buildRateSnapshot(env)
+  await env.DB.prepare(
+    'INSERT INTO month_locks (month, locked_by, point_value, currency, rates_json) VALUES (?, ?, ?, ?, ?)',
+  )
+    .bind(month, admin.id, settings.point_value, settings.currency, ratesJson)
+    .run()
+  await audit(env, admin.id, 'lock_month', month, { point_value: settings.point_value })
+  return json({ ok: true, month })
+}
+
+async function unlockMonth(request: Request, env: Env, month: string): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  assertMonth(month)
+  await env.DB.prepare('DELETE FROM month_locks WHERE month = ?').bind(month).run()
+  await audit(env, admin.id, 'unlock_month', month)
+  return json({ ok: true })
+}
+
 async function monthlyReport(request: Request, env: Env): Promise<Response> {
   // Dashboard and Monthly Report both read this endpoint; either right unlocks it.
   const user = await requireUser(request, env)
@@ -1679,7 +1797,9 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
 
-  const [settings, entriesRes, employeesRes, adjRes, payRes, wtRes, entryUnits] =
+  // Locked months compute from their frozen rate snapshot, not the live rates.
+  const rates = await ratesForMonth(env, month)
+  const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits] =
     await Promise.all([
       loadSettings(env),
       env.DB.prepare(
@@ -1696,9 +1816,9 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       env.DB.prepare('SELECT * FROM payments WHERE month = ?')
         .bind(month)
         .all<PaymentRow>(),
-      env.DB.prepare('SELECT * FROM work_types ORDER BY position, created_at').all<WorkTypeRow>(),
       unitsByEntryId(env, month),
     ])
+  const settings = { ...liveSettings, point_value: rates.point_value, currency: rates.currency }
 
   const round2 = (n: number) => Math.round(n * 100) / 100
   const bonusBy = new Map<string, number>()
@@ -1709,7 +1829,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   }
   const paymentBy = new Map(payRes.results.map((p) => [p.employee_id, p]))
 
-  const workTypes = wtRes.results.map((w) => ({
+  const workTypes = rates.workTypes.map((w) => ({
     id: w.id,
     name: w.name,
     points_per_unit: w.points_per_unit,
@@ -1720,10 +1840,9 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     hours: e.hours,
     units: entryUnits.get(e.id) ?? {},
   }))
-  const overrides = await allRateOverrides(env)
   const employeeLikes = employeesRes.results.map((e) => ({
     ...e,
-    rate_overrides: overrides.get(e.id),
+    rate_overrides: rates.overridesByEmployee.get(e.id),
   }))
   const report = aggregateMonthly(
     month,
@@ -1762,7 +1881,9 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     return json({
       ...report,
       scope: 'full',
-      work_types: wtRes.results,
+      work_types: rates.workTypes,
+      locked: rates.locked,
+      locked_at: rates.locked_at,
       per_person,
       totals: {
         ...report.totals,
@@ -1784,7 +1905,9 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   return json({
     month: report.month,
     scope: 'limited',
-    work_types: wtRes.results.map((w) => ({ id: w.id, name: w.name })),
+    work_types: rates.workTypes.map((w) => ({ id: w.id, name: w.name })),
+    locked: rates.locked,
+    locked_at: rates.locked_at,
     totals: {
       hours: report.totals.hours,
       units: report.totals.units,
@@ -1925,6 +2048,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/reports/monthly' && method === 'GET') {
     return monthlyReport(request, env)
   }
+
+  if (path === '/api/locks' && method === 'GET') return listLocks(request, env)
+  if (path === '/api/locks' && method === 'POST') return lockMonth(request, env)
+  const lockMatch = /^\/api\/locks\/(\d{4}-\d{2})$/.exec(path)
+  if (lockMatch && method === 'DELETE') return unlockMonth(request, env, lockMatch[1])
 
   // ------------------------------------------------------- expense vouchers
 

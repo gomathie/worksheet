@@ -115,6 +115,15 @@ export interface NotificationRow {
   created_at: string
 }
 
+export interface MonthLockRow {
+  month: string
+  locked_at: string
+  locked_by: string | null
+  point_value: number
+  currency: string
+  rates_json: string
+}
+
 export interface AbsenceRow {
   id: string
   employee_id: string

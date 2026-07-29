@@ -43,6 +43,33 @@ const money = (n: number) =>
 
 const printPage = () => window.print()
 
+const busy = ref(false)
+
+async function toggleLock() {
+  if (!report.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    if (report.value.locked) {
+      await api(`/api/locks/${month.value}`, { method: 'DELETE' })
+    } else {
+      if (
+        !confirm(
+          `Lock ${monthLabel.value}? This freezes its rates and prevents further ` +
+            `changes to entries, bonuses, and reimbursements for the month.`,
+        )
+      )
+        return
+      await api('/api/locks', { method: 'POST', json: { month: month.value } })
+    }
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to update lock'
+  } finally {
+    busy.value = false
+  }
+}
+
 function exportSummaryCsv() {
   const r = report.value
   if (!r) return
@@ -136,8 +163,25 @@ const rateNote = computed(() => {
         <button class="btn btn-solid" @click="printPage">
           Print / Save as PDF
         </button>
+        <button
+          v-if="auth.isAdmin && report"
+          class="btn"
+          :class="report.locked ? 'btn-danger' : ''"
+          :disabled="busy"
+          @click="toggleLock"
+        >
+          {{ report.locked ? 'Unlock month' : 'Lock month' }}
+        </button>
       </div>
     </div>
+
+    <p
+      v-if="report && report.locked"
+      class="no-print mb-6 rounded-lg border border-teal bg-teal-soft px-4 py-2 text-sm"
+    >
+      🔒 This month is locked. Its rates are frozen and entries, bonuses, and
+      reimbursements can't be changed until it's unlocked.
+    </p>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
 

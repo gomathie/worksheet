@@ -58,9 +58,13 @@ export interface ExpenseVoucherRow {
   declaration_text: string | null
   status: string
   created_by: string | null
+  // Legacy payment columns, superseded by the recorded_* set in 0010.
   paid_at: string | null
   paid_by: string | null
   paid_reference: string | null
+  recorded_at: string | null
+  recorded_by: string | null
+  recorded_reference: string | null
   reopened_at: string | null
   created_at: string
   updated_at: string

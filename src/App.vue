@@ -14,6 +14,11 @@ const canSeeExpenseReports = computed(
     auth.isAdmin || auth.rights.finance_expenses || auth.rights.review_expenses,
 )
 
+// Final approval needs the admin role *and* the explicitly granted right.
+const canApproveExpenses = computed(
+  () => auth.isAdmin && auth.rights.approve_expenses,
+)
+
 const menuOpen = ref(false)
 
 async function signOut() {
@@ -201,7 +206,7 @@ async function changePassword() {
         >Expenses</RouterLink
       >
       <RouterLink
-        v-if="auth.rights.review_expenses"
+        v-if="auth.rights.review_expenses || canApproveExpenses"
         :to="{ name: 'expense-approvals' }"
         class="btn"
         active-class="btn-solid"

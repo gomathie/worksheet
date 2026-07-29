@@ -6,6 +6,7 @@ import {
   statusAfter,
   statusAfterManagerApproval,
   statusAfterSubmit,
+  isApprover,
   summarize,
   validateAttachment,
   validateVoucher,
@@ -20,6 +21,7 @@ const employee: ExpenseActor = {
   can_create: true,
   can_review: false,
   can_finance: false,
+  can_approve: false,
   is_owner: true,
   is_manager_of_owner: false,
 }
@@ -28,6 +30,7 @@ const manager: ExpenseActor = {
   can_create: true,
   can_review: true,
   can_finance: false,
+  can_approve: false,
   is_owner: false,
   is_manager_of_owner: true,
 }
@@ -36,17 +39,23 @@ const finance: ExpenseActor = {
   can_create: true,
   can_review: false,
   can_finance: true,
+  can_approve: false,
   is_owner: false,
   is_manager_of_owner: false,
 }
+// A plain administrator: every right EXCEPT expense approval.
 const admin: ExpenseActor = {
   is_admin: true,
   can_create: true,
   can_review: true,
   can_finance: true,
+  can_approve: false,
   is_owner: false,
   is_manager_of_owner: false,
 }
+
+// An administrator who has also been granted approval authority.
+const approver: ExpenseActor = { ...admin, can_approve: true }
 
 const validVoucher = {
   expense_date: '2026-07-20',
@@ -69,10 +78,11 @@ describe('statusAfterSubmit', () => {
       statusAfterSubmit({ require_manager: false, require_finance: true }, true),
     ).toBe('finance_review')
   })
-  it('approves immediately when both steps are off', () => {
+  it('still requires approval when both optional steps are off', () => {
+    // Turning the steps off shortens the chain; it must never auto-approve.
     expect(
       statusAfterSubmit({ require_manager: false, require_finance: false }, true),
-    ).toBe('approved')
+    ).toBe('admin_approval')
   })
 })
 
@@ -80,10 +90,10 @@ describe('statusAfterManagerApproval', () => {
   it('hands off to finance when finance review is on', () => {
     expect(statusAfterManagerApproval(DEFAULT_WORKFLOW)).toBe('finance_review')
   })
-  it('approves outright when finance review is off', () => {
+  it('goes straight to the approver when finance review is off', () => {
     expect(
       statusAfterManagerApproval({ require_manager: true, require_finance: false }),
-    ).toBe('approved')
+    ).toBe('admin_approval')
   })
 })
 
@@ -92,12 +102,13 @@ describe('statusAfter', () => {
     const w = DEFAULT_WORKFLOW
     expect(statusAfter('start_review', w, true)).toBe('manager_review')
     expect(statusAfter('manager_approve', w, true)).toBe('finance_review')
-    expect(statusAfter('finance_approve', w, true)).toBe('approved')
+    expect(statusAfter('request_approval', w, true)).toBe('admin_approval')
+    expect(statusAfter('admin_approve', w, true)).toBe('approved')
     expect(statusAfter('manager_reject', w, true)).toBe('rejected')
-    expect(statusAfter('finance_reject', w, true)).toBe('rejected')
+    expect(statusAfter('admin_reject', w, true)).toBe('rejected')
     expect(statusAfter('return', w, true)).toBe('draft')
     expect(statusAfter('reopen', w, true)).toBe('draft')
-    expect(statusAfter('mark_paid', w, true)).toBe('paid')
+    expect(statusAfter('mark_recorded', w, true)).toBe('recorded')
   })
   it('returns null for non-transition actions', () => {
     expect(statusAfter('edit', DEFAULT_WORKFLOW, true)).toBeNull()
@@ -147,13 +158,48 @@ describe('allowedActions', () => {
     ).toEqual([])
   })
 
-  it('lets finance verify and later mark paid', () => {
+  it('lets finance escalate but never approve', () => {
+    const actions = allowedActions({ status: 'finance_review', reopened: false }, finance)
+    expect(actions).toEqual(expect.arrayContaining(['request_approval', 'return']))
+    expect(actions).not.toContain('admin_approve')
+    expect(actions).not.toContain('admin_reject')
+  })
+
+  it('lets finance record only once a voucher is approved', () => {
     expect(
       allowedActions({ status: 'finance_review', reopened: false }, finance),
-    ).toEqual(expect.arrayContaining(['finance_approve', 'finance_reject', 'return']))
+    ).not.toContain('mark_recorded')
+    expect(
+      allowedActions({ status: 'admin_approval', reopened: false }, finance),
+    ).not.toContain('mark_recorded')
     expect(allowedActions({ status: 'approved', reopened: false }, finance)).toContain(
-      'mark_paid',
+      'mark_recorded',
     )
+  })
+
+  it('withholds approval from an admin lacking the right', () => {
+    // The whole point of approve_expenses: the role alone is not enough.
+    const actions = allowedActions({ status: 'admin_approval', reopened: false }, admin)
+    expect(actions).not.toContain('admin_approve')
+    expect(actions).not.toContain('admin_reject')
+  })
+
+  it('grants approval to an admin who holds the right', () => {
+    expect(
+      allowedActions({ status: 'admin_approval', reopened: false }, approver),
+    ).toEqual(expect.arrayContaining(['admin_approve', 'admin_reject', 'return']))
+  })
+
+  it('lets an approver act on a voucher still sitting with finance', () => {
+    expect(
+      allowedActions({ status: 'finance_review', reopened: false }, approver),
+    ).toContain('admin_approve')
+  })
+
+  it('needs both the role and the right to be an approver', () => {
+    expect(isApprover(approver)).toBe(true)
+    expect(isApprover(admin)).toBe(false)
+    expect(isApprover({ ...finance, can_approve: true })).toBe(false)
   })
 
   it('freezes an approved voucher for admins until it is reopened', () => {
@@ -165,8 +211,8 @@ describe('allowedActions', () => {
     expect(reopened).toContain('edit')
   })
 
-  it('gives a paid voucher no owner actions', () => {
-    expect(allowedActions({ status: 'paid', reopened: false }, employee)).toEqual([])
+  it('gives a recorded voucher no owner actions', () => {
+    expect(allowedActions({ status: 'recorded', reopened: false }, employee)).toEqual([])
   })
 
   it('withholds create actions from an owner lacking the right', () => {
@@ -274,7 +320,7 @@ describe('summarize', () => {
       department_name: 'Ops',
       expense_date: '2026-07-02',
       amount: 100,
-      status: 'paid',
+      status: 'recorded',
       receipt_available: 1,
     },
     {
@@ -321,7 +367,7 @@ describe('summarize', () => {
   const s = summarize(vouchers, '2026-07')
 
   it('counts each status', () => {
-    expect(s.counts.paid).toBe(1)
+    expect(s.counts.recorded).toBe(1)
     expect(s.counts.submitted).toBe(1)
     expect(s.counts.rejected).toBe(1)
     expect(s.counts.approved).toBe(1)

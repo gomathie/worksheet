@@ -94,19 +94,117 @@ const currency = computed(
   <div>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h2 class="display text-2xl">Expense approvals</h2>
-      <p v-if="vouchers.length" class="mono text-lg">
-        {{ vouchers.length }} waiting · {{ currency }}{{ total }}
+      <p v-if="isManager && vouchers.length" class="mono text-lg">
+        {{ vouchers.length }} to review · {{ currency }}{{ total }}
       </p>
     </div>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
-    <p v-if="vouchers.length === 0" class="panel text-muted">
-      Nothing is waiting for your review.
-    </p>
+    <!-- ============================================ final approval queue -->
+    <template v-if="isApprover">
+      <h3 class="display mb-1 text-xl">Awaiting your approval</h3>
+      <p class="mb-3 text-sm text-muted">
+        You hold expense approval rights. Nothing can be recorded in the finance
+        records until you approve it.
+      </p>
+      <p v-if="approvals.length === 0" class="panel mb-8 text-muted">
+        Nothing is waiting for your approval.
+      </p>
 
-    <div v-for="v in vouchers" :key="v.id" class="panel mb-4">
+      <div v-for="v in approvals" :key="v.id" class="panel mb-4">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <RouterLink
+              :to="{ name: 'expense-detail', params: { id: v.id } }"
+              class="display text-xl underline"
+              >{{ v.voucher_number }}</RouterLink
+            >
+            <ExpenseStatusChip :status="v.status" />
+            <span
+              v-if="!v.receipt_available"
+              class="display rounded-full border border-amber px-2 py-0.5 text-xs tracking-wider text-amber"
+              >No receipt</span
+            >
+          </div>
+          <p class="mono text-2xl font-semibold">
+            {{ v.currency }}{{ v.amount.toFixed(2) }}
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+          <div>
+            <p class="field-label">Employee</p>
+            <p>{{ v.employee_name }}</p>
+          </div>
+          <div>
+            <p class="field-label">Department</p>
+            <p>{{ v.department_name ?? '—' }}</p>
+          </div>
+          <div>
+            <p class="field-label">Date of expense</p>
+            <p class="mono">{{ v.expense_date }}</p>
+          </div>
+          <div>
+            <p class="field-label">Category</p>
+            <p>{{ v.category_name ?? '—' }}</p>
+          </div>
+        </div>
+
+        <p class="mt-3 text-sm">{{ v.description }}</p>
+
+        <div
+          v-if="!v.receipt_available"
+          class="mt-3 rounded-lg border border-amber bg-amber-soft p-3 text-sm"
+        >
+          <p class="field-label">Reason no receipt is available</p>
+          <p>{{ v.missing_receipt_reason ?? '—' }}</p>
+        </div>
+
+        <div class="mt-4 border-t border-line pt-3">
+          <label class="field-label" :for="`ac-${v.id}`">Comments</label>
+          <textarea
+            :id="`ac-${v.id}`"
+            v-model="comments[v.id]"
+            rows="2"
+            maxlength="1000"
+            class="field-input mb-3"
+            placeholder="Required when rejecting or requesting more information"
+          />
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="btn btn-solid"
+              :disabled="busy === v.id"
+              @click="decide(v, 'admin_approve')"
+            >
+              Approve
+            </button>
+            <button class="btn" :disabled="busy === v.id" @click="decide(v, 'return')">
+              Request more info
+            </button>
+            <button
+              class="btn btn-danger"
+              :disabled="busy === v.id"
+              @click="decide(v, 'admin_reject')"
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ================================================ manager review queue -->
+    <template v-if="isManager">
+      <h3 v-if="isApprover" class="display mt-8 mb-1 text-xl">
+        Your direct reports
+      </h3>
+      <p v-if="vouchers.length === 0" class="panel text-muted">
+        Nothing is waiting for your review.
+      </p>
+
+      <div v-for="v in vouchers" :key="v.id" class="panel mb-4">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div class="flex flex-wrap items-center gap-3">
           <RouterLink
@@ -198,6 +296,7 @@ const currency = computed(
           >
         </div>
       </div>
-    </div>
+      </div>
+    </template>
   </div>
 </template>

@@ -395,7 +395,7 @@ const managerName = (e: Employee) =>
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.finance_expenses" type="checkbox" />
-              Expense finance (verify &amp; mark paid)
+              Expense finance (send for approval &amp; record)
             </label>
           </div>
           <p class="mt-2 text-xs text-muted">

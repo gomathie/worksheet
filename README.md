@@ -16,9 +16,12 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
 ### Accounts, roles & rights
 - **Login** is username + password (PBKDF2 hashing); sessions live in Workers KV. The header
   **Account menu** holds the name/role, self-service **Change password**, and **Sign out**.
-- Roles are **admin** and **employee**. Admins do everything; employees are governed by per-person
-  **rights** an admin assigns: add / edit / delete own entries (three separate rights), view
-  dashboard, view monthly reports, view own remuneration, view own payslip, and record paid leave.
+- Roles are **admin** and **employee**. Admins do everything *except* approve expense vouchers;
+  employees are governed by per-person **rights** an admin assigns: add / edit / delete own entries
+  (three separate rights), view dashboard, view monthly reports, view own remuneration, view own
+  payslip, record paid leave, file expenses, review expenses, expense finance, and approve
+  expenses. **`approve_expenses` is the one right the admin role does not imply** — it must be
+  granted deliberately, so approval authority can also be withheld from an administrator.
 - All permission checks are enforced **server-side**, not just hidden in the UI. New rights default
   off; existing employees keep prior behaviour until an admin re-saves them.
 
@@ -70,16 +73,27 @@ approval to payment.
   later edits to the template can't rewrite what somebody agreed to.
 - **Receipts:** file upload (PDF / JPG / JPEG / PNG, max 10 MB) is built but **currently switched
   off** — see *Receipt attachments* below to enable it.
-- **Workflow:** Draft → Submitted → Manager Review → Finance Review → Approved → Paid, with
-  Rejected reachable from either review stage and a *request more information* path back to draft.
-  Every decision records approver, date, decision, and comments. Rejections require a comment.
-- **Roles** reuse the existing rights model rather than adding new account types:
+- **Workflow:** Draft → Submitted → Manager Review → Finance Review → Awaiting Admin Approval →
+  Approved → Recorded, with Rejected reachable from any review stage and a *request more
+  information* path back to draft. Every decision records approver, date, decision, and comments.
+  Rejections require a comment.
+- **Approval is a granted right, not a role.** `approve_expenses` is the **only** right the admin
+  role does not carry automatically — an approver is an administrator who has also been ticked
+  for it in the Employees tab. An admin without it can see everything and change nothing about
+  approval. Nothing reaches *Approved* by any other route, including when both optional workflow
+  steps are switched off.
+- **Finance does not approve.** The `finance_expenses` holder reviews a voucher and either
+  **requests approval** from an approver or returns it for more information. Once an approver has
+  approved it, finance enters it into the external accounting system and **marks it recorded**
+  (with an optional finance-record reference). Recording is impossible before approval — enforced
+  server-side, not just hidden in the UI.
+- **Roles** otherwise reuse the existing rights model rather than adding account types:
   *file expenses*, *review expenses* (manager — scoped to that person's **direct reports** only,
-  and never their own voucher), and *expense finance* (verify and mark paid, organization-wide).
-  Admins hold everything. Set a person's **Reports to** in the Employees tab to make them a manager.
+  and never their own voucher), and *expense finance*. Set a person's **Reports to** in the
+  Employees tab to make them a manager.
 - **Which steps apply** is configurable in Settings (manager and/or finance can each be switched
   off). Employees with no manager assigned skip the manager step, so nothing waits in an unowned queue.
-- **Dashboard & reports:** pending / approved / rejected / paid counts, month-to-date total,
+- **Dashboard & reports:** pending / approved / rejected / recorded counts, month-to-date total,
   breakdowns by category and employee, and a missing-receipt count. Six reports — monthly,
   department, employee, missing receipts, outstanding reimbursements, approved vs rejected — each
   exportable as **CSV**, **Excel**, or **PDF** (print).
@@ -88,10 +102,10 @@ approval to payment.
 - **Audit trail:** every create, edit (field-by-field, with previous and new value), submit,
   decision, payment, and attachment change. The table is **append-only, enforced by SQLite
   triggers** — `UPDATE` and `DELETE` are rejected by the database, not merely avoided in code.
-- **Editing lock:** approved and paid vouchers are frozen; an administrator must explicitly
-  **reopen** one before it can change again.
-- **Notifications:** in-app (header bell) plus email on submission, approval, rejection, payment,
-  and requests for more information.
+- **Editing lock:** approved and recorded vouchers are frozen; an administrator must explicitly
+  **reopen** one before it can change again (which also clears the recorded marker).
+- **Notifications:** in-app (header bell) plus email on submission, escalation to an approver,
+  approval, rejection, recording, and requests for more information.
 
 ### Receipt attachments (R2) — currently off
 Receipt **file uploads are disabled**: no R2 bucket is bound in `wrangler.toml`. Everything else

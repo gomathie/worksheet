@@ -145,8 +145,8 @@ const share = (amount: number, buckets: { amount: number }[]) => {
           <p class="mono text-3xl font-semibold text-red">{{ dashboard.rejected }}</p>
         </div>
         <div class="panel">
-          <p class="field-label">Paid</p>
-          <p class="mono text-3xl font-semibold text-teal">{{ dashboard.paid }}</p>
+          <p class="field-label">Recorded</p>
+          <p class="mono text-3xl font-semibold text-teal">{{ dashboard.recorded }}</p>
         </div>
       </div>
 

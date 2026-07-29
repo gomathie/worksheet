@@ -361,6 +361,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     add_expenses: Boolean(raw?.add_expenses ?? fallback.add_expenses),
     review_expenses: Boolean(raw?.review_expenses ?? fallback.review_expenses),
     finance_expenses: Boolean(raw?.finance_expenses ?? fallback.finance_expenses),
+    approve_expenses: Boolean(raw?.approve_expenses ?? fallback.approve_expenses),
   })
 }
 
@@ -456,6 +457,8 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     add_expenses: true,
     review_expenses: false,
     finance_expenses: false,
+    // Approval is never granted on creation — an admin ticks it deliberately.
+    approve_expenses: false,
   })
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)

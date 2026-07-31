@@ -4,8 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { api, ApiClientError } from '../api'
 import { useAuthStore } from '../stores/auth'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
+import ExpenseVoucherDocument from '../components/ExpenseVoucherDocument.vue'
 import {
   PAYMENT_METHOD_LABELS,
+  STATUS_LABELS,
   type ExpenseAction,
   type PaymentMethod,
 } from '../../shared/expenses'
@@ -154,7 +156,33 @@ function actionLabel(action: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-const printPage = () => window.print()
+/**
+ * The PDF is evidence for the external accounting system, so it is only
+ * available once the voucher has actually been approved. Printing a draft
+ * would produce a document indistinguishable from an approved receipt.
+ */
+const canDownloadPdf = computed(
+  () => voucher.value?.status === 'approved' || voucher.value?.status === 'recorded',
+)
+
+/**
+ * Print just the voucher document, portrait. The global print stylesheet is
+ * landscape for the monthly report, so the orientation is swapped for the
+ * duration of this print and restored afterwards.
+ */
+function downloadPdf() {
+  const style = document.createElement('style')
+  style.textContent = '@page { size: A4 portrait; margin: 14mm; }'
+  document.head.appendChild(style)
+  const cleanup = () => {
+    style.remove()
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+  window.print()
+  // Safari never fires afterprint in some versions; belt and braces.
+  setTimeout(cleanup, 1000)
+}
 </script>
 
 <template>
@@ -168,7 +196,16 @@ const printPage = () => window.print()
         </span>
       </div>
       <div class="flex flex-wrap gap-2">
-        <button class="btn btn-sm" @click="printPage">Print / Save as PDF</button>
+        <button
+          v-if="canDownloadPdf"
+          class="btn btn-sm btn-solid"
+          @click="downloadPdf"
+        >
+          Download PDF
+        </button>
+        <span v-else class="self-center text-xs text-muted">
+          PDF available once approved
+        </span>
         <RouterLink
           v-if="can('edit')"
           :to="{ name: 'expense-edit', params: { id: voucher.id } }"
@@ -182,8 +219,23 @@ const printPage = () => window.print()
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
+    <!-- ================================================ printable document -->
+    <ExpenseVoucherDocument v-if="canDownloadPdf" :voucher="voucher" class="print-only" />
+
+    <!-- Every on-screen panel is no-print, so without this a browser-initiated
+         print of an unapproved voucher would emit a blank sheet. -->
+    <div v-else class="print-only">
+      <p class="display text-xl">{{ voucher.voucher_number }}</p>
+      <p class="mt-2 text-sm">
+        This expense voucher is
+        <strong>{{ STATUS_LABELS[voucher.status] }}</strong> and has not been
+        approved. It cannot be issued as a receipt or filed as supporting
+        evidence until an approval has been recorded against it.
+      </p>
+    </div>
+
     <!-- ========================================================== summary -->
-    <div class="panel mb-6">
+    <div class="panel no-print mb-6">
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div>
           <p class="field-label">Amount</p>
@@ -444,7 +496,7 @@ const printPage = () => window.print()
     </div>
 
     <!-- ========================================================= approvals -->
-    <div class="panel print-block mb-6">
+    <div class="panel no-print mb-6">
       <h3 class="display mb-3 text-xl">Approval history</h3>
       <div v-if="voucher.approvals.length" class="table-wrap">
         <table class="data">
@@ -483,7 +535,7 @@ const printPage = () => window.print()
     </div>
 
     <!-- ======================================================= audit trail -->
-    <div class="panel print-block">
+    <div class="panel no-print">
       <h3 class="display mb-1 text-xl">Audit trail</h3>
       <p class="mb-3 text-sm text-muted">
         Every action on this voucher, oldest last. This history is append-only —

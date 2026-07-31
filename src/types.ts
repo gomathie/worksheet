@@ -230,6 +230,7 @@ export interface ExpenseVoucher {
   voucher_number: string
   employee_id: string
   employee_name?: string
+  employee_code?: string | null
   department_id: string | null
   department_name?: string | null
   expense_date: string

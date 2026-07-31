@@ -340,6 +340,7 @@ export async function putWorkflow(request: Request, env: Env): Promise<Response>
 const SELECT_VOUCHER = `
   SELECT v.*,
          emp.name  AS employee_name,
+         emp.employee_code AS employee_code,
          d.name    AS department_name,
          c.name    AS category_name,
          recorder.name AS recorded_by_name,

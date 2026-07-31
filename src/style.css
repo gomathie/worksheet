@@ -129,10 +129,25 @@ table.data tr.totals td {
 
 /* ---------- print (monthly report) ---------- */
 
+/* Print-only documents (e.g. the approved expense voucher) are hidden on
+   screen and are the sole content of their printed page. */
+.print-only { display: none; }
+
 @media print {
   @page { size: landscape; margin: 12mm; }
   html { background: #fff; }
   .no-print { display: none !important; }
   .panel { border: none; padding: 0; }
   .print-block { break-inside: avoid; }
+
+  .print-only { display: block; }
+
+  /* The voucher is a standalone document: strip the app's page padding so it
+     sits against the printer margin, and keep the blocks from splitting. */
+  .voucher-doc { font-size: 12px; line-height: 1.45; }
+  .voucher-doc section,
+  .voucher-doc header,
+  .voucher-doc footer { break-inside: avoid; }
+  .voucher-doc table { break-inside: auto; }
+  .voucher-doc thead { display: table-header-group; }
 }

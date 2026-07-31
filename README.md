@@ -97,6 +97,13 @@ approval to payment.
   breakdowns by category and employee, and a missing-receipt count. Six reports — monthly,
   department, employee, missing receipts, outstanding reimbursements, approved vs rejected — each
   exportable as **CSV**, **Excel**, or **PDF** (print).
+- **Voucher PDF (after approval only):** an approved or recorded voucher has a **Download PDF**
+  button that prints a single-page A4 document — employee and code, department, dates, category,
+  payment method, amount, purpose, the missing-receipt reason and declaration where applicable,
+  who gave final approval and when, the full approval history, the external finance reference
+  once recorded, and signature lines. It is meant to be filed in the external accounting system
+  as supporting evidence, which is why it is withheld before approval: an unapproved voucher must
+  not be able to produce a document that reads as an approved receipt.
 - **Search & filter** by employee, department, date range, category, status, receipt availability,
   amount range, and free text over voucher number / description / vendor.
 - **Audit trail:** every create, edit (field-by-field, with previous and new value), submit,

@@ -80,3 +80,62 @@ self.addEventListener('fetch', (event) => {
     }),
   )
 })
+
+// ------------------------------------------------------------ push messages
+//
+// Pushes carry no payload by design (see server/push.ts): the worker wakes,
+// asks the API what is new, and shows that. Nothing about an expense passes
+// through the push service.
+
+self.addEventListener('push', (event) => {
+  event.waitUntil(
+    (async () => {
+      let title = 'OpenSignal Ledger'
+      let body = 'You have a new notification.'
+      let url = '/expenses'
+
+      try {
+        const res = await fetch('/api/notifications', { credentials: 'same-origin' })
+        if (res.ok) {
+          const all = await res.json()
+          const unread = all.filter((n) => !n.read_at)
+          if (unread.length === 0) return // already dealt with elsewhere
+          const latest = unread[0]
+          title = latest.title || title
+          body =
+            unread.length > 1
+              ? `${latest.body || ''}\n(+${unread.length - 1} more)`.trim()
+              : latest.body || body
+          if (latest.voucher_id) url = `/expenses/${latest.voucher_id}`
+        }
+      } catch {
+        // Offline or signed out: fall back to the generic message below.
+      }
+
+      await self.registration.showNotification(title, {
+        body,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: 'ledger-notification',
+        data: { url },
+      })
+    })(),
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = (event.notification.data && event.notification.data.url) || '/'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      // Reuse an open tab when there is one rather than piling up windows.
+      for (const client of list) {
+        if ('focus' in client) {
+          client.navigate(target)
+          return client.focus()
+        }
+      }
+      return self.clients.openWindow(target)
+    }),
+  )
+})

@@ -52,6 +52,11 @@ import {
 } from '../../server/notify'
 import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
 import {
+  removeSubscription,
+  saveSubscription,
+  vapidPublicKey,
+} from '../../server/push'
+import {
   createCategory,
   createDepartment,
   createVoucher,
@@ -59,7 +64,9 @@ import {
   deleteAttachment,
   deleteVoucher,
   downloadAttachment,
+  duplicateVoucher,
   expenseDashboard,
+  expensePack,
   expenseReport,
   getVoucher,
   getWorkflow,
@@ -2094,6 +2101,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return expenseDashboard(request, env)
   }
   if (path === '/api/expenses/reports' && method === 'GET') return expenseReport(request, env)
+  if (path === '/api/expenses/pack' && method === 'GET') return expensePack(request, env)
   if (path === '/api/expenses/queue' && method === 'GET') return listQueue(request, env)
 
   if (path === '/api/expenses' && method === 'GET') return listVouchers(request, env)
@@ -2111,6 +2119,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   const uploadMatch = /^\/api\/expenses\/([\w-]+)\/attachments$/.exec(path)
   if (uploadMatch && method === 'POST') return uploadAttachment(request, env, uploadMatch[1])
 
+  const dupMatch = /^\/api\/expenses\/([\w-]+)\/duplicate$/.exec(path)
+  if (dupMatch && method === 'POST') return duplicateVoucher(request, env, dupMatch[1])
+
   const submitMatch = /^\/api\/expenses\/([\w-]+)\/submit$/.exec(path)
   if (submitMatch && method === 'POST') return submitVoucher(request, env, submitMatch[1])
 
@@ -2122,6 +2133,29 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'GET') return getVoucher(request, env, voucherMatch[1])
     if (method === 'PATCH') return patchVoucher(request, env, voucherMatch[1])
     if (method === 'DELETE') return deleteVoucher(request, env, voucherMatch[1])
+  }
+
+  // ------------------------------------------------------------------- push
+
+  if (path === '/api/push/key' && method === 'GET') {
+    await requireUser(request, env)
+    return json({ key: await vapidPublicKey(env) })
+  }
+  if (path === '/api/push/subscribe' && method === 'POST') {
+    const user = await requireUser(request, env)
+    const body = await readJson<{ endpoint?: string }>(request)
+    const endpoint = (body.endpoint ?? '').trim()
+    if (!/^https:\/\//.test(endpoint)) {
+      throw new ApiError(400, 'A valid push endpoint is required')
+    }
+    await saveSubscription(env, user.id, endpoint)
+    return json({ ok: true })
+  }
+  if (path === '/api/push/unsubscribe' && method === 'POST') {
+    await requireUser(request, env)
+    const body = await readJson<{ endpoint?: string }>(request)
+    if (body.endpoint) await removeSubscription(env, body.endpoint)
+    return json({ ok: true })
   }
 
   // ---------------------------------------------------------- notifications

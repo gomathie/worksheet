@@ -7,6 +7,9 @@ import {
   statusAfterManagerApproval,
   statusAfterSubmit,
   isApprover,
+  daysBetween,
+  findPossibleDuplicates,
+  isPossibleDuplicate,
   summarize,
   validateAttachment,
   validateVoucher,
@@ -510,5 +513,71 @@ describe('sanitizeRightsJson', () => {
   it('survives malformed JSON rather than throwing', () => {
     expect(sanitizeRightsJson('not json', 'employee')).toBe('not json')
     expect(sanitizeRightsJson('', 'employee')).toBe('')
+  })
+})
+
+// ------------------------------------------------------- duplicate detection
+
+describe('duplicate detection', () => {
+  const base = {
+    id: 'a',
+    employee_id: 'e1',
+    category_id: 'c1',
+    expense_date: '2026-07-20',
+    amount: 40,
+    status: 'submitted' as const,
+  }
+  const other = (over: Partial<typeof base> & { id: string }) => ({ ...base, ...over })
+
+  it('measures whole days between dates', () => {
+    expect(daysBetween('2026-07-20', '2026-07-23')).toBe(3)
+    expect(daysBetween('2026-07-23', '2026-07-20')).toBe(3)
+    expect(daysBetween('2026-07-20', '2026-07-20')).toBe(0)
+    // across a month boundary
+    expect(daysBetween('2026-07-31', '2026-08-01')).toBe(1)
+  })
+
+  it('flags the same amount within the window', () => {
+    expect(isPossibleDuplicate(base, other({ id: 'b', expense_date: '2026-07-22' }))).toBe(true)
+  })
+
+  it('ignores claims outside the window', () => {
+    expect(isPossibleDuplicate(base, other({ id: 'b', expense_date: '2026-07-28' }))).toBe(false)
+  })
+
+  it('ignores a different amount', () => {
+    expect(isPossibleDuplicate(base, other({ id: 'b', amount: 41 }))).toBe(false)
+  })
+
+  it('ignores another employee', () => {
+    expect(isPossibleDuplicate(base, other({ id: 'b', employee_id: 'e2' }))).toBe(false)
+  })
+
+  it('never flags the voucher against itself', () => {
+    expect(isPossibleDuplicate(base, { ...base })).toBe(false)
+  })
+
+  it('never flags a rejected claim', () => {
+    // A rejected claim being refiled is the process working, not a duplicate.
+    expect(isPossibleDuplicate(base, other({ id: 'b', status: 'rejected' }))).toBe(false)
+    expect(
+      isPossibleDuplicate({ ...base, status: 'rejected' }, other({ id: 'b' })),
+    ).toBe(false)
+  })
+
+  it('tolerates floating-point amounts', () => {
+    expect(
+      isPossibleDuplicate({ ...base, amount: 0.1 + 0.2 }, other({ id: 'b', amount: 0.3 })),
+    ).toBe(true)
+  })
+
+  it('collects every match', () => {
+    const found = findPossibleDuplicates(base, [
+      other({ id: 'b' }),
+      other({ id: 'c', expense_date: '2026-07-21' }),
+      other({ id: 'd', amount: 99 }),
+      other({ id: 'e', status: 'rejected' }),
+    ])
+    expect(found.map((f) => f.id)).toEqual(['b', 'c'])
   })
 })

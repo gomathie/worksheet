@@ -11,6 +11,7 @@ import {
   type ExpenseAction,
   type PaymentMethod,
 } from '../../shared/expenses'
+import { usePortraitPrint } from '../usePortraitPrint'
 import type { ExpenseVoucherDetail } from '../types'
 
 const route = useRoute()
@@ -108,6 +109,26 @@ function reopenVoucher() {
   return decide('reopen', 'Voucher reopened.')
 }
 
+/** Copy this voucher into a new draft — recurring claims are common. */
+function duplicateVoucher() {
+  error.value = ''
+  busy.value = true
+  return api<ExpenseVoucherDetail>(`/api/expenses/${id.value}/duplicate`, {
+    method: 'POST',
+  })
+    .then((created) => router.push({ name: 'expense-edit', params: { id: created.id } }))
+    .catch((e) => {
+      error.value = e instanceof Error ? e.message : 'Failed to duplicate voucher'
+    })
+    .finally(() => {
+      busy.value = false
+    })
+}
+
+const canDuplicate = computed(
+  () => voucher.value !== null && (can('edit') || can('submit') || canDownloadPdf.value),
+)
+
 function submitVoucher() {
   return run(
     () => api(`/api/expenses/${id.value}/submit`, { method: 'POST' }),
@@ -186,24 +207,10 @@ const canDownloadPdf = computed(
   () => voucher.value?.status === 'approved' || voucher.value?.status === 'recorded',
 )
 
-/**
- * Print just the voucher document, portrait. The global print stylesheet is
- * landscape for the monthly report, so the orientation is swapped for the
- * duration of this print and restored afterwards.
- */
-function downloadPdf() {
-  const style = document.createElement('style')
-  style.textContent = '@page { size: A4 portrait; margin: 14mm; }'
-  document.head.appendChild(style)
-  const cleanup = () => {
-    style.remove()
-    window.removeEventListener('afterprint', cleanup)
-  }
-  window.addEventListener('afterprint', cleanup)
-  window.print()
-  // Safari never fires afterprint in some versions; belt and braces.
-  setTimeout(cleanup, 1000)
-}
+// Portrait for as long as this page is open, so Ctrl+P matches the button.
+usePortraitPrint()
+
+const downloadPdf = () => window.print()
 </script>
 
 <template>
@@ -233,6 +240,15 @@ function downloadPdf() {
           class="btn btn-sm"
           >Edit</RouterLink
         >
+        <button
+          v-if="canDuplicate"
+          class="btn btn-sm"
+          :disabled="busy"
+          title="Create a new draft with the same details"
+          @click="duplicateVoucher"
+        >
+          Duplicate
+        </button>
         <RouterLink :to="{ name: 'expenses' }" class="btn btn-sm">Back</RouterLink>
       </div>
     </div>
@@ -253,6 +269,41 @@ function downloadPdf() {
         approved. It cannot be issued as a receipt or filed as supporting
         evidence until an approval has been recorded against it.
       </p>
+    </div>
+
+    <!-- ============================================== possible duplicates -->
+    <div
+      v-if="voucher.possible_duplicates.length"
+      class="panel no-print mb-6 border-amber bg-amber-soft"
+    >
+      <h3 class="display mb-1 text-xl text-amber">
+        Possible duplicate{{ voucher.possible_duplicates.length > 1 ? 's' : '' }}
+      </h3>
+      <p class="mb-3 text-sm">
+        {{ voucher.employee_name }} has
+        {{ voucher.possible_duplicates.length }} other claim(s) for the same amount
+        within a few days of this one. Filed without receipts, these are worth a
+        second look before approving.
+      </p>
+      <ul class="space-y-1 text-sm">
+        <li
+          v-for="d in voucher.possible_duplicates"
+          :key="d.id"
+          class="flex flex-wrap items-center gap-2"
+        >
+          <RouterLink
+            :to="{ name: 'expense-detail', params: { id: d.id } }"
+            class="mono underline"
+            >{{ d.voucher_number }}</RouterLink
+          >
+          <span class="mono">{{ d.expense_date }}</span>
+          <span class="mono font-semibold">
+            {{ voucher.currency }}{{ d.amount.toFixed(2) }}
+          </span>
+          <span class="text-muted">{{ d.category_name ?? '—' }}</span>
+          <ExpenseStatusChip :status="d.status" />
+        </li>
+      </ul>
     </div>
 
     <!-- ========================================================== summary -->

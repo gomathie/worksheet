@@ -402,6 +402,57 @@ export function formatVoucherNumber(year: string | number, sequence: number): st
   return `${VOUCHER_PREFIX}-${year}-${String(sequence).padStart(4, '0')}`
 }
 
+// ------------------------------------------------------- duplicate detection
+
+/** How many days apart two claims can be and still look like the same one. */
+export const DUPLICATE_WINDOW_DAYS = 3
+
+export interface DuplicateCandidate {
+  id: string
+  employee_id: string
+  category_id?: string | null
+  expense_date: string
+  amount: number
+  status: ExpenseStatus
+}
+
+/** Whole days between two YYYY-MM-DD dates, ignoring time zones. */
+export function daysBetween(a: string, b: string): number {
+  const ms = Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10)) -
+    Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10))
+  return Math.abs(Math.round(ms / 86_400_000))
+}
+
+/**
+ * Would a reviewer reasonably suspect these are the same expense claimed
+ * twice? Because a voucher is filed without a receipt, this is the only
+ * mechanical check available — so it deliberately flags rather than blocks,
+ * and errs toward showing the approver something to look at.
+ *
+ * Rejected claims are never candidates: refusing one and refiling it properly
+ * is exactly what a reviewer asked for.
+ */
+export function isPossibleDuplicate(
+  a: DuplicateCandidate,
+  b: DuplicateCandidate,
+  windowDays = DUPLICATE_WINDOW_DAYS,
+): boolean {
+  if (a.id === b.id) return false
+  if (a.employee_id !== b.employee_id) return false
+  if (a.status === 'rejected' || b.status === 'rejected') return false
+  if (Math.round(a.amount * 100) !== Math.round(b.amount * 100)) return false
+  return daysBetween(a.expense_date, b.expense_date) <= windowDays
+}
+
+/** Every claim in `others` that looks like a repeat of `voucher`. */
+export function findPossibleDuplicates<T extends DuplicateCandidate>(
+  voucher: DuplicateCandidate,
+  others: T[],
+  windowDays = DUPLICATE_WINDOW_DAYS,
+): T[] {
+  return others.filter((o) => isPossibleDuplicate(voucher, o, windowDays))
+}
+
 // -------------------------------------------------------------- aggregation
 
 export interface VoucherLike {

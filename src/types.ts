@@ -225,6 +225,15 @@ export interface ExpenseCategory {
   position: number
 }
 
+export interface DuplicateMatch {
+  id: string
+  voucher_number: string
+  expense_date: string
+  amount: number
+  status: ExpenseStatus
+  category_name: string | null
+}
+
 export interface ExpenseVoucher {
   id: string
   voucher_number: string
@@ -256,6 +265,8 @@ export interface ExpenseVoucher {
   recorded_reference: string | null
   reopened_at: string | null
   attachment_count?: number
+  /** Near-identical claims by the same employee; 0 unless the API computed it. */
+  duplicate_count?: number
   created_at: string
   updated_at: string
 }
@@ -299,6 +310,7 @@ export interface ExpenseVoucherDetail extends ExpenseVoucher {
   approvals: ExpenseApproval[]
   attachments: ExpenseAttachment[]
   audit_trail: ExpenseAuditEntry[]
+  possible_duplicates: DuplicateMatch[]
   /** What the current user may do — computed server-side. */
   actions: ExpenseAction[]
 }

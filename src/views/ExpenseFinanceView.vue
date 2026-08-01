@@ -171,6 +171,12 @@ const exportXls = () =>
             >{{ v.voucher_number }}</RouterLink
           >
           <ExpenseStatusChip :status="v.status" />
+          <span
+            v-if="v.duplicate_count"
+            class="display rounded-full border border-amber px-2 py-0.5 text-xs tracking-wider text-amber"
+            :title="`${v.duplicate_count} similar claim(s) by the same employee`"
+            >Possible duplicate</span
+          >
         </div>
         <p class="mono text-2xl font-semibold">{{ v.currency }}{{ v.amount.toFixed(2) }}</p>
       </div>

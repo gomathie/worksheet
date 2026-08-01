@@ -22,6 +22,7 @@ import { scopeClause, visibleEmployeeIds } from './scope'
 import {
   DEFAULT_DECLARATION,
   PAYMENT_METHODS,
+  DUPLICATE_WINDOW_DAYS,
   formatVoucherNumber,
   allowedActions,
   statusAfter,
@@ -197,6 +198,77 @@ async function nextVoucherNumber(env: Env, year: string): Promise<string> {
   ])
   const seq = batch[1].results?.[0]?.next ?? 1
   return formatVoucherNumber(year, seq)
+}
+
+// ------------------------------------------------------- duplicate detection
+
+/**
+ * Claims by the same employee for the same amount within a few days of this
+ * one. Filed without receipts, a voucher has no external artefact to check
+ * against, so surfacing near-identical claims is the one mechanical control
+ * available. It informs the reviewer; it never blocks a submission.
+ */
+async function possibleDuplicates(
+  env: Env,
+  voucher: Pick<ExpenseVoucherRow, 'id' | 'employee_id' | 'amount' | 'expense_date'>,
+) {
+  const { results } = await env.DB.prepare(
+    `SELECT v.id, v.voucher_number, v.expense_date, v.amount, v.status,
+            c.name AS category_name
+       FROM expense_vouchers v
+       LEFT JOIN expense_categories c ON c.id = v.category_id
+      WHERE v.employee_id = ?
+        AND v.id <> ?
+        AND v.status <> 'rejected'
+        AND ROUND(v.amount, 2) = ROUND(?, 2)
+        AND ABS(julianday(v.expense_date) - julianday(?)) <= ?
+      ORDER BY v.expense_date DESC
+      LIMIT 10`,
+  )
+    .bind(
+      voucher.employee_id,
+      voucher.id,
+      voucher.amount,
+      voucher.expense_date,
+      DUPLICATE_WINDOW_DAYS,
+    )
+    .all()
+  return results
+}
+
+/** Duplicate counts for a whole queue, in one query rather than N. */
+async function duplicateCounts(
+  env: Env,
+  ids: string[],
+): Promise<Record<string, number>> {
+  if (ids.length === 0) return {}
+  const placeholders = ids.map(() => '?').join(',')
+  const { results } = await env.DB.prepare(
+    `SELECT v.id, COUNT(d.id) AS n
+       FROM expense_vouchers v
+       LEFT JOIN expense_vouchers d
+         ON d.employee_id = v.employee_id
+        AND d.id <> v.id
+        AND d.status <> 'rejected'
+        AND ROUND(d.amount, 2) = ROUND(v.amount, 2)
+        AND ABS(julianday(d.expense_date) - julianday(v.expense_date)) <= ?
+      WHERE v.id IN (${placeholders})
+      GROUP BY v.id`,
+  )
+    .bind(DUPLICATE_WINDOW_DAYS, ...ids)
+    .all<{ id: string; n: number }>()
+  const out: Record<string, number> = {}
+  for (const r of results) if (r.n > 0) out[r.id] = r.n
+  return out
+}
+
+/** Attach duplicate counts to a list of voucher rows. */
+async function withDuplicateCounts<T extends { id: string }>(
+  env: Env,
+  rows: T[],
+): Promise<(T & { duplicate_count: number })[]> {
+  const counts = await duplicateCounts(env, rows.map((r) => r.id))
+  return rows.map((r) => ({ ...r, duplicate_count: counts[r.id] ?? 0 }))
 }
 
 // ------------------------------------------------------------- departments
@@ -474,8 +546,8 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     sql += ' ORDER BY v.submission_date, v.created_at'
     const { results } = await env.DB.prepare(sql)
       .bind(...binds)
-      .all()
-    return json(results)
+      .all<{ id: string }>()
+    return json(await withDuplicateCounts(env, results))
   }
 
   if (which === 'finance') {
@@ -487,8 +559,8 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     const { results } = await env.DB.prepare(
       `${SELECT_VOUCHER} WHERE v.status IN ('finance_review', 'admin_approval', 'approved')
        ORDER BY v.status, v.submission_date, v.created_at`,
-    ).all()
-    return json(results)
+    ).all<{ id: string }>()
+    return json(await withDuplicateCounts(env, results))
   }
 
   if (which === 'approver') {
@@ -499,8 +571,8 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     const { results } = await env.DB.prepare(
       `${SELECT_VOUCHER} WHERE v.status IN ('admin_approval', 'finance_review')
        ORDER BY CASE v.status WHEN 'admin_approval' THEN 0 ELSE 1 END, v.submission_date, v.created_at`,
-    ).all()
-    return json(results)
+    ).all<{ id: string }>()
+    return json(await withDuplicateCounts(env, results))
   }
 
   throw new ApiError(400, "queue must be 'manager', 'finance', or 'approver'")
@@ -519,7 +591,7 @@ export async function getVoucher(request: Request, env: Env, id: string): Promis
     actor.is_admin || actor.is_owner || actor.is_manager_of_owner || rights.finance_expenses
   if (!visible) throw new ApiError(403, 'You cannot view this voucher')
 
-  const [approvals, attachments, trailRows] = await Promise.all([
+  const [approvals, attachments, trailRows, duplicates] = await Promise.all([
     env.DB.prepare(
       'SELECT a.*, e.name AS approver_name FROM expense_approvals a LEFT JOIN employees e ON e.id = a.approver_id WHERE a.voucher_id = ? ORDER BY a.approved_at',
     )
@@ -535,6 +607,7 @@ export async function getVoucher(request: Request, env: Env, id: string): Promis
     )
       .bind(id)
       .all<ExpenseAuditRow & { user_name: string | null }>(),
+    possibleDuplicates(env, voucher),
   ])
 
   return json({
@@ -542,6 +615,7 @@ export async function getVoucher(request: Request, env: Env, id: string): Promis
     approvals: approvals.results,
     attachments: attachments.results,
     audit_trail: trailRows.results,
+    possible_duplicates: duplicates,
     actions: allowedActions(
       { status: voucher.status as ExpenseStatus, reopened: Boolean(voucher.reopened_at) },
       actor,
@@ -779,6 +853,69 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
     return submitVoucher(request, env, id, user)
   }
   return json(await env.DB.prepare(`${SELECT_VOUCHER} WHERE v.id = ?`).bind(id).first())
+}
+
+/**
+ * Copy a voucher into a fresh draft. Recurring claims (the same fare each
+ * week) are the common case, so everything but the dates carries over.
+ *
+ * The declaration is deliberately NOT copied: accepting it is a statement
+ * about a specific expense, and re-accepting it is the whole point.
+ */
+export async function duplicateVoucher(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const source = await loadVoucher(env, id)
+  const actor = await buildActor(env, user, source)
+  if (!(actor.is_admin || (actor.is_owner && actor.can_create))) {
+    throw new ApiError(403, 'You cannot duplicate this voucher')
+  }
+
+  const newId = crypto.randomUUID()
+  const today_ = today(env)
+  const number = await nextVoucherNumber(env, today_.slice(0, 4))
+
+  await env.DB.prepare(
+    `INSERT INTO expense_vouchers
+       (id, voucher_number, employee_id, department_id, expense_date, submission_date,
+        category_id, description, vendor, amount, currency, payment_method,
+        receipt_available, missing_receipt_reason, declaration_accepted,
+        declaration_text, status, created_by)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, 'draft', ?)`,
+  )
+    .bind(
+      newId,
+      number,
+      source.employee_id,
+      source.department_id,
+      today_,
+      source.category_id,
+      source.description,
+      source.vendor,
+      source.amount,
+      source.currency,
+      source.payment_method,
+      source.missing_receipt_reason,
+      user.id,
+    )
+    .run()
+
+  await trail(env, newId, user.id, 'created', null, null, {
+    voucher_number: number,
+    duplicated_from: source.voucher_number,
+  })
+  await audit(env, user.id, 'duplicate_expense_voucher', newId, {
+    from: source.voucher_number,
+    to: number,
+  })
+
+  return json(
+    await env.DB.prepare(`${SELECT_VOUCHER} WHERE v.id = ?`).bind(newId).first(),
+    201,
+  )
 }
 
 export async function deleteVoucher(request: Request, env: Env, id: string): Promise<Response> {
@@ -1292,6 +1429,76 @@ export async function expenseDashboard(request: Request, env: Env): Promise<Resp
           ? 'team'
           : 'own',
     ...summarize(results as never, month),
+  })
+}
+
+// --------------------------------------------------------------- audit pack
+
+/**
+ * Every approved/recorded voucher in a month, each with the approval trail the
+ * printed document needs. Filed as one bundle with the month's accounts, so
+ * only settled vouchers are included — anything still in flight has no
+ * standing as evidence.
+ */
+export async function expensePack(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const rights = parseRights(user)
+  if (user.role !== 'admin' && !rights.finance_expenses && !rights.review_expenses) {
+    throw new ApiError(403, 'You do not have permission for the audit pack')
+  }
+  const url = new URL(request.url)
+  const month = url.searchParams.get('month') ?? today(env).slice(0, 7)
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new ApiError(400, 'month must be YYYY-MM')
+  }
+
+  const scope = await visibleEmployeeIds(env, user)
+  const clause = scopeClause(scope, 'v.employee_id')
+  const settings = await loadSettings(env)
+
+  const { results: vouchers } = await env.DB.prepare(
+    `${SELECT_VOUCHER} WHERE v.expense_date LIKE ?
+       AND v.status IN ('approved', 'recorded')${clause.sql}
+     ORDER BY v.expense_date, v.voucher_number`,
+  )
+    .bind(`${month}-%`, ...clause.binds)
+    .all<ExpenseVoucherRow & { employee_name: string }>()
+
+  // One query for every approval in the pack, rather than one per voucher.
+  const ids = vouchers.map((v) => v.id)
+  const approvalsByVoucher = new Map<string, unknown[]>()
+  if (ids.length) {
+    const { results } = await env.DB.prepare(
+      `SELECT a.*, e.name AS approver_name
+         FROM expense_approvals a
+         LEFT JOIN employees e ON e.id = a.approver_id
+        WHERE a.voucher_id IN (${ids.map(() => '?').join(',')})
+        ORDER BY a.approved_at`,
+    )
+      .bind(...ids)
+      .all<ExpenseApprovalRow & { approver_name: string | null }>()
+    for (const a of results) {
+      const list = approvalsByVoucher.get(a.voucher_id) ?? []
+      list.push(a)
+      approvalsByVoucher.set(a.voucher_id, list)
+    }
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  return json({
+    month,
+    currency: settings.currency,
+    generated_at: new Date().toISOString(),
+    total: round2(vouchers.reduce((s, v) => s + v.amount, 0)),
+    count: vouchers.length,
+    vouchers: vouchers.map((v) => ({
+      ...v,
+      approvals: approvalsByVoucher.get(v.id) ?? [],
+      attachments: [],
+      audit_trail: [],
+      possible_duplicates: [],
+      actions: [],
+    })),
   })
 }
 

@@ -7,6 +7,7 @@
 
 import type { Env, NotificationRow } from './env'
 import { notify as sendEmail } from './email'
+import { pushToEmployees } from './push'
 
 export interface NotifyInput {
   employeeId: string
@@ -46,6 +47,9 @@ export async function notifyUser(env: Env, input: NotifyInput): Promise<void> {
       // sendEmail already swallows SMTP errors and no-ops when disabled.
       await sendEmail(env, recipient.email, title, body)
     }
+
+    // Wake any device this person has subscribed; it fetches the detail itself.
+    if (!input.inAppOnly) await pushToEmployees(env, [employeeId])
   } catch (e) {
     console.error('notifyUser failed:', e)
   }

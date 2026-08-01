@@ -121,7 +121,15 @@ const share = (amount: number, buckets: { amount: number }[]) => {
   <div>
     <div class="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
       <h2 class="display text-2xl">Expense reporting</h2>
-      <MonthPicker v-model="month" />
+      <div class="flex flex-wrap items-center gap-3">
+        <MonthPicker v-model="month" />
+        <RouterLink
+          :to="{ name: 'expense-pack', query: { month } }"
+          class="btn btn-sm"
+          title="Every approved voucher for the month as one PDF"
+          >Audit pack</RouterLink
+        >
+      </div>
     </div>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>

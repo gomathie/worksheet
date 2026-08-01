@@ -3,6 +3,12 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
+import {
+  currentSubscription,
+  disablePush,
+  enablePush,
+  pushSupported,
+} from '../push'
 import type { AppNotification } from '../types'
 
 const auth = useAuthStore()
@@ -25,7 +31,40 @@ async function load() {
   }
 }
 
-onMounted(load)
+// --- push subscription state, shown at the foot of the panel
+const pushOn = ref(false)
+const pushBusy = ref(false)
+const pushNote = ref('')
+const canPush = pushSupported()
+
+async function refreshPushState() {
+  if (!canPush) return
+  pushOn.value = (await currentSubscription()) !== null
+}
+
+async function togglePush() {
+  pushBusy.value = true
+  pushNote.value = ''
+  try {
+    if (pushOn.value) {
+      await disablePush()
+      pushOn.value = false
+    } else {
+      const res = await enablePush()
+      pushOn.value = res.ok
+      if (!res.ok) pushNote.value = res.reason ?? 'Could not enable notifications.'
+    }
+  } catch (e) {
+    pushNote.value = e instanceof Error ? e.message : 'Could not change the setting.'
+  } finally {
+    pushBusy.value = false
+  }
+}
+
+onMounted(async () => {
+  await load()
+  await refreshPushState()
+})
 
 async function toggle() {
   open.value = !open.value
@@ -106,6 +145,23 @@ function ago(iso: string): string {
         <p v-if="n.body" class="mt-0.5 line-clamp-2 text-xs text-muted">{{ n.body }}</p>
         <p class="mono mt-1 text-[11px] text-muted">{{ ago(n.created_at) }}</p>
       </button>
+
+      <div v-if="canPush" class="border-t border-line px-3 py-2">
+        <button
+          class="btn btn-sm w-full"
+          :disabled="pushBusy"
+          @click.stop="togglePush"
+        >
+          {{
+            pushBusy
+              ? 'Working…'
+              : pushOn
+                ? 'Turn off push notifications'
+                : 'Turn on push notifications'
+          }}
+        </button>
+        <p v-if="pushNote" class="mt-2 text-xs text-muted">{{ pushNote }}</p>
+      </div>
     </div>
   </div>
 </template>

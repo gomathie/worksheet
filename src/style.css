@@ -150,4 +150,8 @@ table.data tr.totals td {
   .voucher-doc footer { break-inside: avoid; }
   .voucher-doc table { break-inside: auto; }
   .voucher-doc thead { display: table-header-group; }
+
+  /* Audit pack: cover sheet, then one voucher per sheet. */
+  .pack-page { break-after: page; margin-top: 0 !important; }
+  .pack-page:last-child { break-after: auto; }
 }

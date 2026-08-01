@@ -82,6 +82,12 @@ const router = createRouter({
       meta: { auth: true, right: 'finance_expenses' },
     },
     {
+      path: '/expenses/pack',
+      name: 'expense-pack',
+      component: () => import('../views/ExpensePackView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/expenses/reports',
       name: 'expense-reports',
       component: () => import('../views/ExpenseReportsView.vue'),

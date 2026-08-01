@@ -287,7 +287,6 @@ export interface VoucherInput {
   payment_method?: string
   category_id?: string | null
   vendor?: string | null
-  receipt_available?: boolean
   missing_receipt_reason?: string | null
   declaration_accepted?: boolean
 }
@@ -343,19 +342,21 @@ export function validateVoucher(
     issues.push({ field: 'payment_method', message: 'Choose a valid payment method' })
   }
 
-  // Missing-receipt declaration. Only enforced at submission time so a
-  // half-finished draft can still be saved.
-  if (forSubmission && !input.receipt_available) {
+  // A voucher exists precisely because no receipt was issued, so the reason
+  // and the declaration are always required — there is no "has receipt" case.
+  // Only enforced at submission time so a half-finished draft can still be
+  // saved.
+  if (forSubmission) {
     if (!(input.missing_receipt_reason ?? '').trim()) {
       issues.push({
         field: 'missing_receipt_reason',
-        message: 'A reason is required when no receipt is available',
+        message: 'A reason for the missing receipt is required',
       })
     }
     if (!input.declaration_accepted) {
       issues.push({
         field: 'declaration_accepted',
-        message: 'You must accept the declaration when no receipt is available',
+        message: 'You must accept the declaration before submitting',
       })
     }
   }
@@ -393,9 +394,12 @@ export function validateAttachment(
 
 // ------------------------------------------------------------- voucher number
 
-/** EV-2026-0007 */
+/** Prefix for every voucher number, e.g. COH-EXP-2026-0007. */
+export const VOUCHER_PREFIX = 'COH-EXP'
+
+/** COH-EXP-2026-0007 */
 export function formatVoucherNumber(year: string | number, sequence: number): string {
-  return `EV-${year}-${String(sequence).padStart(4, '0')}`
+  return `${VOUCHER_PREFIX}-${year}-${String(sequence).padStart(4, '0')}`
 }
 
 // -------------------------------------------------------------- aggregation
@@ -411,7 +415,6 @@ export interface VoucherLike {
   expense_date: string
   amount: number
   status: ExpenseStatus
-  receipt_available: number | boolean
 }
 
 export interface Bucket {
@@ -429,7 +432,6 @@ export interface ExpenseSummary {
   rejected: number
   recorded: number
   total_this_month: number
-  missing_receipt_count: number
   by_category: Bucket[]
   by_employee: Bucket[]
   by_department: Bucket[]
@@ -477,7 +479,6 @@ export function summarize(vouchers: VoucherLike[], month: string): ExpenseSummar
     rejected: counts.rejected,
     recorded: counts.recorded,
     total_this_month: round2(thisMonth.reduce((s, v) => s + v.amount, 0)),
-    missing_receipt_count: vouchers.filter((v) => !v.receipt_available).length,
     by_category: bucketBy(
       billable,
       (v) => v.category_id ?? 'uncategorized',

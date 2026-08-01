@@ -43,59 +43,6 @@ const generatedOn = new Date().toLocaleString('en-GB', {
   hour: '2-digit',
   minute: '2-digit',
 })
-
-// ------------------------------------------------------------ amount in words
-
-const ONES = [
-  '', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
-  'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
-  'seventeen', 'eighteen', 'nineteen',
-]
-const TENS = [
-  '', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty',
-  'ninety',
-]
-
-function underThousand(n: number): string {
-  if (n < 20) return ONES[n]
-  if (n < 100) {
-    const t = TENS[Math.floor(n / 10)]
-    return n % 10 ? `${t}-${ONES[n % 10]}` : t
-  }
-  const rest = n % 100
-  return `${ONES[Math.floor(n / 100)]} hundred${rest ? ` and ${underThousand(rest)}` : ''}`
-}
-
-function toWords(n: number): string {
-  if (n === 0) return 'zero'
-  const parts: string[] = []
-  const scales: [number, string][] = [
-    [1_000_000_000, 'billion'],
-    [1_000_000, 'million'],
-    [1_000, 'thousand'],
-  ]
-  let left = n
-  for (const [value, name] of scales) {
-    if (left >= value) {
-      parts.push(`${underThousand(Math.floor(left / value))} ${name}`)
-      left %= value
-    }
-  }
-  if (left) parts.push(underThousand(left))
-  return parts.join(' ')
-}
-
-/**
- * Cheque-style wording, e.g. "One hundred and forty-eight and 50/100 only".
- * Deliberately currency-agnostic — the app stores a symbol, not a currency
- * name, so spelling out "cedis" or "dollars" here would sometimes be wrong.
- */
-const amountInWords = computed(() => {
-  const whole = Math.floor(props.voucher.amount)
-  const fraction = Math.round((props.voucher.amount - whole) * 100)
-  const words = `${toWords(whole)} and ${String(fraction).padStart(2, '0')}/100 only`
-  return words.charAt(0).toUpperCase() + words.slice(1)
-})
 </script>
 
 <template>
@@ -127,16 +74,6 @@ const amountInWords = computed(() => {
       <!-- ------------------------------------------- receipt-style leaders -->
       <section class="mt-5 space-y-2.5 text-[13px]">
         <div class="flex items-baseline gap-2">
-          <span class="shrink-0 text-muted">Paid to</span>
-          <span class="min-w-0 flex-1 border-b border-dotted border-ink/40" />
-          <span class="shrink-0 font-medium">
-            {{ voucher.employee_name
-            }}<template v-if="voucher.employee_code">
-              ({{ voucher.employee_code }})</template
-            >
-          </span>
-        </div>
-        <div class="flex items-baseline gap-2">
           <span class="shrink-0 text-muted">Department</span>
           <span class="min-w-0 flex-1 border-b border-dotted border-ink/40" />
           <span class="shrink-0">{{ voucher.department_name ?? '—' }}</span>
@@ -165,21 +102,11 @@ const amountInWords = computed(() => {
 
       <!-- ----------------------------------------------------------- amount -->
       <section class="mt-5">
-        <div class="flex items-stretch border-2 border-ink">
-          <div class="flex-1 px-4 py-3">
-            <p class="text-[10px] tracking-[0.14em] text-muted uppercase">
-              Amount in words
-            </p>
-            <p class="mt-0.5 text-[13px] leading-snug">{{ amountInWords }}</p>
-          </div>
-          <div
-            class="flex min-w-[34%] flex-col justify-center border-l-2 border-ink bg-teal-soft px-4 py-3 text-right"
-          >
-            <p class="text-[10px] tracking-[0.14em] text-muted uppercase">
-              Total claimed
-            </p>
-            <p class="mono text-3xl leading-none font-semibold">{{ money }}</p>
-          </div>
+        <div
+          class="flex items-center justify-between border-2 border-ink bg-teal-soft px-4 py-3"
+        >
+          <span class="display text-lg">Total claimed</span>
+          <span class="mono text-3xl leading-none font-semibold">{{ money }}</span>
         </div>
       </section>
 
@@ -193,34 +120,25 @@ const amountInWords = computed(() => {
         </p>
       </section>
 
-      <!-- ------------------------------------------------ receipt/declaration -->
+      <!-- ------------------------------------------------------- declaration -->
+      <!-- A voucher is raised precisely because no receipt was issued, so the
+           declaration is what gives this document its standing. Never optional. -->
       <section class="mt-4 border border-line p-3">
         <p class="text-[10px] tracking-[0.14em] text-muted uppercase">
-          Supporting receipt
+          Why no receipt was issued
         </p>
-        <p v-if="voucher.receipt_available" class="mt-1 text-[13px]">
-          Original receipt held on file<template v-if="voucher.attachment_count">
-            — {{ voucher.attachment_count }} file(s) attached to this voucher</template
+        <p class="mt-1 text-[13px]">{{ voucher.missing_receipt_reason ?? '—' }}</p>
+        <p class="mt-2 text-[10px] tracking-[0.14em] text-muted uppercase">
+          Employee declaration
+        </p>
+        <p class="text-[12px] leading-snug italic">
+          {{ voucher.declaration_text ?? '—' }}
+        </p>
+        <p class="mt-1 text-[12px]">
+          Accepted by <span class="font-medium">{{ voucher.employee_name }}</span>
+          on <span class="mono">{{ voucher.submission_date ?? '—' }}</span
           >.
         </p>
-        <template v-else>
-          <p class="mt-1 text-[13px] font-medium">
-            No receipt available — issued on the declaration below.
-          </p>
-          <p class="mt-2 text-[10px] tracking-[0.14em] text-muted uppercase">Reason</p>
-          <p class="text-[13px]">{{ voucher.missing_receipt_reason ?? '—' }}</p>
-          <p class="mt-2 text-[10px] tracking-[0.14em] text-muted uppercase">
-            Employee declaration
-          </p>
-          <p class="text-[12px] leading-snug italic">
-            {{ voucher.declaration_text ?? '—' }}
-          </p>
-          <p class="mt-1 text-[12px]">
-            Accepted by <span class="font-medium">{{ voucher.employee_name }}</span>
-            on <span class="mono">{{ voucher.submission_date ?? '—' }}</span
-            >.
-          </p>
-        </template>
       </section>
 
       <!-- --------------------------------------------------- approval + stamp -->
@@ -253,21 +171,22 @@ const amountInWords = computed(() => {
 
         <!-- The app's stamp motif, doubling as the "this is genuine" mark. -->
         <div
-          class="display flex h-24 w-24 shrink-0 -rotate-12 flex-col items-center justify-center rounded-full border-2 border-teal text-center text-teal"
+          class="display flex h-24 w-24 shrink-0 -rotate-12 flex-col items-center justify-center rounded-full border-2 border-teal px-2 text-center text-teal"
         >
           <span class="text-[13px] leading-none tracking-[0.1em]">APPROVED</span>
           <span class="mono mt-1 text-[9px] leading-none">
             {{ day(finalApproval?.approved_at ?? null) }}
           </span>
-          <span class="mt-1 text-[8px] leading-none tracking-[0.08em]">
+          <!-- Sized to keep the longest voucher number inside the circle. -->
+          <span class="mt-1 text-[6px] leading-none tracking-[0.04em]">
             {{ voucher.voucher_number }}
           </span>
         </div>
       </section>
 
       <!-- -------------------------------------------------------- signatures -->
-      <section class="mt-8 grid grid-cols-3 gap-6 text-[10px]">
-        <div v-for="label in ['Initiator', 'Approved by', 'Finance']" :key="label">
+      <section class="mt-8 grid grid-cols-2 gap-8 text-[10px]">
+        <div v-for="label in ['Initiator', 'Approved by']" :key="label">
           <div class="h-8 border-b border-ink" />
           <p class="mt-1 tracking-[0.12em] text-muted uppercase">{{ label }}</p>
         </div>

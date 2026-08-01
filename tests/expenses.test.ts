@@ -64,13 +64,16 @@ const admin: ExpenseActor = {
 // An administrator who has also been granted approval authority.
 const approver: ExpenseActor = { ...admin, can_approve: true }
 
+// A voucher always represents an expense with no receipt, so a valid one
+// always carries the reason and the accepted declaration.
 const validVoucher = {
   expense_date: '2026-07-20',
   description: 'Taxi to the client site',
   amount: 40,
   currency: '$',
   payment_method: 'cash',
-  receipt_available: true,
+  missing_receipt_reason: 'Trotro fare, no receipts issued',
+  declaration_accepted: true,
 }
 
 describe('statusAfterSubmit', () => {
@@ -257,32 +260,28 @@ describe('validateVoucher', () => {
     expect(issues.map((i) => i.field)).toContain('payment_method')
   })
 
-  it('demands a reason and a declaration when no receipt exists', () => {
+  it('always demands a reason for the missing receipt', () => {
     const issues = validateVoucher(
-      { ...validVoucher, receipt_available: false },
+      { ...validVoucher, missing_receipt_reason: '   ' },
       TODAY,
     )
-    const fields = issues.map((i) => i.field)
-    expect(fields).toContain('missing_receipt_reason')
-    expect(fields).toContain('declaration_accepted')
+    expect(issues.map((i) => i.field)).toContain('missing_receipt_reason')
   })
 
-  it('passes once the reason and declaration are supplied', () => {
-    expect(
-      validateVoucher(
-        {
-          ...validVoucher,
-          receipt_available: false,
-          missing_receipt_reason: 'Trotro fare, no receipts issued',
-          declaration_accepted: true,
-        },
-        TODAY,
-      ),
-    ).toEqual([])
+  it('always demands the declaration', () => {
+    const issues = validateVoucher(
+      { ...validVoucher, declaration_accepted: false },
+      TODAY,
+    )
+    expect(issues.map((i) => i.field)).toContain('declaration_accepted')
   })
 
   it('lets an incomplete draft save but not submit', () => {
-    const draft = { ...validVoucher, receipt_available: false }
+    const draft = {
+      ...validVoucher,
+      missing_receipt_reason: null,
+      declaration_accepted: false,
+    }
     expect(validateVoucher(draft, TODAY, false)).toEqual([])
     expect(validateVoucher(draft, TODAY, true).length).toBeGreaterThan(0)
   })
@@ -309,9 +308,9 @@ describe('validateAttachment', () => {
 })
 
 describe('formatVoucherNumber', () => {
-  it('zero-pads the sequence to four digits', () => {
-    expect(formatVoucherNumber('2026', 7)).toBe('EV-2026-0007')
-    expect(formatVoucherNumber(2026, 1234)).toBe('EV-2026-1234')
+  it('zero-pads the sequence to four digits behind the COH-EXP prefix', () => {
+    expect(formatVoucherNumber('2026', 7)).toBe('COH-EXP-2026-0007')
+    expect(formatVoucherNumber(2026, 1234)).toBe('COH-EXP-2026-1234')
   })
 })
 
@@ -328,7 +327,6 @@ describe('summarize', () => {
       expense_date: '2026-07-02',
       amount: 100,
       status: 'recorded',
-      receipt_available: 1,
     },
     {
       id: '2',
@@ -341,7 +339,6 @@ describe('summarize', () => {
       expense_date: '2026-07-10',
       amount: 50,
       status: 'submitted',
-      receipt_available: 0,
     },
     {
       id: '3',
@@ -354,7 +351,6 @@ describe('summarize', () => {
       expense_date: '2026-07-15',
       amount: 999,
       status: 'rejected',
-      receipt_available: 0,
     },
     {
       id: '4',
@@ -367,7 +363,6 @@ describe('summarize', () => {
       expense_date: '2026-06-11',
       amount: 25,
       status: 'approved',
-      receipt_available: 1,
     },
   ]
 
@@ -389,10 +384,6 @@ describe('summarize', () => {
     expect(s.total_this_month).toBe(150)
     // All months, minus rejected: 100 + 50 + 25
     expect(s.total_amount).toBe(175)
-  })
-
-  it('counts every voucher filed without a receipt', () => {
-    expect(s.missing_receipt_count).toBe(2)
   })
 
   it('buckets by category, employee, and department, largest first', () => {

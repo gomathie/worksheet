@@ -225,11 +225,6 @@ const currency = computed(
               >{{ v.voucher_number }}</RouterLink
             >
             <ExpenseStatusChip :status="v.status" />
-            <span
-              v-if="!v.receipt_available"
-              class="display rounded-full border border-amber px-2 py-0.5 text-xs tracking-wider text-amber"
-              >No receipt</span
-            >
           </div>
           <p class="mono text-2xl font-semibold">
             {{ v.currency }}{{ v.amount.toFixed(2) }}
@@ -258,7 +253,6 @@ const currency = computed(
         <p class="mt-3 text-sm">{{ v.description }}</p>
 
         <div
-          v-if="!v.receipt_available"
           class="mt-3 rounded-lg border border-amber bg-amber-soft p-3 text-sm"
         >
           <p class="field-label">Reason no receipt is available</p>
@@ -316,11 +310,6 @@ const currency = computed(
             >{{ v.voucher_number }}</RouterLink
           >
           <ExpenseStatusChip :status="v.status" />
-          <span
-            v-if="!v.receipt_available"
-            class="display rounded-full border border-amber px-2 py-0.5 text-xs tracking-wider text-amber"
-            >No receipt</span
-          >
         </div>
         <p class="mono text-2xl font-semibold">{{ v.currency }}{{ v.amount.toFixed(2) }}</p>
       </div>
@@ -350,7 +339,6 @@ const currency = computed(
       </div>
 
       <div
-        v-if="!v.receipt_available"
         class="mt-3 rounded-lg border border-amber bg-amber-soft p-3 text-sm"
       >
         <p class="field-label">Reason no receipt is available</p>

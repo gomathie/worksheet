@@ -64,15 +64,18 @@ allowance** with used/remaining balance.
 Employees declare business expenses — including those with **no receipt** — and route them through
 approval to payment.
 
-- **Filing:** voucher number is auto-generated (`EV-2026-0007`); fields are employee, department,
+- **Filing:** voucher number is auto-generated (`COH-EXP-2026-0007`); fields are employee, department,
   date of expense, date submitted, category, purpose, vendor (optional), amount, currency, payment
   method (Cash / Mobile Money / Bank / Card / Other), and whether a receipt exists. Vouchers can be
   saved as a **draft** and submitted later.
-- **No receipt:** the form reveals a **reason** box and the **employee declaration**, which must be
-  explicitly accepted before submission. The accepted wording is snapshotted onto the voucher, so
-  later edits to the template can't rewrite what somebody agreed to.
-- **Receipts:** file upload (PDF / JPG / JPEG / PNG, max 10 MB) is built but **currently switched
-  off** — see *Receipt attachments* below to enable it.
+- **The declaration is the point.** A voucher exists *because* no receipt was issued — where a
+  receipt exists there is nothing to declare and no voucher is needed. So the **reason** and the
+  **employee declaration** are always required before submission; there is no "do you have a
+  receipt?" question. The accepted wording is snapshotted onto the voucher, so later edits to the
+  template can't rewrite what somebody agreed to.
+- **Supporting documents:** optional file upload (PDF / JPG / JPEG / PNG, max 10 MB) for anything
+  that corroborates the claim. Built but **currently switched off** — see *Receipt attachments*
+  below to enable it.
 - **Workflow:** Draft → Submitted → Manager Review → Finance Review → Awaiting Admin Approval →
   Approved → Recorded, with Rejected reachable from any review stage and a *request more
   information* path back to draft. Every decision records approver, date, decision, and comments.
@@ -94,19 +97,18 @@ approval to payment.
 - **Which steps apply** is configurable in Settings (manager and/or finance can each be switched
   off). Employees with no manager assigned skip the manager step, so nothing waits in an unowned queue.
 - **Dashboard & reports:** pending / approved / rejected / recorded counts, month-to-date total,
-  breakdowns by category and employee, and a missing-receipt count. Six reports — monthly,
-  department, employee, missing receipts, outstanding reimbursements, approved vs rejected — each
-  exportable as **CSV**, **Excel**, or **PDF** (print).
+  and breakdowns by category and employee. Five reports — monthly, department, employee,
+  outstanding reimbursements, approved vs rejected — each exportable as **CSV**, **Excel**, or
+  **PDF** (print).
 - **Voucher PDF (after approval only):** an approved or recorded voucher has a **Download PDF**
   button that prints a single-page A4 **receipt** — laid out as a payment voucher with dotted
   leaders, the amount both in figures and spelled out cheque-style, the missing-receipt reason and
-  declaration where applicable, an APPROVED stamp carrying the approver, date and voucher number,
-  the external finance reference once recorded, and signature lines for initiator / approver /
-  finance. It is meant to be filed in the external accounting system as supporting evidence, which
+  declaration, an APPROVED stamp carrying the approver, date and voucher number,
+  the external finance reference once recorded, and signature lines for initiator and approver. It is meant to be filed in the external accounting system as supporting evidence, which
   is why it is withheld before approval: an unapproved voucher must not be able to produce a
   document that reads as an approved receipt.
-- **Search & filter** by employee, department, date range, category, status, receipt availability,
-  amount range, and free text over voucher number / description / vendor.
+- **Search & filter** by employee, department, date range, category, status, amount range, and
+  free text over voucher number / description / vendor.
 - **Audit trail:** every create, edit (field-by-field, with previous and new value), submit,
   decision, payment, and attachment change. The table is **append-only, enforced by SQLite
   triggers** — `UPDATE` and `DELETE` are rejected by the database, not merely avoided in code.

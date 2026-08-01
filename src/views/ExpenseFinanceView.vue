@@ -88,7 +88,6 @@ function exportRows() {
       'Description',
       'Vendor',
       'Payment method',
-      'Receipt',
       'Amount',
       'Currency',
       'Status',
@@ -103,7 +102,6 @@ function exportRows() {
       v.description,
       v.vendor ?? '',
       methodLabel(v.payment_method),
-      v.receipt_available ? 'Yes' : 'Declared',
       v.amount,
       v.currency,
       v.status,
@@ -134,7 +132,7 @@ const exportXls = () =>
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
-    <div class="mb-6 grid grid-cols-3 gap-4">
+    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
       <div class="panel">
         <p class="field-label">To send for approval</p>
         <p class="mono text-3xl font-semibold">{{ toEscalate.length }}</p>
@@ -173,11 +171,6 @@ const exportXls = () =>
             >{{ v.voucher_number }}</RouterLink
           >
           <ExpenseStatusChip :status="v.status" />
-          <span
-            v-if="!v.receipt_available"
-            class="display rounded-full border border-amber px-2 py-0.5 text-xs tracking-wider text-amber"
-            >No receipt</span
-          >
         </div>
         <p class="mono text-2xl font-semibold">{{ v.currency }}{{ v.amount.toFixed(2) }}</p>
       </div>

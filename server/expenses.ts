@@ -426,11 +426,6 @@ export async function listVouchers(request: Request, env: Env): Promise<Response
     sql += ' AND v.expense_date <= ?'
     binds.push(to)
   }
-  const receipt = p.get('receipt_available')
-  if (receipt === '0' || receipt === '1') {
-    sql += ' AND v.receipt_available = ?'
-    binds.push(Number(receipt))
-  }
   const min = p.get('amount_min')
   if (min !== null && min !== '' && Number.isFinite(Number(min))) {
     sql += ' AND v.amount >= ?'
@@ -566,7 +561,6 @@ interface VoucherBody {
   amount?: number
   currency?: string
   payment_method?: string
-  receipt_available?: boolean
   missing_receipt_reason?: string | null
   declaration_accepted?: boolean
   /** Save and submit in one step. */
@@ -582,7 +576,9 @@ function normalizeBody(body: VoucherBody, currency: string) {
     amount: Math.round(Number(body.amount ?? 0) * 100) / 100,
     currency: (body.currency ?? currency).toString().trim().slice(0, 4) || currency,
     payment_method: (body.payment_method ?? '') as PaymentMethod,
-    receipt_available: body.receipt_available ? 1 : 0,
+    // A voucher is by definition raised when no receipt exists; the column
+    // is retained for schema compatibility and always stored as 0.
+    receipt_available: 0,
     missing_receipt_reason:
       (body.missing_receipt_reason ?? '')?.toString().trim().slice(0, 500) || null,
     declaration_accepted: body.declaration_accepted ? 1 : 0,
@@ -611,7 +607,7 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
   const fields = normalizeBody(body, settings.currency)
   const wantsSubmit = Boolean(body.submit)
   const issues = validateVoucher(
-    { ...fields, receipt_available: Boolean(fields.receipt_available), declaration_accepted: Boolean(fields.declaration_accepted) },
+    { ...fields, declaration_accepted: Boolean(fields.declaration_accepted) },
     today(env),
     wantsSubmit,
   )
@@ -701,10 +697,6 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
     amount: body.amount !== undefined ? body.amount : voucher.amount,
     currency: body.currency ?? voucher.currency,
     payment_method: body.payment_method ?? voucher.payment_method,
-    receipt_available:
-      body.receipt_available !== undefined
-        ? body.receipt_available
-        : Boolean(voucher.receipt_available),
     missing_receipt_reason:
       body.missing_receipt_reason !== undefined
         ? body.missing_receipt_reason
@@ -719,7 +711,6 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
   const issues = validateVoucher(
     {
       ...fields,
-      receipt_available: Boolean(fields.receipt_available),
       declaration_accepted: Boolean(fields.declaration_accepted),
     },
     today(env),
@@ -776,7 +767,6 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       amount: voucher.amount,
       currency: voucher.currency,
       payment_method: voucher.payment_method,
-      receipt_available: voucher.receipt_available,
       missing_receipt_reason: voucher.missing_receipt_reason,
       declaration_accepted: voucher.declaration_accepted,
       department_id: voucher.department_id,
@@ -878,7 +868,6 @@ export async function submitVoucher(
       amount: voucher.amount,
       currency: voucher.currency,
       payment_method: voucher.payment_method,
-      receipt_available: Boolean(voucher.receipt_available),
       missing_receipt_reason: voucher.missing_receipt_reason,
       declaration_accepted: Boolean(voucher.declaration_accepted),
     },
@@ -1178,13 +1167,6 @@ export async function uploadAttachment(
     .bind(attachmentId, id, fileName, key, file.type || null, file.size, user.id)
     .run()
 
-  // A receipt on file means the missing-receipt declaration no longer applies.
-  await env.DB.prepare(
-    "UPDATE expense_vouchers SET receipt_available = 1, updated_at = datetime('now') WHERE id = ?",
-  )
-    .bind(id)
-    .run()
-
   await trail(env, id, user.id, 'attachment_added', 'attachment', null, fileName)
   await audit(env, user.id, 'add_expense_attachment', id, { file_name: fileName })
 
@@ -1260,19 +1242,6 @@ export async function deleteAttachment(
   }
   await env.DB.prepare('DELETE FROM expense_attachments WHERE id = ?').bind(attachmentId).run()
 
-  const remaining = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM expense_attachments WHERE voucher_id = ?',
-  )
-    .bind(voucherId)
-    .first<{ n: number }>()
-  if ((remaining?.n ?? 0) === 0) {
-    await env.DB.prepare(
-      "UPDATE expense_vouchers SET receipt_available = 0, updated_at = datetime('now') WHERE id = ?",
-    )
-      .bind(voucherId)
-      .run()
-  }
-
   await trail(env, voucherId, user.id, 'attachment_removed', 'attachment', row.file_name, null)
   await audit(env, user.id, 'remove_expense_attachment', voucherId, {
     file_name: row.file_name,
@@ -1302,7 +1271,7 @@ export async function expenseDashboard(request: Request, env: Env): Promise<Resp
   const { results } = await env.DB.prepare(
     `SELECT v.id, v.employee_id, emp.name AS employee_name, v.department_id,
             d.name AS department_name, v.category_id, c.name AS category_name,
-            v.expense_date, v.amount, v.status, v.receipt_available
+            v.expense_date, v.amount, v.status
      FROM expense_vouchers v
      JOIN employees emp ON emp.id = v.employee_id
      LEFT JOIN departments d ON d.id = v.department_id
@@ -1332,7 +1301,6 @@ const REPORT_TYPES = [
   'monthly',
   'department',
   'employee',
-  'missing_receipt',
   'outstanding',
   'approved_vs_rejected',
 ] as const
@@ -1376,7 +1344,7 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
                     SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
-                    SUM(CASE WHEN v.receipt_available = 0 THEN 1 ELSE 0 END) AS missing_receipts
+                    SUM(CASE WHEN v.status = 'rejected' THEN 1 ELSE 0 END) AS rejected
              ${base} GROUP BY month ORDER BY month`
       break
     case 'department':
@@ -1392,17 +1360,8 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
                     SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
-                    SUM(CASE WHEN v.receipt_available = 0 THEN 1 ELSE 0 END) AS missing_receipts
+                    SUM(CASE WHEN v.status = 'rejected' THEN 1 ELSE 0 END) AS rejected
              ${base} GROUP BY emp.id ORDER BY amount DESC`
-      break
-    case 'missing_receipt':
-      sql = `SELECT v.voucher_number, v.expense_date, emp.name AS employee,
-                    COALESCE(d.name, '—') AS department,
-                    COALESCE(c.name, '—') AS category,
-                    v.amount, v.status, v.missing_receipt_reason,
-                    v.declaration_accepted
-             ${base} AND v.receipt_available = 0
-             ORDER BY v.expense_date DESC`
       break
     case 'outstanding':
       // Everything still in flight or approved but not yet recorded.

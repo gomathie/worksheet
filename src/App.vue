@@ -20,6 +20,8 @@ const canApproveExpenses = computed(
 )
 
 const menuOpen = ref(false)
+// Mobile nav disclosure; irrelevant at md and above, where the row is shown.
+const navOpen = ref(false)
 
 async function signOut() {
   menuOpen.value = false
@@ -168,7 +170,23 @@ async function changePassword() {
       </form>
     </div>
 
-    <nav v-if="auth.user" class="no-print my-5 flex flex-wrap gap-1.5">
+    <nav v-if="auth.user" class="no-print my-5">
+      <!-- Thirteen destinations wrap to seven rows on a phone, burying the
+           page content. Collapse to a toggle below md; unchanged above it. -->
+      <button
+        class="btn flex w-full items-center justify-between md:hidden"
+        :aria-expanded="navOpen"
+        @click="navOpen = !navOpen"
+      >
+        <span>Menu</span>
+        <span class="text-muted">{{ navOpen ? '\u25b4' : '\u25be' }}</span>
+      </button>
+
+      <div
+        class="gap-1.5 md:flex md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+        :class="navOpen ? 'mt-2 flex flex-col' : 'hidden'"
+        @click="navOpen = false"
+      >
       <RouterLink :to="{ name: 'entries' }" class="btn" active-class="btn-solid"
         >Time Entry</RouterLink
       >
@@ -242,6 +260,7 @@ async function changePassword() {
           >Activity</RouterLink
         >
       </template>
+      </div>
     </nav>
 
     <RouterView />

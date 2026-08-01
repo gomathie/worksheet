@@ -319,7 +319,7 @@ function sendTest() {
         Remuneration = points × value per point, plus bonuses and approved
         reimbursements.
       </p>
-      <form class="grid grid-cols-2 gap-4" @submit.prevent="saveSettings">
+      <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="saveSettings">
         <div>
           <label class="field-label" for="pv">Value per point</label>
           <input

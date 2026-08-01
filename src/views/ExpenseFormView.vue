@@ -22,10 +22,6 @@ const router = useRouter()
 
 const editingId = computed(() => (route.params.id as string | undefined) ?? null)
 
-// No receipt-storage bucket bound means "receipt available" is a declaration
-// that a paper copy exists, not a promise of an uploaded file.
-const attachmentsEnabled = computed(() => auth.user?.attachments_enabled ?? false)
-
 const departments = ref<Department[]>([])
 const categories = ref<ExpenseCategory[]>([])
 const employees = ref<Employee[]>([])
@@ -44,7 +40,6 @@ const form = ref({
   amount: '' as string | number,
   currency: '$',
   payment_method: 'cash',
-  receipt_available: false,
   missing_receipt_reason: '',
   declaration_accepted: false,
 })
@@ -59,7 +54,6 @@ const issues = computed(() =>
       amount: Number(form.value.amount),
       currency: form.value.currency,
       payment_method: form.value.payment_method,
-      receipt_available: form.value.receipt_available,
       missing_receipt_reason: form.value.missing_receipt_reason,
       declaration_accepted: form.value.declaration_accepted,
     },
@@ -100,7 +94,6 @@ onMounted(async () => {
         amount: v.amount,
         currency: v.currency,
         payment_method: v.payment_method,
-        receipt_available: Boolean(v.receipt_available),
         missing_receipt_reason: v.missing_receipt_reason ?? '',
         declaration_accepted: Boolean(v.declaration_accepted),
       }
@@ -125,7 +118,6 @@ function payload(submit: boolean) {
     amount: Number(form.value.amount),
     currency: form.value.currency,
     payment_method: form.value.payment_method,
-    receipt_available: form.value.receipt_available,
     missing_receipt_reason: form.value.missing_receipt_reason || null,
     declaration_accepted: form.value.declaration_accepted,
     submit,
@@ -285,26 +277,14 @@ async function save(submit: boolean) {
 
       <!-- ==================================================== receipt block -->
       <fieldset class="mt-5 border-t border-line pt-4">
-        <legend class="field-label">Receipt</legend>
-        <label class="flex items-center gap-2 text-sm">
-          <input v-model="form.receipt_available" type="checkbox" />
-          A receipt is available for this expense
-        </label>
-        <p class="mt-1 text-xs text-muted">
-          <template v-if="!attachmentsEnabled">
-            Tick this if you hold a physical or emailed receipt — keep it for the
-            finance team. File uploads are not enabled on this deployment.
-          </template>
-          <template v-else-if="editingId">
-            Attach the receipt file on the voucher page after saving.
-          </template>
-          <template v-else>
-            Save the voucher first, then attach the receipt file on its page.
-          </template>
+        <legend class="field-label">Declaration</legend>
+        <p class="mb-3 text-xs text-muted">
+          An expense voucher exists because no receipt was issued for the
+          transaction. Where you do hold a receipt, claim it through the normal
+          process instead — a voucher is not needed.
         </p>
 
-        <!-- Shown only when no receipt exists, per the declaration rules. -->
-        <div v-if="!form.receipt_available" class="mt-4 rounded-lg border border-amber bg-amber-soft p-4">
+        <div class="rounded-lg border border-amber bg-amber-soft p-4">
           <div>
             <label class="field-label" for="v-reason">Reason for missing receipt</label>
             <textarea

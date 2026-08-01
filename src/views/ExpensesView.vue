@@ -36,7 +36,6 @@ const blankFilters = () => ({
   department_id: '',
   category_id: '',
   status: '',
-  receipt_available: '',
   from: '',
   to: '',
   amount_min: '',
@@ -97,7 +96,6 @@ watch(
     filters.value.department_id,
     filters.value.category_id,
     filters.value.status,
-    filters.value.receipt_available,
     filters.value.from,
     filters.value.to,
     filters.value.amount_min,
@@ -117,7 +115,6 @@ const totals = computed(() => {
   return {
     count: vouchers.value.length,
     amount: billable.reduce((s, v) => s + v.amount, 0),
-    missing: vouchers.value.filter((v) => !v.receipt_available).length,
   }
 })
 
@@ -140,7 +137,6 @@ function exportCsv() {
       'Amount',
       'Currency',
       'Payment method',
-      'Receipt',
       'Status',
     ],
     ...vouchers.value.map((v) => [
@@ -154,7 +150,6 @@ function exportCsv() {
       v.amount,
       v.currency,
       methodLabel(v.payment_method),
-      v.receipt_available ? 'Yes' : 'No',
       STATUS_LABELS[v.status] ?? v.status,
     ]),
   ])
@@ -234,14 +229,6 @@ function exportCsv() {
           </select>
         </div>
         <div>
-          <label class="field-label" for="f-receipt">Receipt</label>
-          <select id="f-receipt" v-model="filters.receipt_available" class="field-input">
-            <option value="">Any</option>
-            <option value="1">Attached</option>
-            <option value="0">Missing</option>
-          </select>
-        </div>
-        <div>
           <label class="field-label" for="f-from">From</label>
           <input id="f-from" v-model="filters.from" type="date" class="field-input mono" />
         </div>
@@ -279,9 +266,6 @@ function exportCsv() {
       <div class="mb-4 flex flex-wrap items-baseline justify-between gap-3">
         <h3 class="display text-xl">
           {{ totals.count }} voucher(s)
-          <span v-if="totals.missing" class="text-base text-amber">
-            · {{ totals.missing }} without receipt
-          </span>
         </h3>
         <p class="mono text-lg font-semibold">{{ money(totals.amount) }}</p>
       </div>
@@ -296,7 +280,6 @@ function exportCsv() {
               <th>Category</th>
               <th>Description</th>
               <th class="num">Amount</th>
-              <th>Receipt</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -312,14 +295,6 @@ function exportCsv() {
                 <span v-if="v.vendor" class="text-xs text-muted"> · {{ v.vendor }}</span>
               </td>
               <td class="num whitespace-nowrap">{{ money(v.amount, v.currency) }}</td>
-              <td class="text-xs">
-                <span v-if="v.receipt_available" class="text-teal">
-                  Yes<template v-if="v.attachment_count">
-                    ({{ v.attachment_count }})</template
-                  >
-                </span>
-                <span v-else class="text-amber">Declared</span>
-              </td>
               <td><ExpenseStatusChip :status="v.status" /></td>
               <td>
                 <RouterLink

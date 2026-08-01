@@ -242,7 +242,9 @@ export interface ExpenseVoucher {
   amount: number
   currency: string
   payment_method: string
-  receipt_available: number
+  // A voucher only exists when no receipt was issued, so the reason and the
+  // declaration are always present. (The DB keeps a receipt_available column
+  // for schema compatibility; it is always 0 and nothing reads it.)
   missing_receipt_reason: string | null
   declaration_accepted: number
   declaration_text: string | null

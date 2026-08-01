@@ -267,10 +267,8 @@ function downloadPdf() {
           <p>{{ voucher.vendor ?? '—' }}</p>
         </div>
         <div>
-          <p class="field-label">Receipt</p>
-          <p :class="voucher.receipt_available ? 'text-teal' : 'text-amber'">
-            {{ voucher.receipt_available ? 'Attached' : 'Not available (declared)' }}
-          </p>
+          <p class="field-label">Supporting documents</p>
+          <p>{{ voucher.attachment_count || 'None' }}</p>
         </div>
       </div>
 
@@ -280,7 +278,6 @@ function downloadPdf() {
       </div>
 
       <div
-        v-if="!voucher.receipt_available"
         class="mt-4 rounded-lg border border-amber bg-amber-soft p-4"
       >
         <p class="field-label">Reason for missing receipt</p>
@@ -316,7 +313,7 @@ function downloadPdf() {
       v-if="attachmentsEnabled || voucher.attachments.length"
       class="panel no-print mb-6"
     >
-      <h3 class="display mb-3 text-xl">Receipts &amp; attachments</h3>
+      <h3 class="display mb-3 text-xl">Supporting documents</h3>
       <ul v-if="voucher.attachments.length" class="mb-4 space-y-2 text-sm">
         <li
           v-for="a in voucher.attachments"
@@ -347,7 +344,7 @@ function downloadPdf() {
       <p v-else class="mb-4 text-sm text-muted">No files attached.</p>
 
       <div v-if="can('add_attachment') && attachmentsEnabled">
-        <label class="field-label" for="v-file">Attach a receipt (PDF, JPG, PNG — max 10 MB)</label>
+        <label class="field-label" for="v-file">Attach a supporting document (PDF, JPG, PNG — max 10 MB)</label>
         <input
           id="v-file"
           ref="fileInput"

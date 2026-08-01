@@ -20,7 +20,6 @@ const REPORTS = [
   { type: 'monthly', label: 'Monthly expenses' },
   { type: 'department', label: 'Department expenses' },
   { type: 'employee', label: 'Employee expenses' },
-  { type: 'missing_receipt', label: 'Missing receipts' },
   { type: 'outstanding', label: 'Outstanding reimbursements' },
   { type: 'approved_vs_rejected', label: 'Approved vs rejected' },
 ] as const
@@ -159,16 +158,7 @@ const share = (amount: number, buckets: { amount: number }[]) => {
           </span>
           <span class="text-xs tracking-widest">This month</span>
         </div>
-        <div class="grid flex-1 grid-cols-2 gap-4">
-          <div class="panel">
-            <p class="field-label">Missing receipts</p>
-            <p class="mono text-3xl font-semibold text-amber">
-              {{ dashboard.missing_receipt_count }}
-            </p>
-            <p class="mt-1 text-xs text-muted">
-              Vouchers filed on a declaration instead of a receipt (last 12 months).
-            </p>
-          </div>
+        <div class="grid flex-1 grid-cols-1 gap-4">
           <div class="panel">
             <p class="field-label">Total (12 months, excl. rejected)</p>
             <p class="mono text-3xl font-semibold">{{ money(dashboard.total_amount) }}</p>

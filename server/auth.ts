@@ -96,6 +96,8 @@ export interface Rights {
   // which lands 'pending'; `approve_users` lets its holder activate one.
   add_users: boolean
   approve_users: boolean
+  /** Holds a petty cash float and may spend vouchers against it. */
+  use_petty_cash: boolean
 }
 
 /** Whose records a person may see. Stored on employees.data_scope. */
@@ -154,6 +156,7 @@ export const DEFAULT_RIGHTS: Rights = {
   approve_expenses: false,
   add_users: false,
   approve_users: false,
+  use_petty_cash: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -169,6 +172,7 @@ const ALL_RIGHTS: Rights = {
   review_expenses: true,
   finance_expenses: true,
   add_users: true,
+  use_petty_cash: true,
   // Not granted here — see the carve-out in parseRights.
   approve_expenses: false,
   approve_users: false,
@@ -237,6 +241,7 @@ export function parseRights(employee: Employee): Rights {
       approve_expenses: Boolean(raw.approve_expenses),
       add_users: Boolean(raw.add_users),
       approve_users: Boolean(raw.approve_users),
+      use_petty_cash: Boolean(raw.use_petty_cash),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

@@ -342,6 +342,12 @@ const downloadPdf = () => window.print()
           <p class="field-label">Supporting documents</p>
           <p>{{ voucher.attachment_count || 'None' }}</p>
         </div>
+        <div>
+          <p class="field-label">Funded from</p>
+          <p :class="voucher.paid_from_petty_cash ? 'text-teal' : ''">
+            {{ voucher.paid_from_petty_cash ? 'Petty cash float' : 'Own pocket' }}
+          </p>
+        </div>
       </div>
 
       <div class="mt-4 border-t border-line pt-4">

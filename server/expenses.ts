@@ -19,10 +19,13 @@ import { audit, parseRights, requireAdmin, requireUser } from './auth'
 import { loadSettings } from './settings'
 import { employeesWithRight, notifyUser, notifyUsers } from './notify'
 import { scopeClause, visibleEmployeeIds } from './scope'
+import { balanceFor } from './pettycash'
 import {
   DEFAULT_DECLARATION,
   PAYMENT_METHODS,
   DUPLICATE_WINDOW_DAYS,
+  canSpendFromPettyCash,
+  consumesPettyCash,
   formatVoucherNumber,
   allowedActions,
   statusAfter,
@@ -498,16 +501,6 @@ export async function listVouchers(request: Request, env: Env): Promise<Response
     sql += ' AND v.expense_date <= ?'
     binds.push(to)
   }
-  const min = p.get('amount_min')
-  if (min !== null && min !== '' && Number.isFinite(Number(min))) {
-    sql += ' AND v.amount >= ?'
-    binds.push(Number(min))
-  }
-  const max = p.get('amount_max')
-  if (max !== null && max !== '' && Number.isFinite(Number(max))) {
-    sql += ' AND v.amount <= ?'
-    binds.push(Number(max))
-  }
   const q = (p.get('q') ?? '').trim()
   if (q) {
     sql += ' AND (v.voucher_number LIKE ? OR v.description LIKE ? OR v.vendor LIKE ?)'
@@ -637,6 +630,7 @@ interface VoucherBody {
   payment_method?: string
   missing_receipt_reason?: string | null
   declaration_accepted?: boolean
+  paid_from_petty_cash?: boolean
   /** Save and submit in one step. */
   submit?: boolean
 }
@@ -656,7 +650,52 @@ function normalizeBody(body: VoucherBody, currency: string) {
     missing_receipt_reason:
       (body.missing_receipt_reason ?? '')?.toString().trim().slice(0, 500) || null,
     declaration_accepted: body.declaration_accepted ? 1 : 0,
+    paid_from_petty_cash: body.paid_from_petty_cash ? 1 : 0,
   }
+}
+
+/**
+ * A petty-cash claim only makes sense from somebody holding a float, and only
+ * up to what they hold. Checked when the voucher is actually submitted, not
+ * while it is a draft — an employee may well write the voucher up before the
+ * top-up has been recorded.
+ *
+ * The voucher's own amount is excluded from the balance so that editing and
+ * resubmitting an already-counted claim does not compare it against itself.
+ */
+async function assertPettyCashAllowed(
+  env: Env,
+  employeeId: string,
+  amount: number,
+  excludeVoucherId: string | null,
+): Promise<void> {
+  const owner = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
+    .bind(employeeId)
+    .first<Employee>()
+  if (!owner || !parseRights(owner).use_petty_cash) {
+    throw new ApiError(
+      400,
+      'This employee does not hold a petty cash float, so the expense cannot be charged to one.',
+    )
+  }
+
+  let available = await balanceFor(env, employeeId)
+  if (excludeVoucherId) {
+    const prior = await env.DB.prepare(
+      `SELECT amount, status FROM expense_vouchers
+        WHERE id = ? AND paid_from_petty_cash = 1`,
+    )
+      .bind(excludeVoucherId)
+      .first<{ amount: number; status: string }>()
+    // Already deducted? Add it back before comparing, or a resubmit of the
+    // same claim would look like a second withdrawal.
+    if (prior && consumesPettyCash(prior.status as ExpenseStatus)) {
+      available = Math.round((available + prior.amount) * 100) / 100
+    }
+  }
+
+  const check = canSpendFromPettyCash(available, amount)
+  if (!check.ok) throw new ApiError(400, check.message!)
 }
 
 export async function createVoucher(request: Request, env: Env): Promise<Response> {
@@ -700,6 +739,10 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
       ? body.department_id
       : owner.department_id
 
+  if (fields.paid_from_petty_cash && wantsSubmit) {
+    await assertPettyCashAllowed(env, employeeId, fields.amount, null)
+  }
+
   const workflow = await loadWorkflow(env)
   const now = new Date().toISOString()
   const status: ExpenseStatus = wantsSubmit
@@ -714,8 +757,8 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
        (id, voucher_number, employee_id, department_id, expense_date, submission_date,
         category_id, description, vendor, amount, currency, payment_method,
         receipt_available, missing_receipt_reason, declaration_accepted,
-        declaration_text, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        declaration_text, status, created_by, paid_from_petty_cash)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -736,6 +779,7 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
       fields.declaration_accepted ? DEFAULT_DECLARATION : null,
       status,
       user.id,
+      fields.paid_from_petty_cash,
     )
     .run()
 
@@ -779,6 +823,10 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       body.declaration_accepted !== undefined
         ? body.declaration_accepted
         : Boolean(voucher.declaration_accepted),
+    paid_from_petty_cash:
+      body.paid_from_petty_cash !== undefined
+        ? body.paid_from_petty_cash
+        : Boolean(voucher.paid_from_petty_cash),
   }
   const fields = normalizeBody(merged as VoucherBody, settings.currency)
   const wantsSubmit = Boolean(body.submit)
@@ -799,6 +847,10 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
     if (!cat) throw new ApiError(400, 'Unknown expense category')
   }
 
+  if (fields.paid_from_petty_cash && wantsSubmit) {
+    await assertPettyCashAllowed(env, voucher.employee_id, fields.amount, voucher.id)
+  }
+
   const departmentId =
     body.department_id !== undefined && actor.is_admin
       ? body.department_id
@@ -809,7 +861,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
        expense_date = ?, category_id = ?, description = ?, vendor = ?, amount = ?,
        currency = ?, payment_method = ?, receipt_available = ?,
        missing_receipt_reason = ?, declaration_accepted = ?, declaration_text = ?,
-       department_id = ?, updated_at = datetime('now')
+       paid_from_petty_cash = ?, department_id = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -824,6 +876,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       fields.missing_receipt_reason,
       fields.declaration_accepted,
       fields.declaration_accepted ? DEFAULT_DECLARATION : null,
+      fields.paid_from_petty_cash,
       departmentId,
       id,
     )
@@ -843,6 +896,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       payment_method: voucher.payment_method,
       missing_receipt_reason: voucher.missing_receipt_reason,
       declaration_accepted: voucher.declaration_accepted,
+      paid_from_petty_cash: voucher.paid_from_petty_cash,
       department_id: voucher.department_id,
     },
     { ...fields, department_id: departmentId },
@@ -883,8 +937,8 @@ export async function duplicateVoucher(
        (id, voucher_number, employee_id, department_id, expense_date, submission_date,
         category_id, description, vendor, amount, currency, payment_method,
         receipt_available, missing_receipt_reason, declaration_accepted,
-        declaration_text, status, created_by)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, 'draft', ?)`,
+        declaration_text, status, created_by, paid_from_petty_cash)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, 'draft', ?, ?)`,
   )
     .bind(
       newId,
@@ -900,6 +954,7 @@ export async function duplicateVoucher(
       source.payment_method,
       source.missing_receipt_reason,
       user.id,
+      source.paid_from_petty_cash,
     )
     .run()
 
@@ -1012,6 +1067,10 @@ export async function submitVoucher(
     true,
   )
   if (issues.length) fail(issues)
+
+  if (voucher.paid_from_petty_cash) {
+    await assertPettyCashAllowed(env, voucher.employee_id, voucher.amount, voucher.id)
+  }
 
   const owner = await env.DB.prepare('SELECT manager_id FROM employees WHERE id = ?')
     .bind(voucher.employee_id)

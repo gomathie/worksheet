@@ -7,6 +7,11 @@ import {
   statusAfterManagerApproval,
   statusAfterSubmit,
   isApprover,
+  PETTY_CASH_CONSUMING_STATUSES,
+  canSpendFromPettyCash,
+  consumesPettyCash,
+  movementValue,
+  pettyCashBalance,
   daysBetween,
   findPossibleDuplicates,
   isPossibleDuplicate,
@@ -579,5 +584,82 @@ describe('duplicate detection', () => {
       other({ id: 'e', status: 'rejected' }),
     ])
     expect(found.map((f) => f.id)).toEqual(['b', 'c'])
+  })
+})
+
+// ----------------------------------------------------------------- petty cash
+
+describe('petty cash', () => {
+  const issue = (amount: number) => ({ type: 'issue' as const, amount })
+  const ret = (amount: number) => ({ type: 'return' as const, amount })
+  const adj = (amount: number) => ({ type: 'adjustment' as const, amount })
+
+  it('signs movements correctly', () => {
+    expect(movementValue(issue(500))).toBe(500)
+    expect(movementValue(ret(200))).toBe(-200)
+    expect(movementValue(adj(-30))).toBe(-30)
+  })
+
+  it('reduces the float by vouchers in play', () => {
+    expect(
+      pettyCashBalance([issue(500)], [
+        { amount: 40, status: 'submitted' },
+        { amount: 60, status: 'approved' },
+      ]),
+    ).toBe(400)
+  })
+
+  it('ignores drafts and rejected claims', () => {
+    // The money is only accounted for once the claim is actually in play.
+    expect(
+      pettyCashBalance([issue(500)], [
+        { amount: 40, status: 'draft' },
+        { amount: 60, status: 'rejected' },
+      ]),
+    ).toBe(500)
+  })
+
+  it('returns the money to the float when a claim is rejected', () => {
+    const before = pettyCashBalance([issue(100)], [{ amount: 40, status: 'approved' }])
+    const after = pettyCashBalance([issue(100)], [{ amount: 40, status: 'rejected' }])
+    expect(before).toBe(60)
+    expect(after).toBe(100)
+  })
+
+  it('counts every consuming status', () => {
+    for (const status of PETTY_CASH_CONSUMING_STATUSES) {
+      expect(consumesPettyCash(status)).toBe(true)
+      expect(pettyCashBalance([issue(100)], [{ amount: 10, status }])).toBe(90)
+    }
+    expect(consumesPettyCash('draft')).toBe(false)
+    expect(consumesPettyCash('rejected')).toBe(false)
+  })
+
+  it('nets returns and adjustments', () => {
+    expect(pettyCashBalance([issue(500), ret(100), adj(-25)], [])).toBe(375)
+  })
+
+  it('can go negative when overspent', () => {
+    expect(
+      pettyCashBalance([issue(50)], [{ amount: 80, status: 'approved' }]),
+    ).toBe(-30)
+  })
+
+  it('rounds to two decimals', () => {
+    expect(
+      pettyCashBalance([issue(0.1), issue(0.2)], [{ amount: 0.3, status: 'approved' }]),
+    ).toBe(0)
+  })
+
+  it('allows spending exactly the balance', () => {
+    // Comparing floats directly would reject this.
+    expect(canSpendFromPettyCash(0.3, 0.1 + 0.2).ok).toBe(true)
+    expect(canSpendFromPettyCash(100, 100).ok).toBe(true)
+  })
+
+  it('refuses more than is held, and says how much is left', () => {
+    const res = canSpendFromPettyCash(40, 60)
+    expect(res.ok).toBe(false)
+    expect(res.message).toContain('40.00')
   })
 })

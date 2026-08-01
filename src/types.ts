@@ -25,6 +25,8 @@ export interface Rights {
   approve_expenses: boolean
   add_users: boolean
   approve_users: boolean
+  /** Holds a petty cash float and may charge vouchers to it. */
+  use_petty_cash: boolean
 }
 
 export type Role = 'admin' | 'manager' | 'employee'
@@ -225,6 +227,60 @@ export interface ExpenseCategory {
   position: number
 }
 
+export type PettyCashMethod = 'cash' | 'mobile_money'
+
+export interface PettyCashEntry {
+  id: string
+  employee_id: string
+  type: 'issue' | 'return' | 'adjustment'
+  amount: number
+  note: string | null
+  method: PettyCashMethod | null
+  reference: string | null
+  created_by_name: string | null
+  created_at: string
+}
+
+export interface PettyCashRequest {
+  id: string
+  employee_id: string
+  employee_name: string
+  amount: number
+  reason: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  decision_note: string | null
+  decided_by_name: string | null
+  decided_at: string | null
+  created_at: string
+}
+
+export interface PettyCashHolder {
+  employee_id: string
+  employee_name: string
+  employee_code: string | null
+  issued: number
+  spent: number
+  balance: number
+  last_issued_at: string | null
+}
+
+export interface PettyCashPayload {
+  currency: string
+  can_use: boolean
+  can_issue: boolean
+  balance: number
+  ledger: PettyCashEntry[]
+  spent: {
+    id: string
+    voucher_number: string
+    expense_date: string
+    amount: number
+    status: ExpenseStatus
+  }[]
+  holders: PettyCashHolder[]
+  requests: PettyCashRequest[]
+}
+
 export interface DuplicateMatch {
   id: string
   voucher_number: string
@@ -257,6 +313,7 @@ export interface ExpenseVoucher {
   missing_receipt_reason: string | null
   declaration_accepted: number
   declaration_text: string | null
+  paid_from_petty_cash: number
   status: ExpenseStatus
   created_by: string | null
   recorded_at: string | null

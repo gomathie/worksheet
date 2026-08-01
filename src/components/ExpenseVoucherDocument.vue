@@ -84,6 +84,13 @@ const generatedOn = new Date().toLocaleString('en-GB', {
           <span class="shrink-0">{{ voucher.category_name ?? '—' }}</span>
         </div>
         <div class="flex items-baseline gap-2">
+          <span class="shrink-0 text-muted">Funded from</span>
+          <span class="min-w-0 flex-1 border-b border-dotted border-ink/40" />
+          <span class="shrink-0">
+            {{ voucher.paid_from_petty_cash ? 'Petty cash float' : 'Own pocket' }}
+          </span>
+        </div>
+        <div class="flex items-baseline gap-2">
           <span class="shrink-0 text-muted">Paid by</span>
           <span class="min-w-0 flex-1 border-b border-dotted border-ink/40" />
           <span class="shrink-0">{{ methodLabel }}</span>

@@ -453,6 +453,92 @@ export function findPossibleDuplicates<T extends DuplicateCandidate>(
   return others.filter((o) => isPossibleDuplicate(voucher, o, windowDays))
 }
 
+// ----------------------------------------------------------------- petty cash
+
+/** How cash physically changed hands. */
+export const PETTY_CASH_METHODS = ['cash', 'mobile_money'] as const
+export type PettyCashMethod = (typeof PETTY_CASH_METHODS)[number]
+
+export const PETTY_CASH_METHOD_LABELS: Record<PettyCashMethod, string> = {
+  cash: 'Cash',
+  mobile_money: 'Mobile Money',
+}
+
+export const PETTY_CASH_REQUEST_STATUSES = ['pending', 'approved', 'rejected'] as const
+export type PettyCashRequestStatus = (typeof PETTY_CASH_REQUEST_STATUSES)[number]
+
+export const PETTY_CASH_MOVEMENTS = ['issue', 'return', 'adjustment'] as const
+export type PettyCashMovement = (typeof PETTY_CASH_MOVEMENTS)[number]
+
+export interface PettyCashEntry {
+  type: PettyCashMovement
+  amount: number
+}
+
+/**
+ * Statuses in which a petty-cash voucher has actually consumed the float.
+ * A draft has not been claimed yet, and a rejected claim was disallowed — in
+ * both cases the money is not accounted for, so it must not be deducted.
+ */
+export const PETTY_CASH_CONSUMING_STATUSES: ExpenseStatus[] = [
+  'submitted',
+  'manager_review',
+  'finance_review',
+  'admin_approval',
+  'approved',
+  'recorded',
+]
+
+export function consumesPettyCash(status: ExpenseStatus): boolean {
+  return PETTY_CASH_CONSUMING_STATUSES.includes(status)
+}
+
+/** Signed value of one ledger movement: issues add, returns subtract. */
+export function movementValue(entry: PettyCashEntry): number {
+  if (entry.type === 'issue') return entry.amount
+  if (entry.type === 'return') return -entry.amount
+  return entry.amount // adjustments are stored signed
+}
+
+/**
+ * What the employee should still be holding.
+ *
+ * Derived rather than stored, so it cannot drift from the vouchers: reopening
+ * or rejecting a claim automatically returns the money to the float without
+ * any compensating entry.
+ */
+export function pettyCashBalance(
+  ledger: PettyCashEntry[],
+  spent: { amount: number; status: ExpenseStatus }[],
+): number {
+  const issued = ledger.reduce((sum, e) => sum + movementValue(e), 0)
+  const used = spent
+    .filter((v) => consumesPettyCash(v.status))
+    .reduce((sum, v) => sum + v.amount, 0)
+  return round2(issued - used)
+}
+
+/**
+ * Can this claim come out of the float? Checked when a voucher is submitted,
+ * not while it is a draft — the employee may be filing it before the top-up
+ * has been recorded.
+ */
+export function canSpendFromPettyCash(
+  balance: number,
+  amount: number,
+): { ok: boolean; message?: string } {
+  if (amount <= 0) return { ok: true }
+  // Compare in minor units; comparing floats directly rejects exact-balance
+  // claims that should be allowed.
+  if (Math.round(amount * 100) > Math.round(balance * 100)) {
+    return {
+      ok: false,
+      message: `That is more than the petty cash you are holding (${balance.toFixed(2)}).`,
+    }
+  }
+  return { ok: true }
+}
+
 // -------------------------------------------------------------- aggregation
 
 export interface VoucherLike {

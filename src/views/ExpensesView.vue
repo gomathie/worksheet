@@ -36,10 +36,7 @@ const blankFilters = () => ({
   department_id: '',
   category_id: '',
   status: '',
-  from: '',
-  to: '',
-  amount_min: '',
-  amount_max: '',
+  month: '',
   q: '',
 })
 const filters = ref(blankFilters())
@@ -54,7 +51,14 @@ async function load() {
   try {
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(filters.value)) {
-      if (value !== '') params.set(key, String(value))
+      if (key === 'month' || value === '') continue
+      params.set(key, String(value))
+    }
+    // The API filters on a date range; a month is just its first and last day.
+    if (filters.value.month) {
+      const [y, m] = filters.value.month.split('-').map(Number)
+      params.set('from', `${filters.value.month}-01`)
+      params.set('to', new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10))
     }
     vouchers.value = await api<ExpenseVoucher[]>(`/api/expenses?${params}`)
   } catch (e) {
@@ -96,10 +100,7 @@ watch(
     filters.value.department_id,
     filters.value.category_id,
     filters.value.status,
-    filters.value.from,
-    filters.value.to,
-    filters.value.amount_min,
-    filters.value.amount_max,
+    filters.value.month,
   ],
   load,
 )
@@ -229,34 +230,14 @@ function exportCsv() {
           </select>
         </div>
         <div>
-          <label class="field-label" for="f-from">From</label>
-          <input id="f-from" v-model="filters.from" type="date" class="field-input mono" />
-        </div>
-        <div>
-          <label class="field-label" for="f-to">To</label>
-          <input id="f-to" v-model="filters.to" type="date" class="field-input mono" />
-        </div>
-        <div>
-          <label class="field-label" for="f-min">Min amount</label>
+          <label class="field-label" for="f-month">Month</label>
           <input
-            id="f-min"
-            v-model="filters.amount_min"
-            type="number"
-            min="0"
-            step="0.01"
+            id="f-month"
+            v-model="filters.month"
+            type="month"
             class="field-input mono"
           />
-        </div>
-        <div>
-          <label class="field-label" for="f-max">Max amount</label>
-          <input
-            id="f-max"
-            v-model="filters.amount_max"
-            type="number"
-            min="0"
-            step="0.01"
-            class="field-input mono"
-          />
+          <p class="mt-1 text-xs text-muted">Leave blank for every month.</p>
         </div>
       </div>
     </div>

@@ -63,6 +63,7 @@ export interface ExpenseVoucherRow {
   missing_receipt_reason: string | null
   declaration_accepted: number
   declaration_text: string | null
+  paid_from_petty_cash: number
   status: string
   created_by: string | null
   // Legacy payment columns, superseded by the recorded_* set in 0010.

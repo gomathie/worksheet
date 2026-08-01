@@ -107,8 +107,8 @@ approval to payment.
   the external finance reference once recorded, and signature lines for initiator and approver. It is meant to be filed in the external accounting system as supporting evidence, which
   is why it is withheld before approval: an unapproved voucher must not be able to produce a
   document that reads as an approved receipt.
-- **Search & filter** by employee, department, date range, category, status, amount range, and
-  free text over voucher number / description / vendor.
+- **Search & filter** by employee, department, month, category, status, and free text over
+  voucher number / description / vendor.
 - **Audit trail:** every create, edit (field-by-field, with previous and new value), submit,
   decision, payment, and attachment change. The table is **append-only, enforced by SQLite
   triggers** — `UPDATE` and `DELETE` are rejected by the database, not merely avoided in code.
@@ -116,6 +116,31 @@ approval to payment.
   **reopen** one before it can change again (which also clears the recorded marker).
 - **Notifications:** in-app (header bell) plus email on submission, escalation to an approver,
   approval, rejection, recording, and requests for more information.
+
+### Petty cash
+An administrator hands an employee a cash float; the employee spends it and files vouchers
+against it.
+
+- **`use_petty_cash` is an assigned right** — only holders can be issued a float or charge a
+  voucher to one. Issuing, recovering and correcting floats is **admin-only**.
+- **The balance is derived, never stored:** `SUM(ledger movements) − SUM(petty-cash vouchers in
+  play)`. "In play" is every status except *draft* and *rejected*, so a claim that is rejected,
+  returned to draft or reopened automatically puts the money back with no compensating entry to
+  get wrong — the figure cannot drift from the vouchers.
+- **On the voucher form**, holders get a *Paid from the petty cash I am holding* tick box showing
+  their current balance. Submitting reduces it; the printed receipt records whether the expense
+  came from the float or the employee's own pocket.
+- **Guards:** a claim larger than the float is refused at submission (not while drafting — the
+  top-up may not be recorded yet), handing back more than is held is refused in favour of an
+  adjustment, and re-submitting an already-counted claim never double-charges.
+- **Top-up requests:** a float holder asks for more cash (one open request at a time); an
+  administrator confirms **what was actually handed over and how** — Cash or Mobile Money, with an
+  optional reference such as a MoMo transaction id. The confirmed amount may differ from the amount
+  requested, and only the confirmed figure reaches the ledger. Declining requires a note. A pending
+  or declined request never moves the balance.
+- **Petty Cash tab:** your balance, your movements (with how each was paid), your open request, and
+  every voucher charged to your float (drafts and rejected ones greyed out). Admins additionally see
+  every float, the pending request queue, and the direct issue/recover form.
 
 ### Receipt attachments (R2) — currently off
 Receipt **file uploads are disabled**: no R2 bucket is bound in `wrangler.toml`. Everything else

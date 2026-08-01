@@ -106,6 +106,12 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/petty-cash',
+      name: 'petty-cash',
+      component: () => import('../views/PettyCashView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/employees',
       name: 'employees',
       component: () => import('../views/EmployeesView.vue'),

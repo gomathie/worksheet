@@ -224,6 +224,13 @@ async function changePassword() {
         >Expenses</RouterLink
       >
       <RouterLink
+        v-if="auth.rights.use_petty_cash || auth.isAdmin"
+        :to="{ name: 'petty-cash' }"
+        class="btn"
+        active-class="btn-solid"
+        >Petty Cash</RouterLink
+      >
+      <RouterLink
         v-if="
           auth.rights.review_expenses ||
           canApproveExpenses ||

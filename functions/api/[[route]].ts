@@ -52,6 +52,12 @@ import {
 } from '../../server/notify'
 import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
 import {
+  decidePettyCashRequest,
+  getPettyCash,
+  recordPettyCashMovement,
+  requestPettyCash,
+} from '../../server/pettycash'
+import {
   removeSubscription,
   saveSubscription,
   vapidPublicKey,
@@ -480,6 +486,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     approve_expenses: Boolean(raw?.approve_expenses ?? fallback.approve_expenses),
     add_users: Boolean(raw?.add_users ?? fallback.add_users),
     approve_users: Boolean(raw?.approve_users ?? fallback.approve_users),
+    use_petty_cash: Boolean(raw?.use_petty_cash ?? fallback.use_petty_cash),
   })
 }
 
@@ -2133,6 +2140,20 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'GET') return getVoucher(request, env, voucherMatch[1])
     if (method === 'PATCH') return patchVoucher(request, env, voucherMatch[1])
     if (method === 'DELETE') return deleteVoucher(request, env, voucherMatch[1])
+  }
+
+  // ------------------------------------------------------------ petty cash
+
+  if (path === '/api/petty-cash' && method === 'GET') return getPettyCash(request, env)
+  if (path === '/api/petty-cash' && method === 'POST') {
+    return recordPettyCashMovement(request, env)
+  }
+  if (path === '/api/petty-cash/requests' && method === 'POST') {
+    return requestPettyCash(request, env)
+  }
+  const pettyReqMatch = /^\/api\/petty-cash\/requests\/([\w-]+)\/decision$/.exec(path)
+  if (pettyReqMatch && method === 'POST') {
+    return decidePettyCashRequest(request, env, pettyReqMatch[1])
   }
 
   // ------------------------------------------------------------------- push

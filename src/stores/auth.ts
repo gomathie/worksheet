@@ -17,6 +17,7 @@ const NO_RIGHTS: Rights = {
   approve_expenses: false,
   add_users: false,
   approve_users: false,
+  use_petty_cash: false,
 }
 
 export const useAuthStore = defineStore('auth', {

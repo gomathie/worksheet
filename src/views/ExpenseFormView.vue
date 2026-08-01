@@ -14,6 +14,7 @@ import type {
   Employee,
   ExpenseCategory,
   ExpenseVoucherDetail,
+  PettyCashPayload,
 } from '../types'
 
 const auth = useAuthStore()
@@ -42,7 +43,12 @@ const form = ref({
   payment_method: 'cash',
   missing_receipt_reason: '',
   declaration_accepted: false,
+  paid_from_petty_cash: false,
 })
+
+// Only offered to float holders; the API refuses it for anyone else.
+const pettyCash = ref<PettyCashPayload | null>(null)
+const canUsePettyCash = computed(() => pettyCash.value?.can_use ?? false)
 
 /** Live client-side mirror of the server rules, shown once the user submits. */
 const showIssues = ref(false)
@@ -66,11 +72,13 @@ const issueFor = (field: string) =>
 
 onMounted(async () => {
   try {
-    const [depts, cats, settings] = await Promise.all([
+    const [depts, cats, settings, petty] = await Promise.all([
       api<Department[]>('/api/departments'),
       api<ExpenseCategory[]>('/api/expense-categories'),
       api<{ currency: string }>('/api/settings'),
+      api<PettyCashPayload>('/api/petty-cash').catch(() => null),
     ])
+    pettyCash.value = petty
     departments.value = depts.filter((d) => d.active)
     categories.value = cats.filter((c) => c.active)
     currency.value = settings.currency ?? '$'
@@ -96,6 +104,7 @@ onMounted(async () => {
         payment_method: v.payment_method,
         missing_receipt_reason: v.missing_receipt_reason ?? '',
         declaration_accepted: Boolean(v.declaration_accepted),
+        paid_from_petty_cash: Boolean(v.paid_from_petty_cash),
       }
     } else {
       form.value.department_id = auth.user!.department_id
@@ -120,6 +129,7 @@ function payload(submit: boolean) {
     payment_method: form.value.payment_method,
     missing_receipt_reason: form.value.missing_receipt_reason || null,
     declaration_accepted: form.value.declaration_accepted,
+    paid_from_petty_cash: form.value.paid_from_petty_cash,
     submit,
   }
 }
@@ -276,6 +286,23 @@ async function save(submit: boolean) {
       </div>
 
       <!-- ==================================================== receipt block -->
+      <fieldset v-if="canUsePettyCash" class="mt-5 border-t border-line pt-4">
+        <legend class="field-label">Petty cash</legend>
+        <label class="flex items-start gap-2 text-sm">
+          <input v-model="form.paid_from_petty_cash" type="checkbox" class="mt-1" />
+          <span>
+            Paid from the petty cash I am holding
+            <span class="block text-xs text-muted">
+              You are holding
+              <span class="mono">{{ pettyCash?.currency
+              }}{{ (pettyCash?.balance ?? 0).toFixed(2) }}</span
+              >. Submitting reduces it by this voucher's amount; a rejected or
+              reopened voucher puts it back.
+            </span>
+          </span>
+        </label>
+      </fieldset>
+
       <fieldset class="mt-5 border-t border-line pt-4">
         <legend class="field-label">Declaration</legend>
         <p class="mb-3 text-xs text-muted">

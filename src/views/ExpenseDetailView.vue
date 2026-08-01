@@ -87,6 +87,27 @@ function decide(action: ExpenseAction, successMessage: string) {
   )
 }
 
+/**
+ * Reopening is consequential — it unwinds an approval, sends the voucher back
+ * to draft, and clears the external finance reference — so it is confirmed
+ * rather than fired on a single click.
+ */
+function reopenVoucher() {
+  const v = voucher.value
+  if (!v) return
+  const wasRecorded = Boolean(v.recorded_at)
+  const message =
+    `Reopen ${v.voucher_number}?\n\n` +
+    'It returns to draft and has to go through approval again.' +
+    (wasRecorded
+      ? `\n\nIts recorded reference${
+          v.recorded_reference ? ` (${v.recorded_reference})` : ''
+        } will be cleared, so the entry in your external finance records will no longer match.`
+      : '')
+  if (!confirm(message)) return
+  return decide('reopen', 'Voucher reopened.')
+}
+
 function submitVoucher() {
   return run(
     () => api(`/api/expenses/${id.value}/submit`, { method: 'POST' }),
@@ -477,7 +498,7 @@ function downloadPdf() {
           v-if="can('reopen')"
           class="btn"
           :disabled="busy"
-          @click="decide('reopen', 'Voucher reopened.')"
+          @click="reopenVoucher"
         >
           Reopen
         </button>

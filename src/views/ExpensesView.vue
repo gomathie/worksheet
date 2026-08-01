@@ -300,7 +300,7 @@ function exportCsv() {
                 <RouterLink
                   :to="{ name: 'expense-detail', params: { id: v.id } }"
                   class="btn btn-sm"
-                  >Open</RouterLink
+                  >View</RouterLink
                 >
               </td>
             </tr>

@@ -10,8 +10,12 @@ import { onBeforeUnmount, onMounted } from 'vue'
  * Applying this on mount rather than inside the print handler means the
  * browser's own Ctrl+P / Share-to-print produces the same correct output as
  * the button does.
+ *
+ * `margin` is a CSS shorthand, so the top gets a little extra room — the
+ * voucher header otherwise prints tight against the sheet edge, which leaves
+ * no space for a punch hole or a received stamp.
  */
-export function usePortraitPrint(margin = '14mm') {
+export function usePortraitPrint(margin = '20mm 14mm 14mm') {
   let style: HTMLStyleElement | null = null
 
   onMounted(() => {

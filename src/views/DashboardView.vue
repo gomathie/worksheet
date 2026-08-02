@@ -73,7 +73,10 @@ const money = (n: number) =>
           }}</span>
           <span class="text-sm tracking-widest">Hours</span>
         </div>
-        <div class="grid flex-1 grid-cols-2 gap-4 md:grid-cols-4">
+        <!-- basis-full drops the tiles below the hours circle on a phone;
+             sharing the row leaves them ~43px of content and clips the
+             figures. From md they sit alongside it again. -->
+        <div class="grid basis-full grid-cols-2 gap-4 md:flex-1 md:basis-0 md:grid-cols-4">
           <div v-for="wt in visibleTypes" :key="wt.id" class="panel">
             <p class="field-label">{{ wt.name }}</p>
             <p class="mono text-3xl font-semibold">

@@ -348,10 +348,15 @@ const tableColspan = computed(
             :key="i"
             class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]"
           >
+            <!-- The label wrappers carry `md:hidden`, not the labels:
+                 `.field-label` sets `display: block` from unlayered CSS, which
+                 outranks Tailwind's layered utilities and would win. -->
             <div>
-              <label class="field-label md:hidden" :for="`card-${wt.id}-${i}-name`">
-                Card name
-              </label>
+              <div class="md:hidden">
+                <label class="field-label" :for="`card-${wt.id}-${i}-name`">
+                  Card name
+                </label>
+              </div>
               <input
                 :id="`card-${wt.id}-${i}-name`"
                 v-model="c.card_name"
@@ -360,9 +365,11 @@ const tableColspan = computed(
               />
             </div>
             <div>
-              <label class="field-label md:hidden" :for="`card-${wt.id}-${i}-audits`">
-                Total audits
-              </label>
+              <div class="md:hidden">
+                <label class="field-label" :for="`card-${wt.id}-${i}-audits`">
+                  Total audits
+                </label>
+              </div>
               <input
                 :id="`card-${wt.id}-${i}-audits`"
                 v-model.number="c.total_audits"
@@ -374,9 +381,11 @@ const tableColspan = computed(
               />
             </div>
             <div>
-              <label class="field-label md:hidden" :for="`card-${wt.id}-${i}-time`">
-                Time completed
-              </label>
+              <div class="md:hidden">
+                <label class="field-label" :for="`card-${wt.id}-${i}-time`">
+                  Time completed
+                </label>
+              </div>
               <input
                 :id="`card-${wt.id}-${i}-time`"
                 v-model="c.time_completed"
@@ -384,13 +393,16 @@ const tableColspan = computed(
                 class="field-input mono"
               />
             </div>
+            <!-- Full-width on a one-column phone layout reads as an error bar,
+                 so keep it shrink-wrapped and right-aligned there. -->
             <button
               type="button"
-              class="btn btn-sm btn-danger md:self-start"
+              class="btn btn-sm btn-danger justify-self-end md:self-start"
               :aria-label="`Remove card ${i + 1}`"
               @click="removeCard(c)"
             >
-              ✕
+              <span class="md:hidden">Remove</span>
+              <span class="hidden md:inline">✕</span>
             </button>
           </div>
           <p v-if="cardsFor(wt.id).length === 0" class="text-xs text-muted">

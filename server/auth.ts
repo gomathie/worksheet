@@ -81,6 +81,9 @@ export interface Rights {
   view_remuneration: boolean
   view_payslip: boolean
   log_leave: boolean
+  // Card-based work types (Classification/QAP) are normally logged as cards.
+  // This right lets the holder type the count directly instead.
+  direct_counts: boolean
   // Expense vouchers. "Manager" and "finance" are rights rather than roles:
   // review_expenses only bites for the holder's own direct reports
   // (employees.manager_id), finance_expenses is organization-wide.
@@ -150,6 +153,7 @@ export const DEFAULT_RIGHTS: Rights = {
   view_remuneration: false,
   view_payslip: false,
   log_leave: false,
+  direct_counts: false,
   add_expenses: true,
   review_expenses: false,
   finance_expenses: false,
@@ -168,6 +172,7 @@ const ALL_RIGHTS: Rights = {
   view_remuneration: true,
   view_payslip: true,
   log_leave: true,
+  direct_counts: true,
   add_expenses: true,
   review_expenses: true,
   finance_expenses: true,
@@ -231,6 +236,7 @@ export function parseRights(employee: Employee): Rights {
       view_remuneration: Boolean(raw.view_remuneration ?? raw.view_payslip),
       view_payslip: Boolean(raw.view_payslip),
       log_leave: Boolean(raw.log_leave),
+      direct_counts: Boolean(raw.direct_counts),
       // Filing your own expenses is the baseline, like logging your own time:
       // rows written before the expense module default to allowed.
       add_expenses: Boolean(raw.add_expenses ?? true),

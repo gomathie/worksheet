@@ -2,6 +2,7 @@ import type {
   AbsenceRow,
   AdjustmentRow,
   Employee,
+  EntryCardRow,
   EntryItemRow,
   EntryRow,
   Env,
@@ -175,8 +176,12 @@ async function listWorkTypes(request: Request, env: Env): Promise<Response> {
     'SELECT * FROM work_types ORDER BY position, created_at',
   ).all<WorkTypeRow>()
   if (user.role === 'admin') return json(results)
-  // Rates are money-sensitive; non-admins only need names for forms/labels.
-  return json(results.filter((w) => w.active).map((w) => ({ id: w.id, name: w.name })))
+  // Rates are money-sensitive; non-admins only need names + the card flag.
+  return json(
+    results
+      .filter((w) => w.active)
+      .map((w) => ({ id: w.id, name: w.name, card_based: w.card_based })),
+  )
 }
 
 function assertPointsPerUnit(value: unknown): number {
@@ -189,18 +194,19 @@ function assertPointsPerUnit(value: unknown): number {
 
 async function createWorkType(request: Request, env: Env): Promise<Response> {
   const admin = await requireAdmin(request, env)
-  const body = await readJson<{ name?: string; points_per_unit?: number }>(request)
+  const body = await readJson<{ name?: string; points_per_unit?: number; card_based?: boolean }>(request)
   const name = (body.name ?? '').trim().slice(0, 60)
   if (!name) throw new ApiError(400, 'name is required')
   const rate = assertPointsPerUnit(body.points_per_unit ?? 1)
+  const cardBased = body.card_based ? 1 : 0
 
   const id = crypto.randomUUID()
   await env.DB.prepare(
-    'INSERT INTO work_types (id, name, points_per_unit, position) VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM work_types))',
+    'INSERT INTO work_types (id, name, points_per_unit, card_based, position) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM work_types))',
   )
-    .bind(id, name, rate)
+    .bind(id, name, rate, cardBased)
     .run()
-  await audit(env, admin.id, 'create_work_type', id, { name, points_per_unit: rate })
+  await audit(env, admin.id, 'create_work_type', id, { name, points_per_unit: rate, card_based: cardBased })
   const created = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')
     .bind(id)
     .first<WorkTypeRow>()
@@ -222,6 +228,7 @@ async function patchWorkType(
     name?: string
     points_per_unit?: number
     active?: number | boolean
+    card_based?: number | boolean
   }>(request)
   const name =
     body.name !== undefined ? String(body.name).trim().slice(0, 60) : existing.name
@@ -231,13 +238,15 @@ async function patchWorkType(
       ? assertPointsPerUnit(body.points_per_unit)
       : existing.points_per_unit
   const active = body.active !== undefined ? (body.active ? 1 : 0) : existing.active
+  const cardBased =
+    body.card_based !== undefined ? (body.card_based ? 1 : 0) : existing.card_based
 
   await env.DB.prepare(
-    'UPDATE work_types SET name = ?, points_per_unit = ?, active = ? WHERE id = ?',
+    'UPDATE work_types SET name = ?, points_per_unit = ?, active = ?, card_based = ? WHERE id = ?',
   )
-    .bind(name, rate, active, id)
+    .bind(name, rate, active, cardBased, id)
     .run()
-  await audit(env, admin.id, 'update_work_type', id, { name, points_per_unit: rate, active })
+  await audit(env, admin.id, 'update_work_type', id, { name, points_per_unit: rate, active, card_based: cardBased })
   const updated = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')
     .bind(id)
     .first<WorkTypeRow>()
@@ -480,6 +489,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     view_remuneration: Boolean(raw?.view_remuneration ?? fallback.view_remuneration),
     view_payslip: Boolean(raw?.view_payslip ?? fallback.view_payslip),
     log_leave: Boolean(raw?.log_leave ?? fallback.log_leave),
+    direct_counts: Boolean(raw?.direct_counts ?? fallback.direct_counts),
     add_expenses: Boolean(raw?.add_expenses ?? fallback.add_expenses),
     review_expenses: Boolean(raw?.review_expenses ?? fallback.review_expenses),
     finance_expenses: Boolean(raw?.finance_expenses ?? fallback.finance_expenses),
@@ -573,6 +583,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   if (username && !passwordHash) {
     throw new ApiError(400, 'password is required when assigning a username')
   }
+<<<<<<< HEAD
   // The role seeds the tick-boxes; anything explicitly sent still wins.
   // Approval rights are never seeded — an admin grants those deliberately —
   // and are stripped outright for non-admins.
@@ -580,6 +591,24 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     rightsToJson(body.rights, defaultRightsForRole(role)),
     role,
   )
+=======
+  const rights = rightsToJson(body.rights, {
+    add_entries: true,
+    edit_entries: true,
+    delete_entries: true,
+    view_dashboard: false,
+    view_reports: false,
+    view_remuneration: false,
+    view_payslip: false,
+    log_leave: false,
+    direct_counts: false,
+    add_expenses: true,
+    review_expenses: false,
+    finance_expenses: false,
+    // Approval is never granted on creation — an admin ticks it deliberately.
+    approve_expenses: false,
+  })
+>>>>>>> feature/card-workflow
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
   const leaveAllowance = normalizeEntryLimit(body.leave_allowance)
@@ -828,13 +857,27 @@ async function listEntries(request: Request, env: Env): Promise<Response> {
   }
   sql += ' ORDER BY e.work_date DESC, e.time_start DESC'
 
-  const [{ results }, units] = await Promise.all([
+  const [{ results }, units, cards] = await Promise.all([
     env.DB.prepare(sql)
       .bind(...binds)
       .all<EntryRow & { employee_name: string }>(),
     unitsByEntryId(env, month, scopeEmployee),
+    cardsByEntryId(env, month, scopeEmployee),
   ])
-  return json(results.map((e) => ({ ...e, units: units.get(e.id) ?? {} })))
+  return json(
+    results.map((e) => ({
+      ...e,
+      units: units.get(e.id) ?? {},
+      cards: cards.get(e.id) ?? [],
+    })),
+  )
+}
+
+interface CardInput {
+  work_type_id?: string
+  card_name?: string
+  total_audits?: number
+  time_completed?: string | null
 }
 
 interface EntryBody {
@@ -842,15 +885,29 @@ interface EntryBody {
   work_date?: string
   time_start?: string
   time_end?: string
-  items?: Record<string, number> // work_type_id -> units
+  items?: Record<string, number> // work_type_id -> units (non-card types / direct)
+  cards?: CardInput[] // card-based types: one row per card
   notes?: string | null
 }
 
-/** Validate logged units: integers ≥ 0, only for types assigned to the employee. */
+/** The set of work-type ids that are logged as cards rather than typed counts. */
+async function cardBasedTypeIds(env: Env): Promise<Set<string>> {
+  const { results } = await env.DB.prepare(
+    'SELECT id FROM work_types WHERE card_based = 1',
+  ).all<{ id: string }>()
+  return new Set(results.map((r) => r.id))
+}
+
+/**
+ * Validate logged units: integers ≥ 0, only for types assigned to the employee.
+ * Card-based types can't be typed directly unless `allowDirect` (the
+ * direct_counts right / admin) — those go through cards instead.
+ */
 async function normalizeItems(
   env: Env,
   employeeId: string,
   raw: Record<string, number> | undefined,
+  opts: { cardTypes?: Set<string>; allowDirect?: boolean } = {},
 ): Promise<Record<string, number>> {
   const items: Record<string, number> = {}
   if (!raw) return items
@@ -859,14 +916,91 @@ async function normalizeItems(
     const units = assertCount(value, 'units')
     if (units === 0) continue
     if (!assigned.has(typeId)) {
-      throw new ApiError(
-        400,
-        'This employee is not assigned that type of work',
-      )
+      throw new ApiError(400, 'This employee is not assigned that type of work')
+    }
+    if (opts.cardTypes?.has(typeId) && !opts.allowDirect) {
+      throw new ApiError(400, 'This work type must be logged as cards')
     }
     items[typeId] = units
   }
   return items
+}
+
+/** Validate card rows and return them; counts are derived from these. */
+async function normalizeCards(
+  env: Env,
+  employeeId: string,
+  raw: CardInput[] | undefined,
+  cardTypes: Set<string>,
+): Promise<Omit<EntryCardRow, 'id' | 'entry_id' | 'created_at'>[]> {
+  const cards: Omit<EntryCardRow, 'id' | 'entry_id' | 'created_at'>[] = []
+  if (!raw) return cards
+  const assigned = new Set(await assignedTypeIds(env, employeeId))
+  for (const c of raw) {
+    const typeId = c.work_type_id ?? ''
+    if (!cardTypes.has(typeId)) {
+      throw new ApiError(400, 'Cards can only be logged for card-based work types')
+    }
+    if (!assigned.has(typeId)) {
+      throw new ApiError(400, 'This employee is not assigned that type of work')
+    }
+    const name = String(c.card_name ?? '').trim().slice(0, 120)
+    if (!name) throw new ApiError(400, 'Each card needs a name')
+    const audits = assertCount(c.total_audits ?? 0, 'total_audits')
+    const time = c.time_completed ? String(c.time_completed).slice(0, 20) : null
+    cards.push({ work_type_id: typeId, card_name: name, total_audits: audits, time_completed: time })
+  }
+  return cards
+}
+
+async function writeEntryCards(
+  env: Env,
+  entryId: string,
+  cards: Omit<EntryCardRow, 'id' | 'entry_id' | 'created_at'>[],
+): Promise<void> {
+  const statements = [
+    env.DB.prepare('DELETE FROM entry_cards WHERE entry_id = ?').bind(entryId),
+    ...cards.map((c) =>
+      env.DB.prepare(
+        'INSERT INTO entry_cards (id, entry_id, work_type_id, card_name, total_audits, time_completed) VALUES (?, ?, ?, ?, ?, ?)',
+      ).bind(crypto.randomUUID(), entryId, c.work_type_id, c.card_name, c.total_audits, c.time_completed),
+    ),
+  ]
+  await env.DB.batch(statements)
+}
+
+/** Merge typed units with card counts (one card = one unit of its type). */
+function unitsWithCards(
+  items: Record<string, number>,
+  cards: { work_type_id: string }[],
+): Record<string, number> {
+  const units = { ...items }
+  for (const c of cards) units[c.work_type_id] = (units[c.work_type_id] ?? 0) + 1
+  return units
+}
+
+async function cardsByEntryId(
+  env: Env,
+  month: string,
+  employeeId?: string,
+): Promise<Map<string, EntryCardRow[]>> {
+  let sql =
+    'SELECT c.* FROM entry_cards c JOIN entries e ON e.id = c.entry_id WHERE e.work_date LIKE ?'
+  const binds: unknown[] = [`${month}-%`]
+  if (employeeId) {
+    sql += ' AND e.employee_id = ?'
+    binds.push(employeeId)
+  }
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds)
+    .all<EntryCardRow>()
+  const map = new Map<string, EntryCardRow[]>()
+  for (const c of results) {
+    const list = map.get(c.entry_id) ?? []
+    list.push(c)
+    map.set(c.entry_id, list)
+  }
+  return map
 }
 
 async function writeEntryItems(
@@ -941,7 +1075,11 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
   if (user.role !== 'admin') {
     await enforceEntryLimit(env, user, body.work_date!)
   }
-  const items = await normalizeItems(env, employeeId, body.items)
+  const cardTypes = await cardBasedTypeIds(env)
+  const canDirect = user.role === 'admin' || parseRights(user).direct_counts
+  const items = await normalizeItems(env, employeeId, body.items, { cardTypes, allowDirect: canDirect })
+  const cards = await normalizeCards(env, employeeId, body.cards, cardTypes)
+  const units = unitsWithCards(items, cards)
   const hours = computeHours(body.time_start!, body.time_end!)
 
   // When approval is required, employee-logged entries start pending;
@@ -968,12 +1106,13 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
       status,
     )
     .run()
-  await writeEntryItems(env, id, items)
+  await writeEntryItems(env, id, units)
+  await writeEntryCards(env, id, cards)
   await audit(env, user.id, 'create_entry', id, { employee_id: employeeId })
   const created = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
     .first<EntryRow>()
-  return json({ ...created, units: items }, 201)
+  return json({ ...created, units, cards }, 201)
 }
 
 async function loadOwnedEntry(
@@ -1043,22 +1182,28 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
       id,
     )
     .run()
-  if (body.items !== undefined) {
-    const items = await normalizeItems(env, next.employee_id, body.items)
-    await writeEntryItems(env, id, items)
+  if (body.items !== undefined || body.cards !== undefined) {
+    const cardTypes = await cardBasedTypeIds(env)
+    const canDirect = user.role === 'admin' || parseRights(user).direct_counts
+    const items = await normalizeItems(env, next.employee_id, body.items, {
+      cardTypes,
+      allowDirect: canDirect,
+    })
+    const cards = await normalizeCards(env, next.employee_id, body.cards, cardTypes)
+    await writeEntryItems(env, id, unitsWithCards(items, cards))
+    await writeEntryCards(env, id, cards)
   }
   await audit(env, user.id, 'update_entry', id)
   const updated = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
     .first<EntryRow>()
-  const { results: itemRows } = await env.DB.prepare(
-    'SELECT * FROM entry_items WHERE entry_id = ?',
-  )
-    .bind(id)
-    .all<EntryItemRow>()
+  const [{ results: itemRows }, { results: cardRows }] = await Promise.all([
+    env.DB.prepare('SELECT * FROM entry_items WHERE entry_id = ?').bind(id).all<EntryItemRow>(),
+    env.DB.prepare('SELECT * FROM entry_cards WHERE entry_id = ?').bind(id).all<EntryCardRow>(),
+  ])
   const units: Record<string, number> = {}
   for (const it of itemRows) units[it.work_type_id] = it.units
-  return json({ ...updated, units })
+  return json({ ...updated, units, cards: cardRows })
 }
 
 async function deleteEntry(request: Request, env: Env, id: string): Promise<Response> {

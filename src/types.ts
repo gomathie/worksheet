@@ -18,6 +18,8 @@ export interface Rights {
   view_remuneration: boolean
   view_payslip: boolean
   log_leave: boolean
+  /** Type Classification/QAP counts directly instead of logging cards. */
+  direct_counts: boolean
   add_expenses: boolean
   review_expenses: boolean
   finance_expenses: boolean
@@ -58,10 +60,19 @@ export interface PendingUser {
 export interface WorkTypeInfo {
   id: string
   name: string
+  card_based?: number // 1 = logged as cards
   // Admin-only fields; absent for regular employees.
   points_per_unit?: number
   active?: number
   position?: number
+}
+
+export interface EntryCard {
+  id?: string
+  work_type_id: string
+  card_name: string
+  total_audits: number
+  time_completed: string | null
 }
 
 export interface Me {
@@ -114,6 +125,7 @@ export interface Entry {
   time_end: string
   hours: number
   units: Record<string, number>
+  cards?: EntryCard[]
   notes: string | null
   status: 'approved' | 'pending' | 'rejected'
 }

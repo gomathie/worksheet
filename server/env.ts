@@ -147,6 +147,7 @@ export interface WorkTypeRow {
   points_per_unit: number
   active: number
   position: number
+  card_based: number // 1 = logged as individual cards, not a typed count
   created_at: string
 }
 
@@ -154,6 +155,16 @@ export interface EntryItemRow {
   entry_id: string
   work_type_id: string
   units: number
+}
+
+export interface EntryCardRow {
+  id: string
+  entry_id: string
+  work_type_id: string
+  card_name: string
+  total_audits: number
+  time_completed: string | null
+  created_at: string
 }
 
 export interface AdjustmentRow {

@@ -24,9 +24,13 @@
       "PowerShell($out = node \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\genhash.mjs\"; $cred = $out | ConvertFrom-Json; $cred.password | Out-File \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\temppass.txt\" -Encoding utf8; npx wrangler d1 execute ledger-db --remote --command \"INSERT INTO employees \\(id, employee_code, name, username, password_hash, role\\) VALUES \\('temp-verify-admin','TMP-000','Temp Verify','tempverify','$\\($cred.hash\\)','admin'\\)\" | Out-Null; \"temp admin ready\")",
       "Bash(curl -s -o /dev/null -w '%{http_code}' https://0c0e2bcb.ledger-6pa.pages.dev/api/me)",
       "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST https://0c0e2bcb.ledger-6pa.pages.dev/api/auth/login -H 'content-type: application/json' -d '{\"username\":\"x\",\"password\":\"yyyyyyyy\"}')",
+<<<<<<< HEAD
       "Bash(curl -s -o /dev/null -w '%{http_code}' https://0c0e2bcb.ledger-6pa.pages.dev/api/work-types)",
       "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST https://ledger-6pa.pages.dev/api/auth/login -H 'content-type: application/json' -d '{\"username\":\"nobody\",\"password\":\"xxxxxxxx\"}')",
       "Bash(curl -s -o /dev/null -w '%{http_code}' https://ledger-6pa.pages.dev/api/me)"
+=======
+      "Bash(curl -s -o /dev/null -w '%{http_code}' https://0c0e2bcb.ledger-6pa.pages.dev/api/work-types)"
+>>>>>>> feature/card-workflow
     ]
   }
 }

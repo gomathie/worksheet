@@ -18,7 +18,7 @@ const form = ref<RateSettings>({
 })
 const workTypes = ref<WorkTypeInfo[]>([])
 const codePrefix = ref('EMP-')
-const newType = ref({ name: '', points_per_unit: 1 })
+const newType = ref({ name: '', points_per_unit: 1, card_based: false })
 const error = ref('')
 const saved = ref(false)
 const busy = ref(false)
@@ -82,7 +82,7 @@ function saveSettings() {
 function addType() {
   return run(async () => {
     await api('/api/work-types', { method: 'POST', json: newType.value })
-    newType.value = { name: '', points_per_unit: 1 }
+    newType.value = { name: '', points_per_unit: 1, card_based: false }
     await loadTypes()
   })
 }
@@ -157,7 +157,7 @@ function saveType(wt: WorkTypeInfo) {
   return run(async () => {
     await api(`/api/work-types/${wt.id}`, {
       method: 'PATCH',
-      json: { name: wt.name, points_per_unit: wt.points_per_unit },
+      json: { name: wt.name, points_per_unit: wt.points_per_unit, card_based: wt.card_based },
     })
     await loadTypes()
   })
@@ -248,6 +248,7 @@ function sendTest() {
             <tr>
               <th>Name</th>
               <th class="num">Points per unit</th>
+              <th>Cards</th>
               <th>Status</th>
               <th></th>
             </tr>
@@ -264,6 +265,14 @@ function sendTest() {
                   min="0"
                   step="any"
                   class="field-input mono !w-24 text-right"
+                />
+              </td>
+              <td>
+                <input
+                  type="checkbox"
+                  :checked="!!wt.card_based"
+                  :title="'Log this type as cards'"
+                  @change="wt.card_based = ($event.target as HTMLInputElement).checked ? 1 : 0"
                 />
               </td>
               <td>{{ wt.active ? 'Active' : 'Inactive' }}</td>
@@ -309,8 +318,17 @@ function sendTest() {
             class="field-input mono !w-28"
           />
         </div>
+        <label class="flex items-center gap-2 pb-2 text-sm">
+          <input v-model="newType.card_based" type="checkbox" />
+          Logged as cards
+        </label>
         <button class="btn btn-solid" :disabled="busy">Add work type</button>
       </form>
+      <p class="mt-2 text-xs text-muted">
+        "Cards" types (e.g. Classification, QAP) are logged as individual cards
+        (name, total audits, time completed); the count is the number of cards.
+        Grant "Direct counts" to an employee to let them type the number instead.
+      </p>
     </div>
 
     <div class="panel">

@@ -32,6 +32,7 @@ const blankRights = () => ({
   view_remuneration: false,
   view_payslip: false,
   log_leave: false,
+  direct_counts: false,
   add_expenses: true,
   review_expenses: false,
   finance_expenses: false,
@@ -188,6 +189,7 @@ function rightsSummary(e: Employee): string {
     ['view_remuneration', 'Remuneration'],
     ['view_payslip', 'Payslip'],
     ['log_leave', 'Leave'],
+    ['direct_counts', 'Direct counts'],
     ['add_expenses', 'File expenses'],
     ['review_expenses', 'Review expenses'],
     ['finance_expenses', 'Expense finance'],
@@ -479,6 +481,10 @@ const managerName = (e: Employee) =>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.log_leave" type="checkbox" />
               Record paid leave
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.direct_counts" type="checkbox" />
+              Enter Classification/QAP counts directly (skip cards)
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.add_expenses" type="checkbox" />

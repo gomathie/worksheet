@@ -24,13 +24,16 @@
       "PowerShell($out = node \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\genhash.mjs\"; $cred = $out | ConvertFrom-Json; $cred.password | Out-File \"C:\\\\Users\\\\gomat\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-gomat-Downloads-worksheet\\\\e5cacbe6-f9c0-46d0-8dd4-e6e8ae8ab8de\\\\scratchpad\\\\temppass.txt\" -Encoding utf8; npx wrangler d1 execute ledger-db --remote --command \"INSERT INTO employees \\(id, employee_code, name, username, password_hash, role\\) VALUES \\('temp-verify-admin','TMP-000','Temp Verify','tempverify','$\\($cred.hash\\)','admin'\\)\" | Out-Null; \"temp admin ready\")",
       "Bash(curl -s -o /dev/null -w '%{http_code}' https://0c0e2bcb.ledger-6pa.pages.dev/api/me)",
       "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST https://0c0e2bcb.ledger-6pa.pages.dev/api/auth/login -H 'content-type: application/json' -d '{\"username\":\"x\",\"password\":\"yyyyyyyy\"}')",
-<<<<<<< HEAD
       "Bash(curl -s -o /dev/null -w '%{http_code}' https://0c0e2bcb.ledger-6pa.pages.dev/api/work-types)",
       "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST https://ledger-6pa.pages.dev/api/auth/login -H 'content-type: application/json' -d '{\"username\":\"nobody\",\"password\":\"xxxxxxxx\"}')",
-      "Bash(curl -s -o /dev/null -w '%{http_code}' https://ledger-6pa.pages.dev/api/me)"
-=======
-      "Bash(curl -s -o /dev/null -w '%{http_code}' https://0c0e2bcb.ledger-6pa.pages.dev/api/work-types)"
->>>>>>> feature/card-workflow
+      "Bash(curl -s -o /dev/null -w '%{http_code}' https://ledger-6pa.pages.dev/api/me)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('.claude/settings.json','utf8'\\)\\); console.log\\('valid JSON'\\)\")",
+      "Bash(curl -s -i -X POST http://127.0.0.1:8788/api/auth/login -H 'content-type: application/json' -d '{\"username\":\"localadmin\",\"password\":\"localtest123\"}')",
+      "Bash(curl -s -c /tmp/ck.txt -X POST http://127.0.0.1:8788/api/auth/login -H 'content-type: application/json' -d '{\"username\":\"localadmin\",\"password\":\"localtest123\"}' -o /dev/null)",
+      "Bash(curl -s -b /tmp/ck.txt http://127.0.0.1:8788/api/me)",
+      "Bash(curl -s -b /tmp/ck.txt http://127.0.0.1:8788/api/work-types)",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(s\\);\\(Array.isArray\\(j\\)?j:j.work_types||[]\\).forEach\\(w=>console.log\\(' ',w.id,'| card_based=',w.card_based\\)\\)}\\)\")",
+      "Bash(curl -s -o /dev/null -w \"  /api/petty-cash -> %{http_code}\\\\n\" -b /tmp/ck.txt http://127.0.0.1:8788/api/petty-cash)"
     ]
   }
 }

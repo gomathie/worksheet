@@ -583,7 +583,6 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   if (username && !passwordHash) {
     throw new ApiError(400, 'password is required when assigning a username')
   }
-<<<<<<< HEAD
   // The role seeds the tick-boxes; anything explicitly sent still wins.
   // Approval rights are never seeded — an admin grants those deliberately —
   // and are stripped outright for non-admins.
@@ -591,24 +590,6 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
     rightsToJson(body.rights, defaultRightsForRole(role)),
     role,
   )
-=======
-  const rights = rightsToJson(body.rights, {
-    add_entries: true,
-    edit_entries: true,
-    delete_entries: true,
-    view_dashboard: false,
-    view_reports: false,
-    view_remuneration: false,
-    view_payslip: false,
-    log_leave: false,
-    direct_counts: false,
-    add_expenses: true,
-    review_expenses: false,
-    finance_expenses: false,
-    // Approval is never granted on creation — an admin ticks it deliberately.
-    approve_expenses: false,
-  })
->>>>>>> feature/card-workflow
 
   const maxPerDay = normalizeEntryLimit(body.max_entries_per_day)
   const leaveAllowance = normalizeEntryLimit(body.leave_allowance)

@@ -332,31 +332,64 @@ const tableColspan = computed(
               + Add card
             </button>
           </div>
+          <!-- One set of column headings for the whole list. Hidden below md,
+               where the row grid collapses and each field carries its own. -->
+          <div
+            v-if="cardsFor(wt.id).length > 0"
+            class="mb-1 hidden gap-2 md:grid md:grid-cols-[2fr_1fr_1fr_auto]"
+          >
+            <span class="field-label">Card name</span>
+            <span class="field-label">Total audits</span>
+            <span class="field-label">Time completed</span>
+            <span aria-hidden="true" />
+          </div>
           <div
             v-for="(c, i) in cardsFor(wt.id)"
             :key="i"
             class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]"
           >
-            <input
-              v-model="c.card_name"
-              placeholder="Card name"
-              class="field-input"
-            />
-            <input
-              v-model.number="c.total_audits"
-              type="number"
-              min="0"
-              step="1"
-              placeholder="Total audits"
-              class="field-input mono"
-            />
-            <input
-              v-model="c.time_completed"
-              type="time"
-              class="field-input mono"
-              aria-label="Time completed"
-            />
-            <button type="button" class="btn btn-sm btn-danger" @click="removeCard(c)">
+            <div>
+              <label class="field-label md:hidden" :for="`card-${wt.id}-${i}-name`">
+                Card name
+              </label>
+              <input
+                :id="`card-${wt.id}-${i}-name`"
+                v-model="c.card_name"
+                placeholder="Card name"
+                class="field-input"
+              />
+            </div>
+            <div>
+              <label class="field-label md:hidden" :for="`card-${wt.id}-${i}-audits`">
+                Total audits
+              </label>
+              <input
+                :id="`card-${wt.id}-${i}-audits`"
+                v-model.number="c.total_audits"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Total audits"
+                class="field-input mono"
+              />
+            </div>
+            <div>
+              <label class="field-label md:hidden" :for="`card-${wt.id}-${i}-time`">
+                Time completed
+              </label>
+              <input
+                :id="`card-${wt.id}-${i}-time`"
+                v-model="c.time_completed"
+                type="time"
+                class="field-input mono"
+              />
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-danger md:self-start"
+              :aria-label="`Remove card ${i + 1}`"
+              @click="removeCard(c)"
+            >
               ✕
             </button>
           </div>

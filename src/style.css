@@ -143,8 +143,12 @@ table.data tr.totals td {
   .print-only { display: block; }
 
   /* The voucher is a standalone document: strip the app's page padding so it
-     sits against the printer margin, and keep the blocks from splitting. */
-  .voucher-doc { font-size: 12px; line-height: 1.45; }
+     sits against the printer margin, and keep the blocks from splitting.
+
+     The top padding is in the document rather than the @page margin because
+     some print paths (Android Chrome, "no margins" presets) ignore @page and
+     would otherwise butt the frame against the sheet edge. */
+  .voucher-doc { font-size: 12px; line-height: 1.45; padding-top: 8mm; }
   .voucher-doc section,
   .voucher-doc header,
   .voucher-doc footer { break-inside: avoid; }

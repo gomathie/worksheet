@@ -36,6 +36,16 @@ const finalApproval = computed(() =>
 
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '—')
 
+/**
+ * Who signs. Both names are known from the record, so they are printed rather
+ * than left blank — the document then identifies both parties without anyone
+ * having to decipher a signature.
+ */
+const signatories = computed(() => [
+  { label: 'Initiator', name: props.voucher.employee_name ?? '—' },
+  { label: 'Approved by', name: finalApproval.value?.approver_name ?? '—' },
+])
+
 const generatedOn = new Date().toLocaleString('en-GB', {
   year: 'numeric',
   month: 'short',
@@ -192,10 +202,15 @@ const generatedOn = new Date().toLocaleString('en-GB', {
       </section>
 
       <!-- -------------------------------------------------------- signatures -->
+      <!-- The names are printed on the rule so the document identifies both
+           parties on its own; the space above still takes a wet signature. -->
       <section class="mt-8 grid grid-cols-2 gap-8 text-[10px]">
-        <div v-for="label in ['Initiator', 'Approved by']" :key="label">
-          <div class="h-8 border-b border-ink" />
-          <p class="mt-1 tracking-[0.12em] text-muted uppercase">{{ label }}</p>
+        <div v-for="s in signatories" :key="s.label">
+          <p class="flex h-8 items-end pb-0.5 text-[12px] font-medium">
+            {{ s.name }}
+          </p>
+          <div class="border-b border-ink" />
+          <p class="mt-1 tracking-[0.12em] text-muted uppercase">{{ s.label }}</p>
         </div>
       </section>
 

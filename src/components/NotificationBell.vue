@@ -66,9 +66,24 @@ onMounted(async () => {
   await refreshPushState()
 })
 
+// Keep in step with the panel's `w-80` below.
+const PANEL_WIDTH = 320
+
+const root = ref<HTMLElement | null>(null)
+// Which edge of the bell the panel hangs from. The header wraps on narrow
+// screens, moving the bell from the right of the top bar to the left; anchored
+// right it would then hang off the left edge of the screen. The wrap point
+// depends on the header's own content, so measure rather than pick a
+// breakpoint.
+const alignLeft = ref(false)
+
 async function toggle() {
   open.value = !open.value
-  if (open.value) await load()
+  if (open.value) {
+    const r = root.value?.getBoundingClientRect()
+    alignLeft.value = !!r && r.right - PANEL_WIDTH < 8
+    await load()
+  }
 }
 
 async function markAllRead() {
@@ -102,7 +117,7 @@ function ago(iso: string): string {
 </script>
 
 <template>
-  <div class="relative">
+  <div ref="root" class="relative">
     <button
       class="btn btn-sm flex items-center gap-1.5"
       :aria-label="`Notifications${unread ? `, ${unread} unread` : ''}`"
@@ -118,9 +133,12 @@ function ago(iso: string): string {
 
     <div v-if="open" class="fixed inset-0 z-10" @click="open = false" />
 
+    <!-- Anchor side is measured when opening (see alignLeft); the max-width
+         keeps the panel on screen on very narrow phones. -->
     <div
       v-if="open"
-      class="panel absolute right-0 z-20 mt-1 max-h-96 w-80 overflow-y-auto !p-1 text-sm shadow-lg"
+      class="panel absolute z-20 mt-1 max-h-96 w-80 max-w-[calc(100vw-2.5rem)] overflow-y-auto !p-1 text-sm shadow-lg"
+      :class="alignLeft ? 'left-0' : 'right-0'"
     >
       <div class="flex items-center justify-between border-b border-line px-3 py-2">
         <span class="display text-base">Notifications</span>

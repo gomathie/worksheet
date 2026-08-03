@@ -94,12 +94,6 @@ const money = (n: number) =>
           </template>
           <template v-else>
             <div class="panel">
-              <p class="field-label">Your points</p>
-              <p class="mono text-3xl font-semibold">
-                {{ report.my_summary?.points ?? 0 }}
-              </p>
-            </div>
-            <div class="panel">
               <p class="field-label">Due to you</p>
               <p class="mono text-3xl font-semibold text-teal">
                 {{ money(report.my_summary?.total_due ?? report.my_summary?.remuneration ?? 0) }}

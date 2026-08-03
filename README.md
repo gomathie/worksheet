@@ -242,6 +242,11 @@ total due  = base pay + approved bonuses + approved reimbursements
 Only **approved** entries count. When a month is **locked**, its rate snapshot is used instead of
 current rates. Unlocked months use the live rates.
 
+**Points are admin-only.** Non-admins never receive a points figure from the API — not even their
+own, and not on trends or payslips. They see cedi amounts only. This is enforced server-side rather
+than in the templates: shipping points *and* base pay to the same viewer would let them derive
+`value_per_point` by division.
+
 ---
 
 ## Repo layout

@@ -204,7 +204,7 @@ const rateNote = computed(() => {
             {{ money(report.my_summary.total_due ?? report.my_summary.remuneration) }}
           </p>
           <p class="mt-1 text-xs text-muted">
-            {{ report.my_summary.points }} point(s) = {{ money(report.my_summary.remuneration) }}
+            {{ money(report.my_summary.remuneration) }} for work logged
             <template v-if="report.my_summary.bonus">
               + {{ money(report.my_summary.bonus) }} bonus</template
             >

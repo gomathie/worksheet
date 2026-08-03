@@ -142,7 +142,8 @@ export interface DailyDetailRow {
 
 // The API strips money fields for non-admin viewers ("limited" scope):
 // per-person points/remuneration and money totals are absent, settings only
-// carries the currency, and my_summary holds the viewer's own figures.
+// carries the currency, and my_summary holds the viewer's own figures — as
+// cedi amounts only, since points alongside them would reveal point_value.
 export interface ReportPerson {
   employee_id: string
   name: string
@@ -179,7 +180,6 @@ export interface ReportPayload {
   settings: { currency: string } & Partial<RateSettings>
   daily_detail: DailyDetailRow[]
   my_summary?: {
-    points: number
     remuneration: number
     bonus: number
     reimbursements: number
@@ -417,7 +417,8 @@ export interface MyRemuneration {
   hours: number
   units: Record<string, number>
   work_types: WorkTypeInfo[]
-  points: number
+  /** Admin viewers only — omitted from an employee's own slip. */
+  points?: number
   base: number
   bonus: number
   reimbursements: number

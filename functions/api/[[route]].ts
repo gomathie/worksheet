@@ -1524,7 +1524,19 @@ async function listAudit(request: Request, env: Env): Promise<Response> {
 }
 
 /** A single employee's pay summary for a month (used for payslips too). */
-async function remunerationFor(env: Env, employee: Employee, month: string) {
+/**
+ * A month's pay figures for one employee.
+ *
+ * `includePoints` gates the raw points figure. Points are an internal rating
+ * input, not a pay line: employees see the cedi amounts only, so they cannot
+ * read `point_value` off the payload by dividing base by points.
+ */
+async function remunerationFor(
+  env: Env,
+  employee: Employee,
+  month: string,
+  includePoints: boolean,
+) {
   // Locked months use their frozen rate snapshot.
   const rates = await ratesForMonth(env, month)
   const [hoursRow, unitRows, adjRes, payment] = await Promise.all([
@@ -1570,7 +1582,7 @@ async function remunerationFor(env: Env, employee: Employee, month: string) {
     hours: hoursRow?.hours ?? 0,
     units,
     work_types: rates.workTypes.map((w) => ({ id: w.id, name: w.name })),
-    points,
+    ...(includePoints ? { points } : {}),
     base,
     bonus: Math.round(bonus * 100) / 100,
     reimbursements: Math.round(reimbursements * 100) / 100,
@@ -1594,7 +1606,8 @@ async function myRemuneration(request: Request, env: Env): Promise<Response> {
   }
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
-  return json(await remunerationFor(env, user, month))
+  // Admins keep points even on their own slip; everyone else gets money only.
+  return json(await remunerationFor(env, user, month, user.role === 'admin'))
 }
 
 /** Admin-only: any employee's pay summary for a month (for payslips). */
@@ -1610,7 +1623,7 @@ async function employeeRemuneration(
   if (!employee) throw new ApiError(404, 'Employee not found')
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
-  return json(await remunerationFor(env, employee, month))
+  return json(await remunerationFor(env, employee, month, true))
 }
 
 // --------------------------------------------------------- performance trends
@@ -1714,7 +1727,9 @@ async function trends(request: Request, env: Env): Promise<Response> {
     const points = months.map((m) =>
       computePoints(unitsByMonth.get(m) ?? {}, workTypes, overrides),
     )
-    base.points = points
+    // Points ride along for admins only; pairing them with remuneration would
+    // hand an employee point_value.
+    if (isAdmin) base.points = points
     base.remuneration = points.map((p) => computeRemuneration(p, settings))
   }
   return json(base)
@@ -2055,6 +2070,8 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
 
   // Non-admins see everyone's work performance but money figures only for
   // themselves: no rates, no points/remuneration of colleagues, no money totals.
+  // Their own points are withheld too — with the cedi amount present, shipping
+  // points as well would expose point_value.
   const mine = report.per_person.find((p) => p.employee_id === user.id)
   const myBonus = bonusBy.get(user.id) ?? 0
   const myReimb = reimbBy.get(user.id) ?? 0
@@ -2077,7 +2094,6 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     settings: { currency: settings.currency },
     daily_detail,
     my_summary: {
-      points: mine?.points ?? 0,
       remuneration: mine?.remuneration ?? 0,
       bonus: myBonus,
       reimbursements: myReimb,

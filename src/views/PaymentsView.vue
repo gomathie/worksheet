@@ -155,7 +155,7 @@ const statusLabel = (a: Adjustment) =>
       <h3 class="display mb-3 text-xl">Your remuneration</h3>
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div>
-          <p class="field-label">Base ({{ mine.points }} points)</p>
+          <p class="field-label">Base</p>
           <p class="mono text-2xl font-semibold">{{ money(mine.base) }}</p>
         </div>
         <div>

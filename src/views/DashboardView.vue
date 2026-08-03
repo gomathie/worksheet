@@ -92,12 +92,18 @@ const money = (n: number) =>
               </p>
             </div>
           </template>
-          <template v-else>
+          <template v-else-if="report.my_summary?.remuneration !== undefined">
             <div class="panel">
               <p class="field-label">Due to you</p>
               <p class="mono text-3xl font-semibold text-teal">
-                {{ money(report.my_summary?.total_due ?? report.my_summary?.remuneration ?? 0) }}
+                {{ money(report.my_summary.total_due ?? report.my_summary.remuneration) }}
               </p>
+            </div>
+          </template>
+          <template v-else-if="report.my_summary?.points !== undefined">
+            <div class="panel">
+              <p class="field-label">Your points</p>
+              <p class="mono text-3xl font-semibold">{{ report.my_summary.points }}</p>
             </div>
           </template>
         </div>

@@ -23,7 +23,8 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
     and the administrator tunes rights from there.
   - **Employee** is governed by per-person **rights** an admin assigns.
 - Assignable rights: add / edit / delete own entries (three separate rights), view dashboard, view
-  monthly reports, view own remuneration, view own payslip, record paid leave, direct counts
+  monthly reports, view own remuneration, view own payslip, view own points, record paid leave,
+  direct counts
   (type Classification/QAP counts instead of logging cards), file expenses, review expenses,
   expense finance, approve expenses, add users, approve users, and use petty cash.
   **`approve_expenses` and `approve_users` are the two rights the admin role does not imply** —
@@ -242,10 +243,22 @@ total due  = base pay + approved bonuses + approved reimbursements
 Only **approved** entries count. When a month is **locked**, its rate snapshot is used instead of
 current rates. Unlocked months use the live rates.
 
-**Points are admin-only.** Non-admins never receive a points figure from the API — not even their
-own, and not on trends or payslips. They see cedi amounts only. This is enforced server-side rather
-than in the templates: shipping points *and* base pay to the same viewer would let them derive
-`value_per_point` by division.
+### Points vs money visibility
+**Only an administrator ever sees points and money together.** For everyone else the two are
+mutually exclusive, because a viewer holding both figures can divide one by the other and read
+`value_per_point` straight off — an equation the admin role alone is trusted with.
+
+| Viewer | Sees |
+|---|---|
+| Admin | Points, money, `value_per_point`, and the rate legend |
+| `view_remuneration` / `view_payslip` | Cedi amounts only — no points, anywhere |
+| `view_points` | A points score only — no cedi amounts, no payslip |
+| Neither | Hours and units only |
+
+`view_points` is **forced off** whenever either pay right is held. That is enforced in
+`parseRights`, not just on write, so a hand-edited rights row still cannot pair the two; pay wins,
+since it is the figure someone is actually owed. The Team form disables the box to match. This
+applies uniformly to the monthly report, the dashboard, trends, and payslips.
 
 ---
 

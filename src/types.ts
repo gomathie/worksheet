@@ -17,6 +17,8 @@ export interface Rights {
   view_reports: boolean
   view_remuneration: boolean
   view_payslip: boolean
+  /** Points as an output score. Forced off by either pay right — see auth.ts. */
+  view_points: boolean
   log_leave: boolean
   /** Type Classification/QAP counts directly instead of logging cards. */
   direct_counts: boolean
@@ -179,14 +181,19 @@ export interface ReportPayload {
   daily_totals: DailyTotal[]
   settings: { currency: string } & Partial<RateSettings>
   daily_detail: DailyDetailRow[]
-  my_summary?: {
-    remuneration: number
-    bonus: number
-    reimbursements: number
-    total_due: number
-    paid: boolean
-    confirmed: boolean
-  }
+  // Pay or points, never both, and absent without either right. The two shapes
+  // are disjoint so a template cannot render an equation between them.
+  my_summary?:
+    | {
+        remuneration: number
+        bonus: number
+        reimbursements: number
+        total_due: number
+        paid: boolean
+        confirmed: boolean
+        points?: undefined
+      }
+    | { points: number; remuneration?: undefined }
 }
 
 export interface Absence {
@@ -219,6 +226,7 @@ export interface TrendData {
   hours: number[]
   units: Record<string, number[]>
   show_money: boolean
+  show_points: boolean
   points?: number[]
   remuneration?: number[]
 }

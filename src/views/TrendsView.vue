@@ -99,12 +99,20 @@ const hasUnits = computed(() =>
         <TrendChart :labels="monthLabels" :series="[{ label: 'Hours', data: data.hours }]" />
       </div>
 
-      <div v-if="data.show_money && data.remuneration" class="panel">
+      <div v-if="data.show_money && data.remuneration" class="panel mb-6">
         <h3 class="display mb-3 text-xl">Remuneration by month</h3>
         <TrendChart
           :labels="monthLabels"
           :series="[{ label: 'Remuneration', data: data.remuneration }]"
           :currency="data.currency"
+        />
+      </div>
+
+      <div v-if="data.show_points && data.points" class="panel">
+        <h3 class="display mb-3 text-xl">Points by month</h3>
+        <TrendChart
+          :labels="monthLabels"
+          :series="[{ label: 'Points', data: data.points }]"
         />
       </div>
     </template>

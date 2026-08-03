@@ -195,7 +195,20 @@ const rateNote = computed(() => {
       </header>
 
       <section
-        v-if="report.scope === 'limited' && report.my_summary"
+        v-if="report.scope === 'limited' && report.my_summary?.points !== undefined"
+        class="print-block mb-8"
+      >
+        <div class="rounded-lg border border-line p-4">
+          <p class="field-label">Your output this month</p>
+          <p class="mono text-3xl font-semibold">{{ report.my_summary.points }}</p>
+          <p class="mt-1 text-xs text-muted">
+            Points earned for work logged in {{ monthLabel }}.
+          </p>
+        </div>
+      </section>
+
+      <section
+        v-if="report.scope === 'limited' && report.my_summary?.remuneration !== undefined"
         class="print-block mb-8"
       >
         <div class="rounded-lg border border-teal bg-teal-soft p-4">

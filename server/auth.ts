@@ -80,6 +80,11 @@ export interface Rights {
   view_reports: boolean
   view_remuneration: boolean
   view_payslip: boolean
+  // Points as a standalone output score. Mutually exclusive with the two pay
+  // rights for non-admins: points beside a cedi amount is just point_value
+  // written as a division, so canSeeOwnPay wins and this is forced off. Only
+  // the admin role ever sees both together.
+  view_points: boolean
   log_leave: boolean
   // Card-based work types (Classification/QAP) are normally logged as cards.
   // This right lets the holder type the count directly instead.
@@ -152,6 +157,7 @@ export const DEFAULT_RIGHTS: Rights = {
   view_reports: false,
   view_remuneration: false,
   view_payslip: false,
+  view_points: false,
   log_leave: false,
   direct_counts: false,
   add_expenses: true,
@@ -171,6 +177,7 @@ const ALL_RIGHTS: Rights = {
   view_reports: true,
   view_remuneration: true,
   view_payslip: true,
+  view_points: true,
   log_leave: true,
   direct_counts: true,
   add_expenses: true,
@@ -223,6 +230,8 @@ export function parseRights(employee: Employee): Rights {
   }
   try {
     const raw = JSON.parse(employee.rights || '{}') as Partial<Rights>
+    const view_remuneration = Boolean(raw.view_remuneration ?? raw.view_payslip)
+    const view_payslip = Boolean(raw.view_payslip)
     return {
       // Rows written before add/edit/delete were split only have
       // edit_entries; let it stand in until the admin re-saves them.
@@ -233,8 +242,12 @@ export function parseRights(employee: Employee): Rights {
       view_reports: Boolean(raw.view_reports),
       // view_payslip predates the split; let it stand in for view_remuneration
       // so existing payslip-holders keep the Payments summary until re-saved.
-      view_remuneration: Boolean(raw.view_remuneration ?? raw.view_payslip),
-      view_payslip: Boolean(raw.view_payslip),
+      view_remuneration,
+      view_payslip,
+      // Enforced here rather than only on write, so a hand-edited row with both
+      // flags still cannot pair points with a cedi amount. Pay wins: it is the
+      // figure someone is actually owed.
+      view_points: Boolean(raw.view_points) && !view_remuneration && !view_payslip,
       log_leave: Boolean(raw.log_leave),
       direct_counts: Boolean(raw.direct_counts),
       // Filing your own expenses is the baseline, like logging your own time:

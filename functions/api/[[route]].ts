@@ -1710,8 +1710,12 @@ async function trends(request: Request, env: Env): Promise<Response> {
   }
 
   const isAdmin = user.role === 'admin'
-  const showMoney =
-    isAdmin || (targetId === user.id && canSeeOwnPay(parseRights(user)))
+  const userRights = parseRights(user)
+  const showMoney = isAdmin || (targetId === user.id && canSeeOwnPay(userRights))
+  // Points stand in for money on a points-holder's own trend. parseRights
+  // guarantees view_points and the pay rights never coexist off the admin
+  // role, so this and showMoney cannot both be on for a non-admin.
+  const showPoints = isAdmin || (targetId === user.id && userRights.view_points)
 
   const base: Record<string, unknown> = {
     employee_id: target.id,
@@ -1723,15 +1727,14 @@ async function trends(request: Request, env: Env): Promise<Response> {
     units,
     show_money: showMoney,
   }
-  if (showMoney) {
+  if (showMoney || showPoints) {
     const points = months.map((m) =>
       computePoints(unitsByMonth.get(m) ?? {}, workTypes, overrides),
     )
-    // Points ride along for admins only; pairing them with remuneration would
-    // hand an employee point_value.
-    if (isAdmin) base.points = points
-    base.remuneration = points.map((p) => computeRemuneration(p, settings))
+    if (showPoints) base.points = points
+    if (showMoney) base.remuneration = points.map((p) => computeRemuneration(p, settings))
   }
+  base.show_points = showPoints
   return json(base)
 }
 
@@ -2068,14 +2071,28 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     })
   }
 
-  // Non-admins see everyone's work performance but money figures only for
-  // themselves: no rates, no points/remuneration of colleagues, no money totals.
-  // Their own points are withheld too — with the cedi amount present, shipping
-  // points as well would expose point_value.
+  // Non-admins see everyone's work performance but their own figures only:
+  // no rates, no points/remuneration of colleagues, no money totals.
+  //
+  // my_summary carries pay *or* points, never both, and nothing at all without
+  // one of those rights. Sending points beside a cedi amount would publish
+  // point_value as a division, which only the admin role is trusted with.
   const mine = report.per_person.find((p) => p.employee_id === user.id)
   const myBonus = bonusBy.get(user.id) ?? 0
   const myReimb = reimbBy.get(user.id) ?? 0
   const myPayment = paymentBy.get(user.id)
+  const my_summary = canSeeOwnPay(rights)
+    ? {
+        remuneration: mine?.remuneration ?? 0,
+        bonus: myBonus,
+        reimbursements: myReimb,
+        total_due: round2((mine?.remuneration ?? 0) + myBonus + myReimb),
+        paid: Boolean(myPayment?.paid_at),
+        confirmed: Boolean(myPayment?.confirmed_at),
+      }
+    : rights.view_points
+      ? { points: mine?.points ?? 0 }
+      : undefined
   return json({
     month: report.month,
     scope: 'limited',
@@ -2093,14 +2110,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     daily_totals: report.daily_totals,
     settings: { currency: settings.currency },
     daily_detail,
-    my_summary: {
-      remuneration: mine?.remuneration ?? 0,
-      bonus: myBonus,
-      reimbursements: myReimb,
-      total_due: round2((mine?.remuneration ?? 0) + myBonus + myReimb),
-      paid: Boolean(myPayment?.paid_at),
-      confirmed: Boolean(myPayment?.confirmed_at),
-    },
+    my_summary,
   })
 }
 

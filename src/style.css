@@ -74,6 +74,21 @@ html {
   color: var(--color-muted);
   margin-bottom: 4px;
 }
+/* The headline number in a stat tile. Sized down on a phone, where a tile is
+   ~115px wide and a formatted currency total at 30px wants ~180px, and allowed
+   to break mid-figure so an unexpectedly large value wraps inside its tile
+   instead of spilling over the neighbouring one. */
+.stat-figure {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 768px) {
+  .stat-figure { font-size: 30px; }
+}
+
 .field-input {
   width: 100%;
   border: 1px solid var(--color-line);

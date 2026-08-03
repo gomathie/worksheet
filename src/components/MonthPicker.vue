@@ -18,7 +18,10 @@ const label = () => {
 </script>
 
 <template>
-  <div class="flex items-center gap-2">
+  <!-- Wraps because the arrows, the month label and the native month input
+       together exceed a phone's width; without it the whole page is forced
+       wider than the viewport and the browser shrinks the layout to fit. -->
+  <div class="flex flex-wrap items-center gap-2">
     <button class="btn btn-sm" aria-label="Previous month" @click="shift(-1)">‹</button>
     <span class="display min-w-36 text-center text-xl">{{ label() }}</span>
     <button class="btn btn-sm" aria-label="Next month" @click="shift(1)">›</button>

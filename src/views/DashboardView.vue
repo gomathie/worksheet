@@ -79,34 +79,34 @@ const money = (n: number) =>
         <div class="grid basis-full grid-cols-2 gap-4 md:flex-1 md:basis-0 md:grid-cols-4">
           <div v-for="wt in visibleTypes" :key="wt.id" class="panel">
             <p class="field-label">{{ wt.name }}</p>
-            <p class="mono text-3xl font-semibold">
-              {{ report.totals.units[wt.id] ?? 0 }}
-            </p>
+            <p class="stat-figure">{{ report.totals.units[wt.id] ?? 0 }}</p>
           </div>
           <template v-if="report.scope === 'full'">
             <div class="panel">
               <p class="field-label">Points</p>
-              <p class="mono text-3xl font-semibold">{{ report.totals.points }}</p>
+              <p class="stat-figure">{{ report.totals.points }}</p>
             </div>
-            <div class="panel">
+            <!-- Money needs the whole row on a phone: a half-width tile leaves
+                 115px of content, and a formatted total wants ~180px. -->
+            <div class="panel col-span-2 md:col-span-1">
               <p class="field-label">Total due (incl. bonuses)</p>
-              <p class="mono text-3xl font-semibold text-teal">
+              <p class="stat-figure text-teal">
                 {{ money(report.totals.total_due ?? report.totals.remuneration ?? 0) }}
               </p>
             </div>
           </template>
-          <template v-else>
-            <div class="panel">
-              <p class="field-label">Your points</p>
-              <p class="mono text-3xl font-semibold">
-                {{ report.my_summary?.points ?? 0 }}
+          <template v-else-if="report.my_summary?.remuneration !== undefined">
+            <div class="panel col-span-2 md:col-span-1">
+              <p class="field-label">Due to you</p>
+              <p class="stat-figure text-teal">
+                {{ money(report.my_summary.total_due ?? report.my_summary.remuneration) }}
               </p>
             </div>
+          </template>
+          <template v-else-if="report.my_summary?.points !== undefined">
             <div class="panel">
-              <p class="field-label">Due to you</p>
-              <p class="mono text-3xl font-semibold text-teal">
-                {{ money(report.my_summary?.total_due ?? report.my_summary?.remuneration ?? 0) }}
-              </p>
+              <p class="field-label">Your points</p>
+              <p class="stat-figure">{{ report.my_summary.points }}</p>
             </div>
           </template>
         </div>

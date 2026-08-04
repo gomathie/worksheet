@@ -17,6 +17,8 @@ export interface Rights {
   view_reports: boolean
   view_remuneration: boolean
   view_payslip: boolean
+  /** Points as an output score. Forced off by either pay right — see auth.ts. */
+  view_points: boolean
   log_leave: boolean
   /** Type Classification/QAP counts directly instead of logging cards. */
   direct_counts: boolean
@@ -142,7 +144,8 @@ export interface DailyDetailRow {
 
 // The API strips money fields for non-admin viewers ("limited" scope):
 // per-person points/remuneration and money totals are absent, settings only
-// carries the currency, and my_summary holds the viewer's own figures.
+// carries the currency, and my_summary holds the viewer's own figures — as
+// cedi amounts only, since points alongside them would reveal point_value.
 export interface ReportPerson {
   employee_id: string
   name: string
@@ -178,15 +181,19 @@ export interface ReportPayload {
   daily_totals: DailyTotal[]
   settings: { currency: string } & Partial<RateSettings>
   daily_detail: DailyDetailRow[]
-  my_summary?: {
-    points: number
-    remuneration: number
-    bonus: number
-    reimbursements: number
-    total_due: number
-    paid: boolean
-    confirmed: boolean
-  }
+  // Pay or points, never both, and absent without either right. The two shapes
+  // are disjoint so a template cannot render an equation between them.
+  my_summary?:
+    | {
+        remuneration: number
+        bonus: number
+        reimbursements: number
+        total_due: number
+        paid: boolean
+        confirmed: boolean
+        points?: undefined
+      }
+    | { points: number; remuneration?: undefined }
 }
 
 export interface Absence {
@@ -219,6 +226,7 @@ export interface TrendData {
   hours: number[]
   units: Record<string, number[]>
   show_money: boolean
+  show_points: boolean
   points?: number[]
   remuneration?: number[]
 }
@@ -417,7 +425,8 @@ export interface MyRemuneration {
   hours: number
   units: Record<string, number>
   work_types: WorkTypeInfo[]
-  points: number
+  /** Admin viewers only — omitted from an employee's own slip. */
+  points?: number
   base: number
   bonus: number
   reimbursements: number

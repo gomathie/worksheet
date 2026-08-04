@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { DATA_SCOPE_LABELS, type DataScope } from '../types'
 import type { Department, Employee, WorkTypeInfo } from '../types'
@@ -31,6 +31,7 @@ const blankRights = () => ({
   view_reports: false,
   view_remuneration: false,
   view_payslip: false,
+  view_points: false,
   log_leave: false,
   direct_counts: false,
   add_expenses: true,
@@ -56,6 +57,16 @@ const form = ref({
   department_id: '' as string,
   manager_id: '' as string,
   data_scope: 'own' as DataScope,
+})
+
+// Points and pay are mutually exclusive off the admin role: showing both lets
+// the holder divide one by the other and read the value per point. The server
+// enforces it in parseRights; this keeps the form honest about it.
+const grantsOwnPay = computed(
+  () => form.value.rights.view_remuneration || form.value.rights.view_payslip,
+)
+watch(grantsOwnPay, (on) => {
+  if (on) form.value.rights.view_points = false
 })
 
 async function load() {
@@ -188,6 +199,7 @@ function rightsSummary(e: Employee): string {
     ['view_reports', 'Reports'],
     ['view_remuneration', 'Remuneration'],
     ['view_payslip', 'Payslip'],
+    ['view_points', 'Points'],
     ['log_leave', 'Leave'],
     ['direct_counts', 'Direct counts'],
     ['add_expenses', 'File expenses'],
@@ -477,6 +489,22 @@ const managerName = (e: Employee) =>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.view_payslip" type="checkbox" />
               View own payslip
+            </label>
+            <label
+              class="flex items-center gap-2"
+              :class="{ 'opacity-50': grantsOwnPay }"
+              :title="
+                grantsOwnPay
+                  ? 'Unavailable alongside a pay right — points next to an amount would reveal the value per point.'
+                  : ''
+              "
+            >
+              <input
+                v-model="form.rights.view_points"
+                type="checkbox"
+                :disabled="grantsOwnPay"
+              />
+              View own points (output score, no money)
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.log_leave" type="checkbox" />

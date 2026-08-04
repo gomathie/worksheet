@@ -4,6 +4,7 @@ import {
   computePoints,
   computeRemuneration,
   aggregateMonthly,
+  normalizeCardName,
   parseTime,
   type RateSettings,
   type WorkType,
@@ -191,5 +192,40 @@ describe('aggregateMonthly', () => {
     })
     expect(r.per_person).toEqual([])
     expect(r.daily_totals).toEqual([])
+  })
+})
+
+describe('normalizeCardName', () => {
+  it('folds the spaced form onto the underscore convention', () => {
+    expect(normalizeCardName('Boost us')).toBe('Boost_us')
+    expect(normalizeCardName('Carphonewarehouse gb')).toBe('Carphonewarehouse_gb')
+  })
+
+  it('leaves an already-correct name untouched', () => {
+    expect(normalizeCardName('Boost_us')).toBe('Boost_us')
+    expect(normalizeCardName('Currys')).toBe('Currys')
+  })
+
+  it('collapses runs of whitespace to a single underscore', () => {
+    expect(normalizeCardName('Orange   es')).toBe('Orange_es')
+    expect(normalizeCardName('Orange\tes')).toBe('Orange_es')
+  })
+
+  it('trims the edges rather than turning them into underscores', () => {
+    expect(normalizeCardName('  Amazon fr  ')).toBe('Amazon_fr')
+  })
+
+  it('preserves case, so Amazon_us and amazon_us stay distinct', () => {
+    expect(normalizeCardName('PBTECH nz')).toBe('PBTECH_nz')
+  })
+
+  it('returns empty for blank input so the caller can reject it', () => {
+    expect(normalizeCardName('   ')).toBe('')
+    expect(normalizeCardName(undefined)).toBe('')
+    expect(normalizeCardName(null)).toBe('')
+  })
+
+  it('caps the length after folding', () => {
+    expect(normalizeCardName('a'.repeat(200))).toHaveLength(120)
   })
 })

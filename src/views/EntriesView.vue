@@ -72,6 +72,22 @@ function removeCard(card: EntryCard) {
   if (i >= 0) form.value.cards.splice(i, 1)
 }
 
+// Card names used before, per type — the same cards recur, so they are offered
+// as suggestions rather than retyped. A name not in the list can still be
+// typed; it joins the list once the entry is saved.
+const cardNames = ref<Record<string, string[]>>({})
+
+async function loadCardNames() {
+  try {
+    cardNames.value = await api<Record<string, string[]>>('/api/card-names')
+  } catch {
+    // Suggestions are a convenience — losing them must not block logging work.
+    cardNames.value = {}
+  }
+}
+
+const namesFor = (typeId: string) => cardNames.value[typeId] ?? []
+
 async function loadEntries() {
   const params = new URLSearchParams({ month: month.value })
   if (auth.isAdmin && filterEmployee.value) {
@@ -89,7 +105,7 @@ onMounted(async () => {
     api<Employee[]>('/api/employees'),
     api<WorkTypeInfo[]>('/api/work-types'),
   ])
-  await loadEntries()
+  await Promise.all([loadEntries(), loadCardNames()])
 })
 
 watch([month, filterEmployee], loadEntries)
@@ -332,6 +348,11 @@ const tableColspan = computed(
               + Add card
             </button>
           </div>
+          <!-- Previously used names for this type. A datalist suggests them
+               while still allowing a new name to be typed. -->
+          <datalist :id="`card-names-${wt.id}`">
+            <option v-for="n in namesFor(wt.id)" :key="n" :value="n" />
+          </datalist>
           <!-- One set of column headings for the whole list. Hidden below md,
                where the row grid collapses and each field carries its own. -->
           <div
@@ -360,7 +381,9 @@ const tableColspan = computed(
               <input
                 :id="`card-${wt.id}-${i}-name`"
                 v-model="c.card_name"
-                placeholder="Card name"
+                :list="`card-names-${wt.id}`"
+                autocomplete="off"
+                :placeholder="namesFor(wt.id).length ? 'Pick or type a name' : 'Card name'"
                 class="field-input"
               />
             </div>

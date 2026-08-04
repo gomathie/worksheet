@@ -170,6 +170,29 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
 
 // ---------------------------------------------------------- work type routes
 
+/**
+ * Card names already used, per card-based work type, most-used first.
+ *
+ * The same cards recur week to week, so the entry form offers these back as
+ * suggestions instead of making people retype them. Names are shared across
+ * the team on purpose — one person's "Batch A" is everyone's — and a name only
+ * has to be typed once, on first use, before it appears here.
+ */
+async function listCardNames(request: Request, env: Env): Promise<Response> {
+  await requireUser(request, env)
+  const { results } = await env.DB.prepare(
+    `SELECT work_type_id, card_name, COUNT(*) AS uses
+       FROM entry_cards
+      GROUP BY work_type_id, card_name
+      ORDER BY uses DESC, card_name
+      LIMIT 500`,
+  ).all<{ work_type_id: string; card_name: string; uses: number }>()
+
+  const byType: Record<string, string[]> = {}
+  for (const r of results) (byType[r.work_type_id] ??= []).push(r.card_name)
+  return json(byType)
+}
+
 async function listWorkTypes(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const { results } = await env.DB.prepare(
@@ -2167,6 +2190,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     })
   }
 
+  if (path === '/api/card-names' && method === 'GET') return listCardNames(request, env)
   if (path === '/api/work-types' && method === 'GET') return listWorkTypes(request, env)
   if (path === '/api/work-types' && method === 'POST') return createWorkType(request, env)
   const wtMatch = /^\/api\/work-types\/([\w-]+)$/.exec(path)

@@ -186,3 +186,18 @@ export function aggregateMonthly(
     daily_totals: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
   }
 }
+
+/**
+ * Canonical form of a card name.
+ *
+ * Card names follow `retailer_country` (e.g. `Boost_us`). Typed by hand the
+ * separator drifts, and "Boost us" then lives alongside "Boost_us" as a second
+ * card that reports and suggestion lists treat as unrelated. Folding any run of
+ * whitespace to the underscore keeps one card to one name.
+ */
+export function normalizeCardName(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 120)
+}

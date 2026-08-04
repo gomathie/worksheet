@@ -44,6 +44,7 @@ import {
   computeHours,
   computePoints,
   computeRemuneration,
+  normalizeCardName,
   parseTime,
 } from '../../shared/logic'
 import { getCookie } from '../../server/http'

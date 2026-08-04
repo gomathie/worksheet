@@ -952,7 +952,10 @@ async function normalizeCards(
     if (!assigned.has(typeId)) {
       throw new ApiError(400, 'This employee is not assigned that type of work')
     }
-    const name = String(c.card_name ?? '').trim().slice(0, 120)
+    // Card names are `retailer_country`. Spaces are a typo for the underscore
+    // and used to split one card into two suggestions ("Boost us" vs
+    // "Boost_us"), so they are folded here rather than left to the typist.
+    const name = normalizeCardName(c.card_name)
     if (!name) throw new ApiError(400, 'Each card needs a name')
     const audits = assertCount(c.total_audits ?? 0, 'total_audits')
     const time = c.time_completed ? String(c.time_completed).slice(0, 20) : null

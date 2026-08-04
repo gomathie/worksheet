@@ -180,16 +180,20 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
  */
 async function listCardNames(request: Request, env: Env): Promise<Response> {
   await requireUser(request, env)
+  // Names are pooled across card-based types, not grouped by them: the same
+  // card is classified first and goes through QAP afterwards, so a name first
+  // seen under one type must be offered under the other.
   const { results } = await env.DB.prepare(
-    `SELECT work_type_id, card_name, COUNT(*) AS uses
+    `SELECT card_name, COUNT(*) AS uses
        FROM entry_cards
-      GROUP BY work_type_id, card_name
+      GROUP BY card_name
       ORDER BY uses DESC, card_name
       LIMIT 500`,
-  ).all<{ work_type_id: string; card_name: string; uses: number }>()
+  ).all<{ card_name: string; uses: number }>()
 
+  const names = results.map((r) => r.card_name)
   const byType: Record<string, string[]> = {}
-  for (const r of results) (byType[r.work_type_id] ??= []).push(r.card_name)
+  for (const id of await cardBasedTypeIds(env)) byType[id] = names
   return json(byType)
 }
 

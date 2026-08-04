@@ -78,7 +78,13 @@ async function changePassword() {
     <header
       class="no-print flex flex-wrap items-end justify-between gap-3 border-b-2 border-ink pt-7 pb-4"
     >
-      <div class="flex items-center gap-3">
+      <!-- The masthead doubles as the way home. On the login screen the route
+           guard bounces it straight back, so it is harmless there. -->
+      <RouterLink
+        :to="{ name: 'entries' }"
+        class="flex items-center gap-3 hover:opacity-80"
+        aria-label="OpenSignal Ledger — go to time entry"
+      >
         <div
           class="display flex h-10 w-10 -rotate-6 items-center justify-center rounded-full border-2 border-ink text-[15px]"
         >
@@ -90,7 +96,7 @@ async function changePassword() {
             Team Timesheet &amp; Tracker
           </p>
         </div>
-      </div>
+      </RouterLink>
       <div v-if="auth.user" class="flex items-center gap-2 text-sm">
         <NotificationBell />
         <div class="relative">

@@ -28,7 +28,7 @@ const departments = ref<Department[]>([])
 const categories = ref<ExpenseCategory[]>([])
 const newDepartment = ref('')
 const newCategory = ref('')
-const workflow = ref<WorkflowConfig>({ require_manager: true, require_finance: true })
+const workflow = ref<WorkflowConfig>({ require_manager: true })
 const workflowSaved = ref(false)
 
 async function loadTypes() {
@@ -488,14 +488,11 @@ function sendTest() {
           <input v-model="workflow.require_manager" type="checkbox" />
           Manager review — the employee's <em>Reports to</em> approves first
         </label>
-        <label class="flex items-center gap-2">
-          <input v-model="workflow.require_finance" type="checkbox" />
-          Finance review — a finance holder verifies before payment
-        </label>
       </div>
       <p class="mb-4 text-xs text-muted">
         Employees with no manager assigned skip the manager step regardless of
-        this setting, so vouchers never wait in a queue nobody owns.
+        this setting, so vouchers never wait in a queue nobody owns. Approval
+        itself is never optional, and recording always follows it.
       </p>
       <button class="btn btn-solid" :disabled="busy" @click="saveWorkflow">
         {{ busy ? 'Saving…' : 'Save workflow' }}

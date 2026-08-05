@@ -449,7 +449,6 @@ const downloadPdf = () => window.print()
           can('admin_approve') ||
           can('manager_reject') ||
           can('admin_reject') ||
-          can('request_approval') ||
           can('return')
         "
         class="mb-4"
@@ -502,14 +501,6 @@ const downloadPdf = () => window.print()
           @click="decide('manager_approve', 'Approved.')"
         >
           Approve (manager)
-        </button>
-        <button
-          v-if="can('request_approval')"
-          class="btn btn-solid"
-          :disabled="busy"
-          @click="decide('request_approval', 'Sent for administrator approval.')"
-        >
-          Request approval
         </button>
         <button
           v-if="can('admin_approve')"

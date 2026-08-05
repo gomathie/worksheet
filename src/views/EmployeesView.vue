@@ -36,7 +36,7 @@ const blankRights = () => ({
   direct_counts: false,
   add_expenses: true,
   review_expenses: false,
-  finance_expenses: false,
+  record_expenses: false,
   approve_expenses: false,
   add_users: false,
   approve_users: false,
@@ -204,7 +204,7 @@ function rightsSummary(e: Employee): string {
     ['direct_counts', 'Direct counts'],
     ['add_expenses', 'File expenses'],
     ['review_expenses', 'Review expenses'],
-    ['finance_expenses', 'Expense finance'],
+    ['record_expenses', 'Record expenses'],
     ['add_users', 'Add users'],
     ['use_petty_cash', 'Petty cash'],
   ]
@@ -523,13 +523,14 @@ const managerName = (e: Employee) =>
               Review expenses (their direct reports)
             </label>
             <label class="flex items-center gap-2">
-              <input v-model="form.rights.finance_expenses" type="checkbox" />
-              Expense finance (send for approval &amp; record)
+              <input v-model="form.rights.record_expenses" type="checkbox" />
+              Record expenses (book an approved voucher)
             </label>
           </div>
           <p class="mt-2 text-xs text-muted">
             "Review expenses" only covers employees whose <em>Reports to</em> is set to
-            this person. "Expense finance" applies organization-wide.
+            this person. "Record expenses" applies organization-wide and only ever
+            acts on a voucher an approver has already approved.
           </p>
         </fieldset>
 

@@ -89,12 +89,16 @@ export interface Rights {
   // Card-based work types (Classification/QAP) are normally logged as cards.
   // This right lets the holder type the count directly instead.
   direct_counts: boolean
-  // Expense vouchers. "Manager" and "finance" are rights rather than roles:
-  // review_expenses only bites for the holder's own direct reports
-  // (employees.manager_id), finance_expenses is organization-wide.
+  // Expense vouchers, split so that filing, approving and booking are three
+  // separate authorities that can sit with three different people.
+  // "Manager" is a right rather than a role: review_expenses only bites for
+  // the holder's own direct reports (employees.manager_id).
   add_expenses: boolean
   review_expenses: boolean
-  finance_expenses: boolean
+  // Books an already-approved voucher into the external accounting records.
+  // Organization-wide, and powerless before approval — recording is only ever
+  // offered on an 'approved' voucher.
+  record_expenses: boolean
   // Final approval authority. Unlike every other right, this one is NOT
   // implied by the admin role — see parseRights. An approver is an
   // administrator who has also been granted this explicitly, so approval is
@@ -162,7 +166,7 @@ export const DEFAULT_RIGHTS: Rights = {
   direct_counts: false,
   add_expenses: true,
   review_expenses: false,
-  finance_expenses: false,
+  record_expenses: false,
   approve_expenses: false,
   add_users: false,
   approve_users: false,
@@ -182,7 +186,7 @@ const ALL_RIGHTS: Rights = {
   direct_counts: true,
   add_expenses: true,
   review_expenses: true,
-  finance_expenses: true,
+  record_expenses: true,
   add_users: true,
   use_petty_cash: true,
   // Not granted here — see the carve-out in parseRights.
@@ -254,7 +258,13 @@ export function parseRights(employee: Employee): Rights {
       // rows written before the expense module default to allowed.
       add_expenses: Boolean(raw.add_expenses ?? true),
       review_expenses: Boolean(raw.review_expenses),
-      finance_expenses: Boolean(raw.finance_expenses),
+      // `record_expenses` was carved out of the old `finance_expenses`, which
+      // bundled escalating a voucher with booking it. Fall back to the retired
+      // key so holders keep the recording half in the window between the code
+      // going live and the migration running, and on any row that predates it.
+      record_expenses: Boolean(
+        raw.record_expenses ?? (raw as { finance_expenses?: unknown }).finance_expenses,
+      ),
       // Only meaningful alongside the admin role; kept here so the stored
       // value survives a round trip through the Employees form.
       approve_expenses: Boolean(raw.approve_expenses),

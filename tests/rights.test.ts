@@ -57,3 +57,32 @@ describe('view_points exclusivity', () => {
     expect(parseRights(person('employee', { view_reports: true })).view_points).toBe(false)
   })
 })
+
+describe('record_expenses carved out of finance_expenses', () => {
+  /** A row written before the split, carrying only the retired key. */
+  const legacy = (finance: boolean) =>
+    ({ role: 'employee', rights: JSON.stringify({ finance_expenses: finance }) }) as Employee
+
+  it('honours the retired key so holders keep recording before the migration', () => {
+    // The code deploys before the migration runs; without this fallback the
+    // people who record expenses would silently lose the ability in between.
+    expect(parseRights(legacy(true)).record_expenses).toBe(true)
+  })
+
+  it('does not invent the right for a non-holder of the retired key', () => {
+    expect(parseRights(legacy(false)).record_expenses).toBe(false)
+  })
+
+  it('prefers the new key once the migration has written it', () => {
+    const migrated = person('employee', { record_expenses: false } as Partial<Rights>)
+    expect(parseRights(migrated).record_expenses).toBe(false)
+  })
+
+  it('defaults to withheld when neither key is stored', () => {
+    expect(parseRights(person('employee', {})).record_expenses).toBe(false)
+  })
+
+  it('still grants it to an administrator by role', () => {
+    expect(parseRights(person('admin', {})).record_expenses).toBe(true)
+  })
+})

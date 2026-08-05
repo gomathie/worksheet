@@ -24,7 +24,7 @@ export interface Rights {
   direct_counts: boolean
   add_expenses: boolean
   review_expenses: boolean
-  finance_expenses: boolean
+  record_expenses: boolean
   /** Final approval; requires the admin role too. Never implicit. */
   approve_expenses: boolean
   add_users: boolean

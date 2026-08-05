@@ -53,12 +53,11 @@ function fail(issues: { field: string; message: string }[]): never {
 
 export async function loadWorkflow(env: Env): Promise<WorkflowConfig> {
   const { results } = await env.DB.prepare(
-    "SELECT key, value FROM settings WHERE key IN ('expense_require_manager', 'expense_require_finance')",
+    "SELECT key, value FROM settings WHERE key = 'expense_require_manager'",
   ).all<{ key: string; value: string }>()
   const m = new Map(results.map((r) => [r.key, r.value]))
   return {
     require_manager: (m.get('expense_require_manager') ?? '1') === '1',
-    require_finance: (m.get('expense_require_finance') ?? '1') === '1',
   }
 }
 
@@ -68,7 +67,6 @@ async function saveWorkflow(env: Env, w: WorkflowConfig): Promise<void> {
   )
   await env.DB.batch([
     stmt.bind('expense_require_manager', w.require_manager ? '1' : '0'),
-    stmt.bind('expense_require_finance', w.require_finance ? '1' : '0'),
   ])
 }
 
@@ -131,7 +129,7 @@ async function buildActor(
     is_admin: user.role === 'admin',
     can_create: rights.add_expenses,
     can_review: rights.review_expenses,
-    can_finance: rights.finance_expenses,
+    can_record: rights.record_expenses,
     can_approve: rights.approve_expenses,
     is_owner: voucher.employee_id === user.id,
     is_manager_of_owner: isManagerOfOwner,
@@ -146,7 +144,6 @@ const ACTION_PHRASES: Record<ExpenseAction, string> = {
   start_review: 'start reviewing this voucher',
   manager_approve: 'approve this voucher as a manager',
   manager_reject: 'reject this voucher as a manager',
-  request_approval: 'send this voucher for administrator approval',
   admin_approve: 'give final approval on this voucher',
   admin_reject: 'reject this voucher',
   return: 'return this voucher for more information',
@@ -403,7 +400,6 @@ export async function putWorkflow(request: Request, env: Env): Promise<Response>
   const current = await loadWorkflow(env)
   const next: WorkflowConfig = {
     require_manager: body.require_manager ?? current.require_manager,
-    require_finance: body.require_finance ?? current.require_finance,
   }
   await saveWorkflow(env, next)
   await audit(env, admin.id, 'update_expense_workflow', null, next)
@@ -440,7 +436,7 @@ async function visibilityClause(
   const rights = parseRights(user)
   // Finance verifies the whole organization's spend, so it is unrestricted
   // regardless of the assigned data scope.
-  if (user.role === 'admin' || rights.finance_expenses) return { sql: '', binds: [] }
+  if (user.role === 'admin' || rights.record_expenses) return { sql: '', binds: [] }
 
   const scoped = await visibleEmployeeIds(env, user)
   const ids = new Set<string>(scoped ?? [])
@@ -543,15 +539,15 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     return json(await withDuplicateCounts(env, results))
   }
 
-  if (which === 'finance') {
-    if (!rights.finance_expenses && user.role !== 'admin') {
+  if (which === 'record') {
+    if (!rights.record_expenses && user.role !== 'admin') {
       throw new ApiError(403, 'You do not have permission for this')
     }
-    // Finance handles two piles: vouchers to escalate for approval, and
-    // approved ones still to be entered into the external accounting records.
+    // Only approved vouchers can be booked; nothing earlier is actionable
+    // here, because recording cannot precede approval.
     const { results } = await env.DB.prepare(
-      `${SELECT_VOUCHER} WHERE v.status IN ('finance_review', 'admin_approval', 'approved')
-       ORDER BY v.status, v.submission_date, v.created_at`,
+      `${SELECT_VOUCHER} WHERE v.status = 'approved'
+       ORDER BY v.submission_date, v.created_at`,
     ).all<{ id: string }>()
     return json(await withDuplicateCounts(env, results))
   }
@@ -561,6 +557,8 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     if (!(user.role === 'admin' && rights.approve_expenses)) {
       throw new ApiError(403, 'You do not have expense approval rights')
     }
+    // 'finance_review' is legacy — no voucher enters it any more, but one
+    // filed under the old flow still needs an approver to be able to clear it.
     const { results } = await env.DB.prepare(
       `${SELECT_VOUCHER} WHERE v.status IN ('admin_approval', 'finance_review')
        ORDER BY CASE v.status WHEN 'admin_approval' THEN 0 ELSE 1 END, v.submission_date, v.created_at`,
@@ -568,7 +566,7 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     return json(await withDuplicateCounts(env, results))
   }
 
-  throw new ApiError(400, "queue must be 'manager', 'finance', or 'approver'")
+  throw new ApiError(400, "queue must be 'manager', 'record', or 'approver'")
 }
 
 export async function getVoucher(request: Request, env: Env, id: string): Promise<Response> {
@@ -581,7 +579,7 @@ export async function getVoucher(request: Request, env: Env, id: string): Promis
   const actor = await buildActor(env, user, voucher)
   const rights = parseRights(user)
   const visible =
-    actor.is_admin || actor.is_owner || actor.is_manager_of_owner || rights.finance_expenses
+    actor.is_admin || actor.is_owner || actor.is_manager_of_owner || rights.record_expenses
   if (!visible) throw new ApiError(403, 'You cannot view this voucher')
 
   const [approvals, attachments, trailRows, duplicates] = await Promise.all([
@@ -1030,11 +1028,12 @@ async function announceSubmission(
       body: `${bodyText}\n\nIt is waiting for your review.`,
       voucherId,
     })
-  } else if (status === 'finance_review') {
-    await notifyUsers(env, await employeesWithRight(env, 'finance_expenses'), {
-      kind: 'expense_submitted',
+  } else if (status === 'admin_approval') {
+    // No manager step applied, so it goes straight to the approvers.
+    await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
+      kind: 'expense_needs_approval',
       title,
-      body: `${bodyText}\n\nIt is waiting for finance review.`,
+      body: `${bodyText}\n\nIt is waiting for your approval.`,
       voucherId,
     })
   }
@@ -1121,7 +1120,6 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     'start_review',
     'manager_approve',
     'manager_reject',
-    'request_approval',
     'admin_approve',
     'admin_reject',
     'return',
@@ -1153,8 +1151,8 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
   const role =
     action === 'admin_approve' || action === 'admin_reject' || action === 'reopen'
       ? 'approver'
-      : action === 'request_approval' || action === 'mark_recorded'
-        ? 'finance'
+      : action === 'mark_recorded'
+        ? 'recorder'
         : 'manager'
 
   const now = new Date().toISOString()
@@ -1185,13 +1183,11 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     const decision =
       action === 'mark_recorded'
         ? 'recorded'
-        : action === 'request_approval'
-          ? 'escalated'
-          : action === 'return' || action === 'reopen'
-            ? 'returned'
-            : action.endsWith('reject')
-              ? 'rejected'
-              : 'approved'
+        : action === 'return' || action === 'reopen'
+          ? 'returned'
+          : action.endsWith('reject')
+            ? 'rejected'
+            : 'approved'
     await env.DB.prepare(
       `INSERT INTO expense_approvals (id, voucher_id, approver_id, role, decision, comments)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1236,28 +1232,19 @@ async function announceDecision(
 
   switch (d.action) {
     case 'manager_approve':
-      if (d.next === 'finance_review') {
-        await notifyUsers(env, await employeesWithRight(env, 'finance_expenses'), {
-          kind: 'expense_finance_review',
-          title: `Expense voucher ${d.number} needs finance review`,
-          body: `${d.number} for ${money} was approved by the manager and is waiting for finance.${tail}`,
-          voucherId: d.voucherId,
-        })
-      }
+      // Manager approval sends it straight to the approvers now that the
+      // finance review stage is gone.
+      await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
+        kind: 'expense_needs_approval',
+        title: `Expense voucher ${d.number} needs your approval`,
+        body: `${d.number} for ${money} passed manager review and is waiting for approval.${tail}`,
+        voucherId: d.voucherId,
+      })
       await notifyUser(env, {
         employeeId: d.ownerId,
         kind: 'expense_approved',
         title: `Expense voucher ${d.number} approved by your manager`,
         body: `${d.number} for ${money} passed manager review.${tail}`,
-        voucherId: d.voucherId,
-      })
-      break
-    case 'request_approval':
-      // Finance has escalated: only admins holding approve_expenses can act.
-      await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
-        kind: 'expense_needs_approval',
-        title: `Expense voucher ${d.number} needs your approval`,
-        body: `Finance has sent ${d.number} for ${money} for approval.${tail}`,
         voucherId: d.voucherId,
       })
       break
@@ -1269,8 +1256,8 @@ async function announceDecision(
         body: `${d.number} for ${money} has been approved.${tail}`,
         voucherId: d.voucherId,
       })
-      // Finance can now enter it into the external accounting records.
-      await notifyUsers(env, await employeesWithRight(env, 'finance_expenses'), {
+      // It can now be entered into the external accounting records.
+      await notifyUsers(env, await employeesWithRight(env, 'record_expenses'), {
         kind: 'expense_ready_to_record',
         title: `Expense voucher ${d.number} approved — ready to record`,
         body: `${d.number} for ${money} was approved and can now be recorded in the external finance records.${tail}`,
@@ -1385,7 +1372,7 @@ export async function downloadAttachment(
   const actor = await buildActor(env, user, voucher)
   const rights = parseRights(user)
   if (
-    !(actor.is_admin || actor.is_owner || actor.is_manager_of_owner || rights.finance_expenses)
+    !(actor.is_admin || actor.is_owner || actor.is_manager_of_owner || rights.record_expenses)
   ) {
     throw new ApiError(403, 'You cannot view this receipt')
   }
@@ -1482,7 +1469,7 @@ export async function expenseDashboard(request: Request, env: Env): Promise<Resp
     month,
     currency: settings.currency,
     scope:
-      user.role === 'admin' || rights.finance_expenses
+      user.role === 'admin' || rights.record_expenses
         ? 'full'
         : rights.review_expenses
           ? 'team'
@@ -1502,7 +1489,7 @@ export async function expenseDashboard(request: Request, env: Env): Promise<Resp
 export async function expensePack(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const rights = parseRights(user)
-  if (user.role !== 'admin' && !rights.finance_expenses && !rights.review_expenses) {
+  if (user.role !== 'admin' && !rights.record_expenses && !rights.review_expenses) {
     throw new ApiError(403, 'You do not have permission for the audit pack')
   }
   const url = new URL(request.url)
@@ -1580,7 +1567,7 @@ type ReportType = (typeof REPORT_TYPES)[number]
 export async function expenseReport(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const rights = parseRights(user)
-  if (user.role !== 'admin' && !rights.finance_expenses && !rights.review_expenses) {
+  if (user.role !== 'admin' && !rights.record_expenses && !rights.review_expenses) {
     throw new ApiError(403, 'You do not have permission for expense reports')
   }
   const url = new URL(request.url)

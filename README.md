@@ -26,7 +26,7 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
   monthly reports, view own remuneration, view own payslip, view own points, record paid leave,
   direct counts
   (type Classification/QAP counts instead of logging cards), file expenses, review expenses,
-  expense finance, approve expenses, add users, approve users, and use petty cash.
+  record expenses, approve expenses, add users, approve users, and use petty cash.
   **`approve_expenses` and `approve_users` are the two rights the admin role does not imply** —
   they must be granted deliberately so approval authority can be withheld from an administrator.
 - All permission checks are enforced **server-side**, not just hidden in the UI. New rights default
@@ -121,26 +121,33 @@ approval to payment.
 - **Supporting documents:** optional file upload (PDF / JPG / JPEG / PNG, max 10 MB) for anything
   that corroborates the claim. Built but **currently switched off** — see *Receipt attachments*
   below to enable it.
-- **Workflow:** Draft → Submitted → Manager Review → Finance Review → Awaiting Admin Approval →
-  Approved → Recorded, with Rejected reachable from any review stage and a *request more
-  information* path back to draft. Every decision records approver, date, decision, and comments.
-  Rejections require a comment.
+- **Workflow:** Draft → Submitted → Manager Review → Awaiting Admin Approval → Approved →
+  Recorded, with Rejected reachable from any review stage and a *request more information* path
+  back to draft. Every decision records approver, date, decision, and comments. Rejections require
+  a comment.
+- **Filing, approving and recording are three separate rights**, so no one person carries a claim
+  end to end:
+  - `add_expenses` — create a voucher and send it.
+  - `approve_expenses` — give or refuse final approval.
+  - `record_expenses` — book an approved voucher into the external accounts.
 - **Approval is a granted right, not a role.** `approve_expenses` is the **only** right the admin
   role does not carry automatically — an approver is an administrator who has also been ticked
   for it in the Employees tab. An admin without it can see everything and change nothing about
-  approval. Nothing reaches *Approved* by any other route, including when both optional workflow
-  steps are switched off.
-- **Finance does not approve.** The `finance_expenses` holder reviews a voucher and either
-  **requests approval** from an approver or returns it for more information. Once an approver has
-  approved it, finance enters it into the external accounting system and **marks it recorded**
-  (with an optional finance-record reference). Recording is impossible before approval — enforced
-  server-side, not just hidden in the UI.
+  approval. Nothing reaches *Approved* by any other route, including when the manager step is
+  switched off.
+- **Recording is not approval and cannot precede it.** The `record_expenses` holder enters an
+  already-approved voucher into the external accounting system and **marks it recorded** (with an
+  optional finance-record reference). The action only exists on an *Approved* voucher, so there is
+  no order in which recording can come first — enforced server-side, not just hidden in the UI.
+  The right is organization-wide and carries visibility of every voucher plus the monthly audit
+  pack.
 - **Roles** otherwise reuse the existing rights model rather than adding account types:
   *file expenses*, *review expenses* (manager — scoped to that person's **direct reports** only,
-  and never their own voucher), and *expense finance*. Set a person's **Reports to** in the
+  and never their own voucher), and *record expenses*. Set a person's **Reports to** in the
   Employees tab to make them a manager.
-- **Which steps apply** is configurable in Settings (manager and/or finance can each be switched
-  off). Employees with no manager assigned skip the manager step, so nothing waits in an unowned queue.
+- **The manager step is configurable** in Settings; approval and recording are not, because
+  neither can be skipped. Employees with no manager assigned skip the manager step, so nothing
+  waits in an unowned queue.
 - **Dashboard & reports:** pending / approved / rejected / recorded counts, month-to-date total,
   and breakdowns by category and employee. Five reports — monthly, department, employee,
   outstanding reimbursements, approved vs rejected — each exportable as **CSV**, **Excel**, or
@@ -315,7 +322,7 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `ExpenseFormView` | `/expenses/new`, `/expenses/:id/edit` | Authenticated |
 | `ExpenseDetailView` | `/expenses/:id` | Authenticated |
 | `ExpenseApprovalsView` | `/expenses/approvals` | `review_expenses` / `approve_expenses` / `approve_users` / `add_users` |
-| `ExpenseFinanceView` | `/expenses/finance` | `finance_expenses` |
+| `ExpenseFinanceView` | `/expenses/finance` | `record_expenses` |
 | `ExpensePackView` | `/expenses/pack` | Authenticated |
 | `ExpenseReportsView` | `/expenses/reports` | Authenticated |
 | `PettyCashView` | `/petty-cash` | `use_petty_cash` or admin |

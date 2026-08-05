@@ -7,6 +7,11 @@ export const EXPENSE_STATUSES = [
   'draft',
   'submitted',
   'manager_review',
+  // Legacy. The finance review stage was retired when recording became its own
+  // right: a voucher now goes straight from submission (or manager approval) to
+  // the approver. No transition produces this any more, but rows filed under
+  // the old flow keep it, so it stays a known status rather than an unlabelled
+  // one — and still counts as open and as consuming petty cash.
   'finance_review',
   'admin_approval',
   'approved',
@@ -71,15 +76,12 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024 // 10 MB
 // ------------------------------------------------------------------ workflow
 
 export interface WorkflowConfig {
-  /** Route through the employee's manager before finance. */
+  /** Route through the employee's manager before approval. */
   require_manager: boolean
-  /** Route through finance before the voucher counts as approved. */
-  require_finance: boolean
 }
 
 export const DEFAULT_WORKFLOW: WorkflowConfig = {
   require_manager: true,
-  require_finance: true,
 }
 
 /**
@@ -88,21 +90,20 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
  * manager assigned — otherwise it would sit in a queue nobody owns.
  *
  * Note that no path here reaches 'approved': final approval always requires an
- * administrator holding `approve_expenses` to act. Switching both optional
- * steps off shortens the chain, it does not auto-approve.
+ * administrator holding `approve_expenses` to act. Switching the manager step
+ * off shortens the chain, it does not auto-approve.
  */
 export function statusAfterSubmit(
   workflow: WorkflowConfig,
   hasManager: boolean,
 ): ExpenseStatus {
   if (workflow.require_manager && hasManager) return 'submitted'
-  if (workflow.require_finance) return 'finance_review'
   return 'admin_approval'
 }
 
 /** Where a voucher lands once the manager has approved it. */
-export function statusAfterManagerApproval(workflow: WorkflowConfig): ExpenseStatus {
-  return workflow.require_finance ? 'finance_review' : 'admin_approval'
+export function statusAfterManagerApproval(): ExpenseStatus {
+  return 'admin_approval'
 }
 
 // -------------------------------------------------------------- permissions
@@ -118,11 +119,11 @@ export interface ExpenseActor {
   /** Holds the `review_expenses` right (manager-side review). */
   can_review: boolean
   /**
-   * Holds the `finance_expenses` right. Finance does not approve: it escalates
-   * to an approver and, once approved, records the expense in the external
-   * accounting system.
+   * Holds the `record_expenses` right. Recording does not approve and cannot
+   * precede approval: once an approver has approved a voucher, this is who
+   * enters it in the external accounting system and marks it recorded.
    */
-  can_finance: boolean
+  can_record: boolean
   /**
    * Holds the `approve_expenses` right — final approval authority. This is
    * granted explicitly and is NOT implied by the admin role; an approver is an
@@ -142,7 +143,6 @@ export type ExpenseAction =
   | 'start_review'
   | 'manager_approve'
   | 'manager_reject'
-  | 'request_approval'
   | 'admin_approve'
   | 'admin_reject'
   | 'return'
@@ -175,15 +175,21 @@ export function isApprover(actor: ExpenseActor): boolean {
   return actor.is_admin && actor.can_approve
 }
 
-/** May this user give or refuse final approval right now? */
+/**
+ * May this user give or refuse final approval right now?
+ *
+ * 'finance_review' is accepted only so that a voucher left in the retired
+ * stage can still be cleared — nothing enters it any more, and without this it
+ * would have no route forward.
+ */
 function canApprove(actor: ExpenseActor, status: ExpenseStatus): boolean {
-  if (status !== 'finance_review' && status !== 'admin_approval') return false
+  if (status !== 'admin_approval' && status !== 'finance_review') return false
   return isApprover(actor)
 }
 
-/** Does this user hold the finance desk (escalation and recording)? */
-function isFinance(actor: ExpenseActor): boolean {
-  return actor.is_admin || actor.can_finance
+/** Does this user keep the external accounting records? */
+function isRecorder(actor: ExpenseActor): boolean {
+  return actor.is_admin || actor.can_record
 }
 
 /**
@@ -216,13 +222,10 @@ export function allowedActions(
     actions.push('manager_approve', 'manager_reject', 'return')
   }
 
-  // --- finance desk: escalate and record, but never approve
-  if (status === 'finance_review' && isFinance(actor)) {
-    actions.push('request_approval', 'return')
-  }
-  // Recording is only ever possible once an approver has approved, which is
-  // the only route into the 'approved' state.
-  if (status === 'approved' && isFinance(actor)) {
+  // --- recording: books the approved expense, never approves it. Only ever
+  // possible once an approver has approved, which is the sole route into the
+  // 'approved' state.
+  if (status === 'approved' && isRecorder(actor)) {
     actions.push('mark_recorded')
   }
 
@@ -259,9 +262,7 @@ export function statusAfter(
     case 'start_review':
       return 'manager_review'
     case 'manager_approve':
-      return statusAfterManagerApproval(workflow)
-    case 'request_approval':
-      return 'admin_approval'
+      return statusAfterManagerApproval()
     case 'admin_approve':
       return 'approved'
     case 'manager_reject':

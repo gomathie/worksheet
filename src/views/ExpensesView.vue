@@ -28,7 +28,7 @@ const loading = ref(false)
 
 // Anyone who can see beyond their own vouchers gets the employee filter.
 const seesOthers = computed(
-  () => auth.isAdmin || auth.rights.finance_expenses || auth.rights.review_expenses,
+  () => auth.isAdmin || auth.rights.record_expenses || auth.rights.review_expenses,
 )
 
 const blankFilters = () => ({

@@ -125,7 +125,7 @@ export async function getPettyCash(request: Request, env: Env): Promise<Response
     .all()
 
   const oversight =
-    user.role === 'admin' || rights.finance_expenses || rights.review_expenses
+    user.role === 'admin' || rights.record_expenses || rights.review_expenses
   const holders = oversight
     ? await allBalances(env, await visibleEmployeeIds(env, user))
     : []

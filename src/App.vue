@@ -11,7 +11,7 @@ const router = useRouter()
 // Expense reporting is open to anyone who can see beyond their own vouchers.
 const canSeeExpenseReports = computed(
   () =>
-    auth.isAdmin || auth.rights.finance_expenses || auth.rights.review_expenses,
+    auth.isAdmin || auth.rights.record_expenses || auth.rights.review_expenses,
 )
 
 // Final approval needs the admin role *and* the explicitly granted right.
@@ -249,11 +249,11 @@ async function changePassword() {
         >Approvals</RouterLink
       >
       <RouterLink
-        v-if="auth.rights.finance_expenses"
+        v-if="auth.rights.record_expenses"
         :to="{ name: 'expense-finance' }"
         class="btn"
         active-class="btn-solid"
-        >Finance</RouterLink
+        >To Record</RouterLink
       >
       <RouterLink
         v-if="canSeeExpenseReports"

@@ -35,7 +35,7 @@ const employee: ExpenseActor = {
   is_admin: false,
   can_create: true,
   can_review: false,
-  can_finance: false,
+  can_record: false,
   can_approve: false,
   is_owner: true,
   is_manager_of_owner: false,
@@ -44,16 +44,16 @@ const manager: ExpenseActor = {
   is_admin: false,
   can_create: true,
   can_review: true,
-  can_finance: false,
+  can_record: false,
   can_approve: false,
   is_owner: false,
   is_manager_of_owner: true,
 }
-const finance: ExpenseActor = {
+const recorder: ExpenseActor = {
   is_admin: false,
   can_create: true,
   can_review: false,
-  can_finance: true,
+  can_record: true,
   can_approve: false,
   is_owner: false,
   is_manager_of_owner: false,
@@ -63,7 +63,7 @@ const admin: ExpenseActor = {
   is_admin: true,
   can_create: true,
   can_review: true,
-  can_finance: true,
+  can_record: true,
   can_approve: false,
   is_owner: false,
   is_manager_of_owner: false,
@@ -88,30 +88,27 @@ describe('statusAfterSubmit', () => {
   it('routes to the manager when one exists and the step is required', () => {
     expect(statusAfterSubmit(DEFAULT_WORKFLOW, true)).toBe('submitted')
   })
-  it('skips to finance when the employee has no manager', () => {
-    expect(statusAfterSubmit(DEFAULT_WORKFLOW, false)).toBe('finance_review')
+  it('goes straight to the approver when the employee has no manager', () => {
+    expect(statusAfterSubmit(DEFAULT_WORKFLOW, false)).toBe('admin_approval')
   })
-  it('skips the manager step when the workflow disables it', () => {
-    expect(
-      statusAfterSubmit({ require_manager: false, require_finance: true }, true),
-    ).toBe('finance_review')
+  it('still requires approval when the manager step is off', () => {
+    // Turning the step off shortens the chain; it must never auto-approve.
+    expect(statusAfterSubmit({ require_manager: false }, true)).toBe('admin_approval')
   })
-  it('still requires approval when both optional steps are off', () => {
-    // Turning the steps off shortens the chain; it must never auto-approve.
-    expect(
-      statusAfterSubmit({ require_manager: false, require_finance: false }, true),
-    ).toBe('admin_approval')
+  it('never routes to the retired finance stage', () => {
+    for (const hasManager of [true, false]) {
+      for (const require_manager of [true, false]) {
+        expect(statusAfterSubmit({ require_manager }, hasManager)).not.toBe(
+          'finance_review',
+        )
+      }
+    }
   })
 })
 
 describe('statusAfterManagerApproval', () => {
-  it('hands off to finance when finance review is on', () => {
-    expect(statusAfterManagerApproval(DEFAULT_WORKFLOW)).toBe('finance_review')
-  })
-  it('goes straight to the approver when finance review is off', () => {
-    expect(
-      statusAfterManagerApproval({ require_manager: true, require_finance: false }),
-    ).toBe('admin_approval')
+  it('hands straight to the approver now that finance review is retired', () => {
+    expect(statusAfterManagerApproval()).toBe('admin_approval')
   })
 })
 
@@ -119,8 +116,7 @@ describe('statusAfter', () => {
   it('maps each decision to its next state', () => {
     const w = DEFAULT_WORKFLOW
     expect(statusAfter('start_review', w, true)).toBe('manager_review')
-    expect(statusAfter('manager_approve', w, true)).toBe('finance_review')
-    expect(statusAfter('request_approval', w, true)).toBe('admin_approval')
+    expect(statusAfter('manager_approve', w, true)).toBe('admin_approval')
     expect(statusAfter('admin_approve', w, true)).toBe('approved')
     expect(statusAfter('manager_reject', w, true)).toBe('rejected')
     expect(statusAfter('admin_reject', w, true)).toBe('rejected')
@@ -170,29 +166,47 @@ describe('allowedActions', () => {
     expect(actions).not.toContain('manager_approve')
   })
 
-  it('keeps a manager out of the finance stage', () => {
+  it('keeps a manager out of the retired finance stage', () => {
     expect(
       allowedActions({ status: 'finance_review', reopened: false }, manager),
     ).toEqual([])
   })
 
-  it('lets finance escalate but never approve', () => {
-    const actions = allowedActions({ status: 'finance_review', reopened: false }, finance)
-    expect(actions).toEqual(expect.arrayContaining(['request_approval', 'return']))
-    expect(actions).not.toContain('admin_approve')
-    expect(actions).not.toContain('admin_reject')
+  it('never lets a recorder approve, at any stage', () => {
+    for (const status of [
+      'submitted',
+      'manager_review',
+      'finance_review',
+      'admin_approval',
+      'approved',
+    ] as const) {
+      const actions = allowedActions({ status, reopened: false }, recorder)
+      expect(actions).not.toContain('admin_approve')
+      expect(actions).not.toContain('admin_reject')
+    }
   })
 
-  it('lets finance record only once a voucher is approved', () => {
-    expect(
-      allowedActions({ status: 'finance_review', reopened: false }, finance),
-    ).not.toContain('mark_recorded')
-    expect(
-      allowedActions({ status: 'admin_approval', reopened: false }, finance),
-    ).not.toContain('mark_recorded')
-    expect(allowedActions({ status: 'approved', reopened: false }, finance)).toContain(
+  it('lets a recorder book a voucher only once it is approved', () => {
+    for (const status of [
+      'draft',
+      'submitted',
+      'manager_review',
+      'finance_review',
+      'admin_approval',
+    ] as const) {
+      expect(allowedActions({ status, reopened: false }, recorder)).not.toContain(
+        'mark_recorded',
+      )
+    }
+    expect(allowedActions({ status: 'approved', reopened: false }, recorder)).toContain(
       'mark_recorded',
     )
+  })
+
+  it('gives a recorder nothing to do before approval', () => {
+    expect(
+      allowedActions({ status: 'admin_approval', reopened: false }, recorder),
+    ).toEqual([])
   })
 
   it('withholds approval from an admin lacking the right', () => {
@@ -208,7 +222,7 @@ describe('allowedActions', () => {
     ).toEqual(expect.arrayContaining(['admin_approve', 'admin_reject', 'return']))
   })
 
-  it('lets an approver act on a voucher still sitting with finance', () => {
+  it('lets an approver clear a voucher left in the retired finance stage', () => {
     expect(
       allowedActions({ status: 'finance_review', reopened: false }, approver),
     ).toContain('admin_approve')
@@ -217,7 +231,7 @@ describe('allowedActions', () => {
   it('needs both the role and the right to be an approver', () => {
     expect(isApprover(approver)).toBe(true)
     expect(isApprover(admin)).toBe(false)
-    expect(isApprover({ ...finance, can_approve: true })).toBe(false)
+    expect(isApprover({ ...recorder, can_approve: true })).toBe(false)
   })
 
   it('freezes an approved voucher for admins until it is reopened', () => {

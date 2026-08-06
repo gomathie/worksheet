@@ -208,12 +208,13 @@ async function changePassword() {
     </div>
 
     <nav v-if="auth.user" class="no-print my-5">
-      <!-- Fifteen possible destinations, flat, buried the page content on a
-           phone and wrapped to several rows on desktop too. The top row pins
-           Time Entry/Dashboard and one entry pill per section (Reports,
-           Finance, Admin); whichever section the current page belongs to
-           gets a second row of its own page buttons underneath \u2014 no
-           dropdown/overlay, everything stays in the page flow. -->
+      <!-- Fifteen possible destinations. This row is just the five sections
+           (Time Entry, Dashboard, Reports, Finance, Admin) \u2014 collapsible on
+           mobile. Whichever section the current page belongs to gets its own
+           horizontally-scrolling strip of "mini tabs" below (outside this
+           collapsible block, so it's visible without opening Menu, and a
+           7-item section like Finance doesn't turn into a long vertical
+           dropdown on a phone \u2014 see the tab strips right after </nav>. -->
       <button
         class="btn flex w-full items-center justify-between md:hidden"
         :aria-expanded="navOpen"
@@ -223,174 +224,144 @@ async function changePassword() {
         <span class="text-muted">{{ navOpen ? '\u25b4' : '\u25be' }}</span>
       </button>
 
-      <div :class="navOpen ? 'mt-2 block' : 'hidden md:block'">
-        <div
-          class="flex flex-col gap-1.5 md:flex-row md:flex-wrap md:items-center [&>a]:w-full md:[&>a]:w-auto"
+      <div
+        class="flex-col gap-1.5 md:flex md:flex-row md:flex-wrap md:items-center [&>a]:w-full md:[&>a]:w-auto"
+        :class="navOpen ? 'mt-2 flex' : 'hidden md:flex'"
+      >
+        <RouterLink
+          :to="{ name: 'entries' }"
+          class="btn"
+          active-class="btn-solid"
+          @click="navOpen = false"
+          >Time Entry</RouterLink
         >
-          <RouterLink
-            :to="{ name: 'entries' }"
-            class="btn"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Time Entry</RouterLink
-          >
-          <RouterLink
-            v-if="auth.rights.view_dashboard"
-            :to="{ name: 'dashboard' }"
-            class="btn"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Dashboard</RouterLink
-          >
-          <RouterLink
-            :to="{ name: reportsHome }"
-            class="btn"
-            :class="{ 'btn-solid': reportsActive }"
-            @click="navOpen = false"
-            >Reports</RouterLink
-          >
-          <RouterLink
-            :to="{ name: 'payments' }"
-            class="btn"
-            :class="{ 'btn-solid': financeActive }"
-            @click="navOpen = false"
-            >Finance</RouterLink
-          >
-          <RouterLink
-            v-if="auth.isAdmin"
-            :to="{ name: 'employees' }"
-            class="btn"
-            :class="{ 'btn-solid': adminActive }"
-            @click="navOpen = false"
-            >Admin</RouterLink
-          >
-        </div>
-
-        <!-- Reports section pages -->
-        <div
-          v-if="reportsActive"
-          class="mt-2 flex flex-col gap-1.5 border-t border-line pt-2 md:flex-row md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+        <RouterLink
+          v-if="auth.rights.view_dashboard"
+          :to="{ name: 'dashboard' }"
+          class="btn"
+          active-class="btn-solid"
+          @click="navOpen = false"
+          >Dashboard</RouterLink
         >
-          <RouterLink
-            v-if="auth.rights.view_reports"
-            :to="{ name: 'report' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Monthly Report</RouterLink
-          >
-          <RouterLink
-            :to="{ name: 'trends' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Trends</RouterLink
-          >
-          <RouterLink
-            :to="{ name: 'absences' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Absences</RouterLink
-          >
-          <RouterLink
-            v-if="auth.isAdmin"
-            :to="{ name: 'activity' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Activity</RouterLink
-          >
-        </div>
-
-        <!-- Finance section pages -->
-        <div
-          v-if="financeActive"
-          class="mt-2 flex flex-col gap-1.5 border-t border-line pt-2 md:flex-row md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+        <RouterLink
+          :to="{ name: reportsHome }"
+          class="btn"
+          :class="{ 'btn-solid': reportsActive }"
+          @click="navOpen = false"
+          >Reports</RouterLink
         >
-          <RouterLink
-            :to="{ name: 'payments' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Payments</RouterLink
-          >
-          <RouterLink
-            v-if="auth.rights.view_payslip"
-            :to="{ name: 'payslip' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Payslip</RouterLink
-          >
-          <RouterLink
-            :to="{ name: 'expenses' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Expenses</RouterLink
-          >
-          <RouterLink
-            v-if="auth.rights.use_petty_cash || auth.isAdmin"
-            :to="{ name: 'petty-cash' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Petty Cash</RouterLink
-          >
-          <RouterLink
-            v-if="
-              auth.rights.review_expenses ||
-              canApproveExpenses ||
-              auth.canApproveUsers ||
-              auth.rights.add_users
-            "
-            :to="{ name: 'expense-approvals' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Approvals</RouterLink
-          >
-          <RouterLink
-            v-if="auth.rights.record_expenses"
-            :to="{ name: 'expense-finance' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >To Record</RouterLink
-          >
-          <RouterLink
-            v-if="canSeeExpenseReports"
-            :to="{ name: 'expense-reports' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Expense Reports</RouterLink
-          >
-        </div>
-
-        <!-- Admin section pages -->
-        <div
-          v-if="adminActive && auth.isAdmin"
-          class="mt-2 flex flex-col gap-1.5 border-t border-line pt-2 md:flex-row md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+        <RouterLink
+          :to="{ name: 'payments' }"
+          class="btn"
+          :class="{ 'btn-solid': financeActive }"
+          @click="navOpen = false"
+          >Finance</RouterLink
         >
-          <RouterLink
-            :to="{ name: 'employees' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Employees</RouterLink
-          >
-          <RouterLink
-            :to="{ name: 'settings' }"
-            class="btn btn-sm"
-            active-class="btn-solid"
-            @click="navOpen = false"
-            >Settings</RouterLink
-          >
-        </div>
+        <RouterLink
+          v-if="auth.isAdmin"
+          :to="{ name: 'employees' }"
+          class="btn"
+          :class="{ 'btn-solid': adminActive }"
+          @click="navOpen = false"
+          >Admin</RouterLink
+        >
       </div>
     </nav>
+
+    <!-- Section mini-tabs: a single horizontally-scrolling row rather than a
+         long stacked list, and always visible (not nested in the collapsible
+         Menu above) since these are how you move between the pages you're
+         actually working in. -mx-5/px-5 lets the scroll area bleed to the
+         screen edge on mobile, matching the page's own gutter. -->
+    <div
+      v-if="auth.user && reportsActive"
+      class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+    >
+      <RouterLink
+        v-if="auth.rights.view_reports"
+        :to="{ name: 'report' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Monthly Report</RouterLink
+      >
+      <RouterLink :to="{ name: 'trends' }" class="btn btn-sm" active-class="btn-solid"
+        >Trends</RouterLink
+      >
+      <RouterLink :to="{ name: 'absences' }" class="btn btn-sm" active-class="btn-solid"
+        >Absences</RouterLink
+      >
+      <RouterLink
+        v-if="auth.isAdmin"
+        :to="{ name: 'activity' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Activity</RouterLink
+      >
+    </div>
+
+    <div
+      v-if="auth.user && financeActive"
+      class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+    >
+      <RouterLink :to="{ name: 'payments' }" class="btn btn-sm" active-class="btn-solid"
+        >Payments</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.view_payslip"
+        :to="{ name: 'payslip' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Payslip</RouterLink
+      >
+      <RouterLink :to="{ name: 'expenses' }" class="btn btn-sm" active-class="btn-solid"
+        >Expenses</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.use_petty_cash || auth.isAdmin"
+        :to="{ name: 'petty-cash' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Petty Cash</RouterLink
+      >
+      <RouterLink
+        v-if="
+          auth.rights.review_expenses ||
+          canApproveExpenses ||
+          auth.canApproveUsers ||
+          auth.rights.add_users
+        "
+        :to="{ name: 'expense-approvals' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Approvals</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.record_expenses"
+        :to="{ name: 'expense-finance' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >To Record</RouterLink
+      >
+      <RouterLink
+        v-if="canSeeExpenseReports"
+        :to="{ name: 'expense-reports' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Expense Reports</RouterLink
+      >
+    </div>
+
+    <div
+      v-if="auth.user && adminActive && auth.isAdmin"
+      class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+    >
+      <RouterLink :to="{ name: 'employees' }" class="btn btn-sm" active-class="btn-solid"
+        >Employees</RouterLink
+      >
+      <RouterLink :to="{ name: 'settings' }" class="btn btn-sm" active-class="btn-solid"
+        >Settings</RouterLink
+      >
+    </div>
 
     <RouterView />
   </div>

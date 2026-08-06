@@ -224,7 +224,9 @@ async function changePassword() {
       </button>
 
       <div :class="navOpen ? 'mt-2 block' : 'hidden md:block'">
-        <div class="gap-1.5 md:flex md:flex-wrap md:items-center [&>a]:w-full md:[&>a]:w-auto">
+        <div
+          class="flex flex-col gap-1.5 md:flex-row md:flex-wrap md:items-center [&>a]:w-full md:[&>a]:w-auto"
+        >
           <RouterLink
             :to="{ name: 'entries' }"
             class="btn"
@@ -267,7 +269,7 @@ async function changePassword() {
         <!-- Reports section pages -->
         <div
           v-if="reportsActive"
-          class="mt-2 gap-1.5 border-t border-line pt-2 md:flex md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+          class="mt-2 flex flex-col gap-1.5 border-t border-line pt-2 md:flex-row md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
         >
           <RouterLink
             v-if="auth.rights.view_reports"
@@ -304,7 +306,7 @@ async function changePassword() {
         <!-- Finance section pages -->
         <div
           v-if="financeActive"
-          class="mt-2 gap-1.5 border-t border-line pt-2 md:flex md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+          class="mt-2 flex flex-col gap-1.5 border-t border-line pt-2 md:flex-row md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
         >
           <RouterLink
             :to="{ name: 'payments' }"
@@ -370,7 +372,7 @@ async function changePassword() {
         <!-- Admin section pages -->
         <div
           v-if="adminActive && auth.isAdmin"
-          class="mt-2 gap-1.5 border-t border-line pt-2 md:flex md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+          class="mt-2 flex flex-col gap-1.5 border-t border-line pt-2 md:flex-row md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
         >
           <RouterLink
             :to="{ name: 'employees' }"

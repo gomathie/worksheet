@@ -10,6 +10,11 @@ const departments = ref<Department[]>([])
 const error = ref('')
 const busy = ref(false)
 const editingId = ref<string | null>(null)
+// The add/edit form is opened explicitly (via "Add employee" or a row's
+// "Edit") rather than sitting open by default — it's a lot of fields to
+// greet an admin with on every visit to a page that's mostly for browsing
+// the team list.
+const showForm = ref(false)
 
 const activeTypes = computed(() =>
   workTypes.value.filter((w) => w.active === undefined || w.active),
@@ -78,8 +83,14 @@ async function load() {
 }
 onMounted(load)
 
+function startAdd() {
+  resetForm()
+  showForm.value = true
+}
+
 function startEdit(e: Employee) {
   editingId.value = e.id
+  showForm.value = true
   form.value = {
     name: e.name,
     email: e.email ?? '',
@@ -116,6 +127,11 @@ function resetForm() {
   }
 }
 
+function closeForm() {
+  resetForm()
+  showForm.value = false
+}
+
 async function submit() {
   error.value = ''
   busy.value = true
@@ -146,7 +162,7 @@ async function submit() {
     } else {
       await api('/api/employees', { method: 'POST', json: payload })
     }
-    resetForm()
+    closeForm()
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to save'
@@ -246,7 +262,14 @@ const managerName = (e: Employee) =>
 
 <template>
   <div>
-    <div class="panel mb-6">
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <h2 class="display text-2xl">Employees</h2>
+      <button v-if="!showForm" class="btn btn-solid btn-sm" @click="startAdd">
+        + Add employee
+      </button>
+    </div>
+
+    <div v-if="showForm" class="panel mb-6">
       <h2 class="display mb-4 text-2xl">
         {{ editingId ? 'Edit employee' : 'Add employee' }}
       </h2>
@@ -538,9 +561,7 @@ const managerName = (e: Employee) =>
           <button class="btn btn-solid" :disabled="busy">
             {{ busy ? 'Saving…' : editingId ? 'Save' : 'Add' }}
           </button>
-          <button v-if="editingId" type="button" class="btn" @click="resetForm">
-            Cancel
-          </button>
+          <button type="button" class="btn" @click="closeForm">Cancel</button>
         </div>
       </form>
       <p v-if="error" class="mt-3 rounded-lg border border-red bg-red-soft p-3 text-sm text-red">

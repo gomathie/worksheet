@@ -22,6 +22,10 @@ const employees = ref<Employee[]>([])
 const error = ref('')
 const notice = ref('')
 const busy = ref(false)
+// Both movement forms below start collapsed behind a button rather than
+// sitting open by default — same reasoning as the Employees "Add" form.
+const showRequestForm = ref(false)
+const showRecordForm = ref(false)
 
 const form = ref({
   employee_id: '',
@@ -94,6 +98,7 @@ async function record() {
       method: 'cash',
       reference: '',
     }
+    showRecordForm.value = false
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to record the movement'
@@ -115,6 +120,7 @@ async function submitRequest() {
       },
     })
     requestForm.value = { amount: '', reason: '' }
+    showRequestForm.value = false
     notice.value = 'Request sent — an administrator will confirm what they hand over.'
     await load()
   } catch (e) {
@@ -216,13 +222,26 @@ const signed = (e: { type: string; amount: number }) =>
 
       <!-- --------------------------------------------- ask for a top-up -->
       <div v-if="data.can_use" class="panel mb-6">
-        <h3 class="display mb-1 text-xl">Request a top-up</h3>
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <h3 class="display text-xl">Request a top-up</h3>
+          <button
+            v-if="!myOpenRequest && !showRequestForm"
+            class="btn btn-sm btn-solid"
+            @click="showRequestForm = true"
+          >
+            Request a top-up
+          </button>
+        </div>
         <p v-if="myOpenRequest" class="text-sm text-muted">
           You asked for
           <span class="mono font-semibold">{{ money(myOpenRequest.amount) }}</span>
           on <span class="mono">{{ myOpenRequest.created_at.slice(0, 10) }}</span
           >. An administrator will confirm what they hand over — you will be
           notified. Only one request can be open at a time.
+        </p>
+        <p v-else-if="!showRequestForm" class="text-sm text-muted">
+          Ask an administrator for more cash. Nothing moves until they confirm
+          what was actually given, and how.
         </p>
         <template v-else>
           <p class="mb-4 text-sm text-muted">
@@ -252,8 +271,11 @@ const signed = (e: { type: string; amount: number }) =>
                 placeholder="e.g. Site visits for the rest of the month"
               />
             </div>
-            <div class="flex items-end">
+            <div class="flex items-end gap-2">
               <button class="btn btn-solid" :disabled="busy">Send request</button>
+              <button type="button" class="btn" @click="showRequestForm = false">
+                Cancel
+              </button>
             </div>
           </form>
         </template>
@@ -350,12 +372,25 @@ const signed = (e: { type: string; amount: number }) =>
 
       <!-- ------------------------------------------------- issue / return -->
       <div v-if="data.can_issue" class="panel mb-6">
-        <h3 class="display mb-1 text-xl">Assign or recover cash</h3>
+        <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <h3 class="display text-xl">Assign or recover cash</h3>
+          <button
+            v-if="!showRecordForm"
+            class="btn btn-sm btn-solid"
+            @click="showRecordForm = true"
+          >
+            Record a movement
+          </button>
+        </div>
         <p class="mb-4 text-sm text-muted">
           Only employees granted the petty cash right appear here — set it in the
           Employees tab first.
         </p>
-        <form class="grid grid-cols-1 gap-4 md:grid-cols-4" @submit.prevent="record">
+        <form
+          v-if="showRecordForm"
+          class="grid grid-cols-1 gap-4 md:grid-cols-4"
+          @submit.prevent="record"
+        >
           <div class="md:col-span-2">
             <label class="field-label" for="pc-emp">Employee</label>
             <select id="pc-emp" v-model="form.employee_id" required class="field-input">
@@ -422,10 +457,11 @@ const signed = (e: { type: string; amount: number }) =>
               placeholder="e.g. Monthly float for site visits"
             />
           </div>
-          <div class="flex items-end">
+          <div class="flex items-end gap-2">
             <button class="btn btn-solid" :disabled="busy || employees.length === 0">
               {{ busy ? 'Saving…' : 'Record' }}
             </button>
+            <button type="button" class="btn" @click="showRecordForm = false">Cancel</button>
           </div>
         </form>
       </div>

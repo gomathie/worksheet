@@ -92,6 +92,50 @@ async function decide(v: ExpenseVoucher, action: Decision) {
   }
 }
 
+// --- proposing an account
+//
+// An `add_users` holder who is not an administrator has no route into the
+// Employees tab (it is admin-only), so the form to propose an account lives
+// here, beside the list of what they have already proposed. Role, rights and
+// data scope are deliberately absent: an approver sets those afterwards, so
+// this right can only ever create a plain pending employee.
+const canPropose = computed(() => !auth.isAdmin && auth.rights.add_users)
+const showProposeForm = ref(false)
+const proposal = ref({ name: '', email: '', username: '', password: '' })
+
+function resetProposal() {
+  proposal.value = { name: '', email: '', username: '', password: '' }
+}
+
+async function propose() {
+  error.value = ''
+  notice.value = ''
+  if (!proposal.value.name.trim()) {
+    error.value = 'A name is required.'
+    return
+  }
+  busy.value = 'propose'
+  try {
+    await api('/api/users/propose', {
+      method: 'POST',
+      json: {
+        name: proposal.value.name.trim(),
+        email: proposal.value.email.trim() || null,
+        username: proposal.value.username.trim() || null,
+        password: proposal.value.password || undefined,
+      },
+    })
+    notice.value = `${proposal.value.name.trim()} proposed — an administrator has to approve the account before it can sign in.`
+    resetProposal()
+    showProposeForm.value = false
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to propose the account'
+  } finally {
+    busy.value = ''
+  }
+}
+
 async function decideUser(u: PendingUser, decision: 'approved' | 'rejected') {
   const note = (userNotes.value[u.id] ?? '').trim()
   if (decision === 'rejected' && !note) {
@@ -137,8 +181,17 @@ const currency = computed(
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
     <!-- ============================================== new user approvals -->
-    <template v-if="canSeePendingUsers && pendingUsers.length">
-      <h3 class="display mb-1 text-xl">New user accounts</h3>
+    <template v-if="canSeePendingUsers && (pendingUsers.length || canPropose)">
+      <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
+        <h3 class="display text-xl">New user accounts</h3>
+        <button
+          v-if="canPropose"
+          class="btn btn-sm"
+          @click="showProposeForm = !showProposeForm"
+        >
+          {{ showProposeForm ? 'Close' : 'Propose an account' }}
+        </button>
+      </div>
       <p class="mb-3 text-sm text-muted">
         {{
           canApproveUsers
@@ -147,7 +200,61 @@ const currency = computed(
         }}
       </p>
 
-      <div class="panel mb-8">
+      <!-- Only name is required; a username needs a password to go with it,
+           and everything else is the approver's to set. -->
+      <form v-if="canPropose && showProposeForm" class="panel mb-4" @submit.prevent="propose">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label class="field-label" for="np-name">Full name</label>
+            <input id="np-name" v-model="proposal.name" required class="field-input" />
+          </div>
+          <div>
+            <label class="field-label" for="np-email">Email (optional)</label>
+            <input id="np-email" v-model="proposal.email" type="email" class="field-input" />
+          </div>
+          <div>
+            <label class="field-label" for="np-user">Username (optional)</label>
+            <input
+              id="np-user"
+              v-model="proposal.username"
+              class="field-input"
+              placeholder="e.g. ama.k"
+            />
+          </div>
+          <div>
+            <label class="field-label" for="np-pass">Password</label>
+            <input
+              id="np-pass"
+              v-model="proposal.password"
+              type="password"
+              minlength="8"
+              class="field-input"
+              placeholder="min. 8 characters"
+            />
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-muted">
+          Set a username and password together if this person needs to sign in.
+          The account stays pending and cannot be used until an administrator
+          approves it, and they set the role, rights and data scope then.
+        </p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button class="btn btn-solid" :disabled="busy === 'propose'">
+            {{ busy === 'propose' ? 'Sending…' : 'Propose account' }}
+          </button>
+          <button type="button" class="btn" @click="showProposeForm = false">Cancel</button>
+        </div>
+      </form>
+
+      <p v-if="!pendingUsers.length" class="panel mb-8 text-muted">
+        {{
+          canApproveUsers
+            ? 'No accounts waiting for approval.'
+            : 'You have not proposed any accounts yet.'
+        }}
+      </p>
+
+      <div v-else class="panel mb-8">
         <div class="table-wrap">
           <table class="data">
             <thead>

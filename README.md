@@ -26,7 +26,8 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
   monthly reports, view own remuneration, view own payslip, view own points, record paid leave,
   direct counts
   (type Classification/QAP counts instead of logging cards), file expenses, review expenses,
-  record expenses, approve expenses, add users, approve users, and use petty cash.
+  send for approval, record expenses, approve expenses, add users, approve users, and use petty
+  cash.
   **`approve_expenses` and `approve_users` are the two rights the admin role does not imply** —
   they must be granted deliberately so approval authority can be withheld from an administrator.
 - All permission checks are enforced **server-side**, not just hidden in the UI. New rights default
@@ -121,15 +122,27 @@ approval to payment.
 - **Supporting documents:** optional file upload (PDF / JPG / JPEG / PNG, max 10 MB) for anything
   that corroborates the claim. Built but **currently switched off** — see *Receipt attachments*
   below to enable it.
-- **Workflow:** Draft → Submitted → Manager Review → Awaiting Admin Approval → Approved →
-  Recorded, with Rejected reachable from any review stage and a *request more information* path
-  back to draft. Every decision records approver, date, decision, and comments. Rejections require
-  a comment.
-- **Filing, approving and recording are three separate rights**, so no one person carries a claim
-  end to end:
+- **Workflow:** Draft → Submitted → Manager Review → Being Screened → Awaiting Admin Approval →
+  Approved → Recorded, with Rejected reachable from any review stage and a *request more
+  information* path back to draft. Every decision records approver, date, decision, and comments.
+  Rejections require a comment.
+- **Who fronted the money** is recorded separately from how it was paid — a voucher can be funded
+  from the office cash box and paid by mobile money. The sources are **my own pocket**, **petty
+  cash float I hold**, **office cash**, and **company account / card**. Only own-pocket money can
+  raise a reimbursement; every other source already came from the organisation.
+- **Filing, screening, approving and recording are four separate rights**, so no one person
+  carries a claim end to end:
   - `add_expenses` — create a voucher and send it.
+  - `send_for_approval` — screen a submission and put it in front of an approver, or send it back.
   - `approve_expenses` — give or refuse final approval.
   - `record_expenses` — book an approved voucher into the external accounts.
+- **Screening is not approval.** A submitted voucher waits to be screened; its holder can pass it
+  on or return it, never decide it. Administrators can always screen, so the queue is never left
+  unowned when nobody holds the right — the same guard the manager step uses.
+- **Own-pocket vouchers offer to claim themselves back.** Submitting one asks whether to raise a
+  reimbursement; saying yes creates it **pending and linked to the voucher**. The claim is
+  screened and approved in its own right, and rejecting the voucher withdraws it, so an expense
+  that was refused can never be paid out.
 - **Approval is a granted right, not a role.** `approve_expenses` is the **only** right the admin
   role does not carry automatically — an approver is an administrator who has also been ticked
   for it in the Employees tab. An admin without it can see everything and change nothing about
@@ -322,6 +335,7 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `ExpenseFormView` | `/expenses/new`, `/expenses/:id/edit` | Authenticated |
 | `ExpenseDetailView` | `/expenses/:id` | Authenticated |
 | `ExpenseApprovalsView` | `/expenses/approvals` | `review_expenses` / `approve_expenses` / `approve_users` / `add_users` |
+| `ExpenseScreeningView` | `/expenses/screening` | `send_for_approval` |
 | `ExpenseFinanceView` | `/expenses/finance` | `record_expenses` |
 | `ExpensePackView` | `/expenses/pack` | Authenticated |
 | `ExpenseReportsView` | `/expenses/reports` | Authenticated |

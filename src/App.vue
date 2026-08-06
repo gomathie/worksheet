@@ -1,12 +1,40 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from './api'
 import { useAuthStore } from './stores/auth'
 import NotificationBell from './components/NotificationBell.vue'
+import NavGroup from './components/NavGroup.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+// Which nav dropdown (if any) the current route belongs to, so its pill
+// stays highlighted even while the dropdown itself is closed.
+const reportsActive = computed(() =>
+  ['report', 'trends', 'absences', 'activity'].includes(String(route.name)),
+)
+// Payments, Payslip, and everything expense-related all move money —
+// grouped under one "Finance" dropdown rather than splitting Pay/Expenses.
+const financeActive = computed(() =>
+  [
+    'payments',
+    'payslip',
+    'expenses',
+    'expense-new',
+    'expense-detail',
+    'expense-edit',
+    'expense-pack',
+    'expense-approvals',
+    'expense-finance',
+    'expense-reports',
+    'petty-cash',
+  ].includes(String(route.name)),
+)
+const adminActive = computed(() =>
+  ['employees', 'settings'].includes(String(route.name)),
+)
 
 // Expense reporting is open to anyone who can see beyond their own vouchers.
 const canSeeExpenseReports = computed(
@@ -177,8 +205,10 @@ async function changePassword() {
     </div>
 
     <nav v-if="auth.user" class="no-print my-5">
-      <!-- Thirteen destinations wrap to seven rows on a phone, burying the
-           page content. Collapse to a toggle below md; unchanged above it. -->
+      <!-- Fifteen possible destinations, flat, buried the page content on a
+           phone and wrapped to several rows on desktop too. Pin the two most
+           used (Time Entry, Dashboard) and fold the rest into three dropdown
+           groups (Reports, Finance, Admin) \u2014 see NavGroup.vue. -->
       <button
         class="btn flex w-full items-center justify-between md:hidden"
         :aria-expanded="navOpen"
@@ -189,11 +219,14 @@ async function changePassword() {
       </button>
 
       <div
-        class="gap-1.5 md:flex md:flex-wrap [&>a]:w-full md:[&>a]:w-auto"
+        class="gap-1.5 md:flex md:flex-wrap md:items-center [&>a]:w-full md:[&>a]:w-auto"
         :class="navOpen ? 'mt-2 flex flex-col' : 'hidden'"
-        @click="navOpen = false"
       >
-      <RouterLink :to="{ name: 'entries' }" class="btn" active-class="btn-solid"
+      <RouterLink
+        :to="{ name: 'entries' }"
+        class="btn"
+        active-class="btn-solid"
+        @click="navOpen = false"
         >Time Entry</RouterLink
       >
       <RouterLink
@@ -201,78 +234,114 @@ async function changePassword() {
         :to="{ name: 'dashboard' }"
         class="btn"
         active-class="btn-solid"
+        @click="navOpen = false"
         >Dashboard</RouterLink
       >
-      <RouterLink
-        v-if="auth.rights.view_reports"
-        :to="{ name: 'report' }"
-        class="btn"
-        active-class="btn-solid"
-        >Monthly Report</RouterLink
-      >
-      <RouterLink :to="{ name: 'payments' }" class="btn" active-class="btn-solid"
-        >Payments</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.view_payslip"
-        :to="{ name: 'payslip' }"
-        class="btn"
-        active-class="btn-solid"
-        >Payslip</RouterLink
-      >
-      <RouterLink :to="{ name: 'trends' }" class="btn" active-class="btn-solid"
-        >Trends</RouterLink
-      >
-      <RouterLink :to="{ name: 'absences' }" class="btn" active-class="btn-solid"
-        >Absences</RouterLink
-      >
-      <RouterLink :to="{ name: 'expenses' }" class="btn" active-class="btn-solid"
-        >Expenses</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.use_petty_cash || auth.isAdmin"
-        :to="{ name: 'petty-cash' }"
-        class="btn"
-        active-class="btn-solid"
-        >Petty Cash</RouterLink
-      >
-      <RouterLink
-        v-if="
-          auth.rights.review_expenses ||
-          canApproveExpenses ||
-          auth.canApproveUsers ||
-          auth.rights.add_users
-        "
-        :to="{ name: 'expense-approvals' }"
-        class="btn"
-        active-class="btn-solid"
-        >Approvals</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.record_expenses"
-        :to="{ name: 'expense-finance' }"
-        class="btn"
-        active-class="btn-solid"
-        >To Record</RouterLink
-      >
-      <RouterLink
-        v-if="canSeeExpenseReports"
-        :to="{ name: 'expense-reports' }"
-        class="btn"
-        active-class="btn-solid"
-        >Expense Reports</RouterLink
-      >
-      <template v-if="auth.isAdmin">
-        <RouterLink :to="{ name: 'employees' }" class="btn" active-class="btn-solid"
-          >Employees</RouterLink
+
+      <NavGroup label="Reports" :active="reportsActive" @click="navOpen = false">
+        <RouterLink
+          v-if="auth.rights.view_reports"
+          :to="{ name: 'report' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Monthly Report</RouterLink
         >
-        <RouterLink :to="{ name: 'settings' }" class="btn" active-class="btn-solid"
-          >Settings</RouterLink
+        <RouterLink
+          :to="{ name: 'trends' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Trends</RouterLink
         >
-        <RouterLink :to="{ name: 'activity' }" class="btn" active-class="btn-solid"
+        <RouterLink
+          :to="{ name: 'absences' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Absences</RouterLink
+        >
+        <RouterLink
+          v-if="auth.isAdmin"
+          :to="{ name: 'activity' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
           >Activity</RouterLink
         >
-      </template>
+      </NavGroup>
+
+      <NavGroup label="Finance" :active="financeActive" @click="navOpen = false">
+        <RouterLink
+          :to="{ name: 'payments' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Payments</RouterLink
+        >
+        <RouterLink
+          v-if="auth.rights.view_payslip"
+          :to="{ name: 'payslip' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Payslip</RouterLink
+        >
+        <div class="my-1 border-t border-line" />
+        <RouterLink
+          :to="{ name: 'expenses' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Expenses</RouterLink
+        >
+        <RouterLink
+          v-if="auth.rights.use_petty_cash || auth.isAdmin"
+          :to="{ name: 'petty-cash' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Petty Cash</RouterLink
+        >
+        <RouterLink
+          v-if="
+            auth.rights.review_expenses ||
+            canApproveExpenses ||
+            auth.canApproveUsers ||
+            auth.rights.add_users
+          "
+          :to="{ name: 'expense-approvals' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Approvals</RouterLink
+        >
+        <RouterLink
+          v-if="auth.rights.record_expenses"
+          :to="{ name: 'expense-finance' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >To Record</RouterLink
+        >
+        <RouterLink
+          v-if="canSeeExpenseReports"
+          :to="{ name: 'expense-reports' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Expense Reports</RouterLink
+        >
+      </NavGroup>
+
+      <NavGroup
+        v-if="auth.isAdmin"
+        label="Admin"
+        :active="adminActive"
+        @click="navOpen = false"
+      >
+        <RouterLink
+          :to="{ name: 'employees' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Employees</RouterLink
+        >
+        <RouterLink
+          :to="{ name: 'settings' }"
+          class="block rounded px-3 py-2 text-left hover:bg-teal-soft"
+          active-class="bg-teal-soft text-teal"
+          >Settings</RouterLink
+        >
+      </NavGroup>
       </div>
     </nav>
 

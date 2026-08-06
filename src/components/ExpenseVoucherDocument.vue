@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import {
   PAYMENT_METHOD_LABELS,
+  FUNDING_SOURCE_LABELS,
   STATUS_LABELS,
+  type FundingSource,
   type PaymentMethod,
 } from '../../shared/expenses'
 import type { ExpenseVoucherDetail } from '../types'
@@ -16,6 +18,15 @@ import type { ExpenseVoucherDetail } from '../types'
 // for an approved receipt.
 
 const props = defineProps<{ voucher: ExpenseVoucherDetail }>()
+
+// Falls back to the old boolean for a voucher filed before funding_source.
+const fundingLabel = computed(
+  () =>
+    FUNDING_SOURCE_LABELS[
+      (props.voucher.funding_source ??
+        (props.voucher.paid_from_petty_cash ? 'petty_cash' : 'own_pocket')) as FundingSource
+    ] ?? 'Own pocket',
+)
 
 const money = computed(
   () => `${props.voucher.currency}${props.voucher.amount.toFixed(2)}`,
@@ -97,7 +108,7 @@ const generatedOn = new Date().toLocaleString('en-GB', {
           <span class="shrink-0 text-muted">Funded from</span>
           <span class="min-w-0 flex-1 border-b border-dotted border-ink/40" />
           <span class="shrink-0">
-            {{ voucher.paid_from_petty_cash ? 'Petty cash float' : 'Own pocket' }}
+            {{ fundingLabel }}
           </span>
         </div>
         <div class="flex items-baseline gap-2">

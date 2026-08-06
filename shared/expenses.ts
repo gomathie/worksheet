@@ -7,6 +7,8 @@ export const EXPENSE_STATUSES = [
   'draft',
   'submitted',
   'manager_review',
+  // Checked by a `send_for_approval` holder before it reaches an approver.
+  'screening',
   // Legacy. The finance review stage was retired when recording became its own
   // right: a voucher now goes straight from submission (or manager approval) to
   // the approver. No transition produces this any more, but rows filed under
@@ -20,6 +22,38 @@ export const EXPENSE_STATUSES = [
 ] as const
 
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number]
+
+/**
+ * Who fronted the money. Distinct from PAYMENT_METHODS, which is *how* it was
+ * paid: a voucher can be funded from the office cash box and paid by mobile
+ * money. Only 'own_pocket' leaves somebody out of pocket, so it is the only
+ * source that can raise a reimbursement.
+ */
+export const FUNDING_SOURCES = [
+  'own_pocket',
+  'petty_cash',
+  'office_cash',
+  'company_account',
+] as const
+
+export type FundingSource = (typeof FUNDING_SOURCES)[number]
+
+export const FUNDING_SOURCE_LABELS: Record<FundingSource, string> = {
+  own_pocket: 'My own pocket',
+  petty_cash: 'Petty cash float I hold',
+  office_cash: 'Office cash',
+  company_account: 'Company account / card',
+}
+
+/** Only money the employee personally advanced can be claimed back. */
+export function isReimbursable(source: FundingSource): boolean {
+  return source === 'own_pocket'
+}
+
+export function parseFundingSource(value: unknown): FundingSource | null {
+  const s = String(value ?? '')
+  return (FUNDING_SOURCES as readonly string[]).includes(s) ? (s as FundingSource) : null
+}
 
 export const PAYMENT_METHODS = [
   'cash',
@@ -43,6 +77,7 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
   draft: 'Draft',
   submitted: 'Submitted',
   manager_review: 'Manager Review',
+  screening: 'Being Screened',
   finance_review: 'Finance Review',
   admin_approval: 'Awaiting Admin Approval',
   approved: 'Approved',
@@ -54,6 +89,7 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
 export const OPEN_STATUSES: ExpenseStatus[] = [
   'submitted',
   'manager_review',
+  'screening',
   'finance_review',
   'admin_approval',
 ]
@@ -98,12 +134,12 @@ export function statusAfterSubmit(
   hasManager: boolean,
 ): ExpenseStatus {
   if (workflow.require_manager && hasManager) return 'submitted'
-  return 'admin_approval'
+  return 'screening'
 }
 
 /** Where a voucher lands once the manager has approved it. */
 export function statusAfterManagerApproval(): ExpenseStatus {
-  return 'admin_approval'
+  return 'screening'
 }
 
 // -------------------------------------------------------------- permissions
@@ -125,6 +161,12 @@ export interface ExpenseActor {
    */
   can_record: boolean
   /**
+   * Holds the `send_for_approval` right. Screens a submitted voucher and puts
+   * it in front of an approver, or returns it for more information. Screening
+   * is not approval — this actor can never decide a voucher's fate.
+   */
+  can_send_for_approval: boolean
+  /**
    * Holds the `approve_expenses` right — final approval authority. This is
    * granted explicitly and is NOT implied by the admin role; an approver is an
    * administrator who also holds it.
@@ -143,6 +185,7 @@ export type ExpenseAction =
   | 'start_review'
   | 'manager_approve'
   | 'manager_reject'
+  | 'request_approval'
   | 'admin_approve'
   | 'admin_reject'
   | 'return'
@@ -193,6 +236,17 @@ function isRecorder(actor: ExpenseActor): boolean {
 }
 
 /**
+ * May this user screen a submitted voucher and put it to an approver?
+ *
+ * Administrators always can, so the screening queue always has an owner — the
+ * right can be held by nobody at all without stranding vouchers, which is the
+ * same guard the manager step relies on.
+ */
+function isScreener(actor: ExpenseActor): boolean {
+  return actor.is_admin || actor.can_send_for_approval
+}
+
+/**
  * Every action the user may take on a voucher in this state. The API calls
  * this before mutating; the UI calls it to decide which buttons to render.
  */
@@ -220,6 +274,12 @@ export function allowedActions(
   if (canActAsManager(actor, status)) {
     if (status === 'submitted') actions.push('start_review')
     actions.push('manager_approve', 'manager_reject', 'return')
+  }
+
+  // --- screening: checks a submitted voucher and puts it to an approver, or
+  // sends it back. Never decides it.
+  if (status === 'screening' && isScreener(actor)) {
+    actions.push('request_approval', 'return')
   }
 
   // --- recording: books the approved expense, never approves it. Only ever
@@ -263,6 +323,8 @@ export function statusAfter(
       return 'manager_review'
     case 'manager_approve':
       return statusAfterManagerApproval()
+    case 'request_approval':
+      return 'admin_approval'
     case 'admin_approve':
       return 'approved'
     case 'manager_reject':
@@ -484,6 +546,7 @@ export interface PettyCashEntry {
 export const PETTY_CASH_CONSUMING_STATUSES: ExpenseStatus[] = [
   'submitted',
   'manager_review',
+  'screening',
   'finance_review',
   'admin_approval',
   'approved',

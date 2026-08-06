@@ -24,6 +24,7 @@ export interface Rights {
   direct_counts: boolean
   add_expenses: boolean
   review_expenses: boolean
+  send_for_approval: boolean
   record_expenses: boolean
   /** Final approval; requires the admin role too. Never implicit. */
   approve_expenses: boolean
@@ -213,8 +214,11 @@ export interface Adjustment {
   type: 'bonus' | 'reimbursement'
   amount: number
   description: string | null
-  status: 'pending' | 'approved' | 'rejected'
+  // 'pending' is raised but unscreened; 'awaiting_approval' is with the approver.
+  status: 'pending' | 'awaiting_approval' | 'approved' | 'rejected'
   created_at: string
+  /** Set when an own-pocket expense voucher raised this claim. */
+  voucher_id?: string | null
 }
 
 export interface TrendData {
@@ -334,6 +338,7 @@ export interface ExpenseVoucher {
   declaration_accepted: number
   declaration_text: string | null
   paid_from_petty_cash: number
+  funding_source: string
   status: ExpenseStatus
   created_by: string | null
   recorded_at: string | null

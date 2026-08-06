@@ -10,6 +10,7 @@ const TONE: Record<ExpenseStatus, string> = {
   draft: 'border-line text-muted',
   submitted: 'border-amber text-amber',
   manager_review: 'border-amber text-amber',
+  screening: 'border-amber text-amber',
   finance_review: 'border-amber text-amber',
   admin_approval: 'border-amber bg-amber-soft text-amber',
   approved: 'border-teal text-teal',

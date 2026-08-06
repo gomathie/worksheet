@@ -15,6 +15,7 @@ const NO_RIGHTS: Rights = {
   direct_counts: false,
   add_expenses: false,
   review_expenses: false,
+  send_for_approval: false,
   record_expenses: false,
   approve_expenses: false,
   add_users: false,

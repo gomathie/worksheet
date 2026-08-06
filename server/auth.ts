@@ -95,6 +95,10 @@ export interface Rights {
   // the holder's own direct reports (employees.manager_id).
   add_expenses: boolean
   review_expenses: boolean
+  // Screens a submitted voucher (and a raised reimbursement) and puts it in
+  // front of an approver. Organization-wide, and never a decision of its own:
+  // the holder can pass it on or send it back, not approve it.
+  send_for_approval: boolean
   // Books an already-approved voucher into the external accounting records.
   // Organization-wide, and powerless before approval — recording is only ever
   // offered on an 'approved' voucher.
@@ -166,6 +170,7 @@ export const DEFAULT_RIGHTS: Rights = {
   direct_counts: false,
   add_expenses: true,
   review_expenses: false,
+  send_for_approval: false,
   record_expenses: false,
   approve_expenses: false,
   add_users: false,
@@ -186,6 +191,7 @@ const ALL_RIGHTS: Rights = {
   direct_counts: true,
   add_expenses: true,
   review_expenses: true,
+  send_for_approval: true,
   record_expenses: true,
   add_users: true,
   use_petty_cash: true,
@@ -258,6 +264,7 @@ export function parseRights(employee: Employee): Rights {
       // rows written before the expense module default to allowed.
       add_expenses: Boolean(raw.add_expenses ?? true),
       review_expenses: Boolean(raw.review_expenses),
+      send_for_approval: Boolean(raw.send_for_approval),
       // `record_expenses` was carved out of the old `finance_expenses`, which
       // bundled escalating a voucher with booking it. Fall back to the retired
       // key so holders keep the recording half in the window between the code

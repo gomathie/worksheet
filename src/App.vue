@@ -27,6 +27,7 @@ const financeActive = computed(() =>
     'expense-edit',
     'expense-pack',
     'expense-approvals',
+    'expense-screening',
     'expense-finance',
     'expense-reports',
     'petty-cash',
@@ -334,6 +335,13 @@ async function changePassword() {
         class="btn btn-sm"
         active-class="btn-solid"
         >Approvals</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.send_for_approval"
+        :to="{ name: 'expense-screening' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Screening</RouterLink
       >
       <RouterLink
         v-if="auth.rights.record_expenses"

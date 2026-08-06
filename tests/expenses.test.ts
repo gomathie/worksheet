@@ -8,6 +8,11 @@ import {
   statusAfterSubmit,
   isApprover,
   PETTY_CASH_CONSUMING_STATUSES,
+  OPEN_STATUSES,
+  FUNDING_SOURCES,
+  FUNDING_SOURCE_LABELS,
+  isReimbursable,
+  parseFundingSource,
   canSpendFromPettyCash,
   consumesPettyCash,
   movementValue,
@@ -36,6 +41,7 @@ const employee: ExpenseActor = {
   can_create: true,
   can_review: false,
   can_record: false,
+  can_send_for_approval: false,
   can_approve: false,
   is_owner: true,
   is_manager_of_owner: false,
@@ -45,6 +51,7 @@ const manager: ExpenseActor = {
   can_create: true,
   can_review: true,
   can_record: false,
+  can_send_for_approval: false,
   can_approve: false,
   is_owner: false,
   is_manager_of_owner: true,
@@ -54,6 +61,18 @@ const recorder: ExpenseActor = {
   can_create: true,
   can_review: false,
   can_record: true,
+  can_send_for_approval: false,
+  can_approve: false,
+  is_owner: false,
+  is_manager_of_owner: false,
+}
+// Screens submissions and puts them to an approver; decides nothing.
+const screener: ExpenseActor = {
+  is_admin: false,
+  can_create: true,
+  can_review: false,
+  can_record: false,
+  can_send_for_approval: true,
   can_approve: false,
   is_owner: false,
   is_manager_of_owner: false,
@@ -64,6 +83,7 @@ const admin: ExpenseActor = {
   can_create: true,
   can_review: true,
   can_record: true,
+  can_send_for_approval: true,
   can_approve: false,
   is_owner: false,
   is_manager_of_owner: false,
@@ -88,27 +108,28 @@ describe('statusAfterSubmit', () => {
   it('routes to the manager when one exists and the step is required', () => {
     expect(statusAfterSubmit(DEFAULT_WORKFLOW, true)).toBe('submitted')
   })
-  it('goes straight to the approver when the employee has no manager', () => {
-    expect(statusAfterSubmit(DEFAULT_WORKFLOW, false)).toBe('admin_approval')
+  it('goes to screening when the employee has no manager', () => {
+    expect(statusAfterSubmit(DEFAULT_WORKFLOW, false)).toBe('screening')
   })
-  it('still requires approval when the manager step is off', () => {
+  it('goes to screening when the manager step is off', () => {
     // Turning the step off shortens the chain; it must never auto-approve.
-    expect(statusAfterSubmit({ require_manager: false }, true)).toBe('admin_approval')
+    expect(statusAfterSubmit({ require_manager: false }, true)).toBe('screening')
   })
-  it('never routes to the retired finance stage', () => {
+  it('never reaches an approver or an approval without being screened', () => {
     for (const hasManager of [true, false]) {
       for (const require_manager of [true, false]) {
-        expect(statusAfterSubmit({ require_manager }, hasManager)).not.toBe(
-          'finance_review',
-        )
+        const landed = statusAfterSubmit({ require_manager }, hasManager)
+        expect(landed).not.toBe('admin_approval')
+        expect(landed).not.toBe('approved')
+        expect(landed).not.toBe('finance_review')
       }
     }
   })
 })
 
 describe('statusAfterManagerApproval', () => {
-  it('hands straight to the approver now that finance review is retired', () => {
-    expect(statusAfterManagerApproval()).toBe('admin_approval')
+  it('hands to the screening desk, not straight to the approver', () => {
+    expect(statusAfterManagerApproval()).toBe('screening')
   })
 })
 
@@ -116,7 +137,8 @@ describe('statusAfter', () => {
   it('maps each decision to its next state', () => {
     const w = DEFAULT_WORKFLOW
     expect(statusAfter('start_review', w, true)).toBe('manager_review')
-    expect(statusAfter('manager_approve', w, true)).toBe('admin_approval')
+    expect(statusAfter('manager_approve', w, true)).toBe('screening')
+    expect(statusAfter('request_approval', w, true)).toBe('admin_approval')
     expect(statusAfter('admin_approve', w, true)).toBe('approved')
     expect(statusAfter('manager_reject', w, true)).toBe('rejected')
     expect(statusAfter('admin_reject', w, true)).toBe('rejected')
@@ -675,5 +697,65 @@ describe('petty cash', () => {
     const res = canSpendFromPettyCash(40, 60)
     expect(res.ok).toBe(false)
     expect(res.message).toContain('40.00')
+  })
+})
+
+describe('funding sources', () => {
+  it('treats only own-pocket money as reclaimable', () => {
+    expect(isReimbursable('own_pocket')).toBe(true)
+    for (const s of ['petty_cash', 'office_cash', 'company_account'] as const) {
+      expect(isReimbursable(s)).toBe(false)
+    }
+  })
+
+  it('accepts every declared source and refuses anything else', () => {
+    for (const s of FUNDING_SOURCES) expect(parseFundingSource(s)).toBe(s)
+    expect(parseFundingSource('cash')).toBeNull()
+    expect(parseFundingSource('')).toBeNull()
+    expect(parseFundingSource(undefined)).toBeNull()
+  })
+
+  it('labels every source, so none renders as a raw key', () => {
+    for (const s of FUNDING_SOURCES) {
+      expect(FUNDING_SOURCE_LABELS[s]).toBeTruthy()
+    }
+  })
+})
+
+describe('screening stage', () => {
+  const inScreening = { status: 'screening' as const, reopened: false }
+
+  it('lets a screener pass a voucher on or send it back', () => {
+    const actions = allowedActions(inScreening, screener)
+    expect(actions).toEqual(expect.arrayContaining(['request_approval', 'return']))
+  })
+
+  it('never lets a screener approve or reject', () => {
+    const actions = allowedActions(inScreening, screener)
+    expect(actions).not.toContain('admin_approve')
+    expect(actions).not.toContain('admin_reject')
+    expect(actions).not.toContain('manager_approve')
+  })
+
+  it('never lets a screener record, even after approval', () => {
+    expect(
+      allowedActions({ status: 'approved', reopened: false }, screener),
+    ).not.toContain('mark_recorded')
+  })
+
+  it('keeps an ordinary employee and a recorder out of the queue', () => {
+    expect(allowedActions(inScreening, employee)).toEqual([])
+    expect(allowedActions(inScreening, recorder)).toEqual([])
+  })
+
+  it('lets an administrator screen, so the queue is never unowned', () => {
+    // The right can be held by nobody at all; without this a voucher would
+    // strand in screening with no one able to move it.
+    expect(allowedActions(inScreening, admin)).toContain('request_approval')
+  })
+
+  it('counts as open and as consuming a petty cash float', () => {
+    expect(OPEN_STATUSES).toContain('screening')
+    expect(consumesPettyCash('screening')).toBe(true)
   })
 })

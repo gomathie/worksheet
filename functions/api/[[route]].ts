@@ -1362,12 +1362,38 @@ async function createAdjustment(request: Request, env: Env): Promise<Response> {
   return json(created, 201)
 }
 
+/**
+ * Reimbursements raised but not yet put to an approver — the screening desk's
+ * second pile, alongside the vouchers. Open to the same right, because
+ * screening a claim is the same act as screening the voucher that raised it.
+ */
+async function listPendingReimbursements(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (user.role !== 'admin' && !parseRights(user).send_for_approval) {
+    throw new ApiError(403, 'You do not have permission for this')
+  }
+  const { results } = await env.DB.prepare(
+    `SELECT a.*, emp.name AS employee_name
+       FROM adjustments a
+       JOIN employees emp ON emp.id = a.employee_id
+      WHERE a.type = 'reimbursement' AND a.status = 'pending'
+      ORDER BY a.created_at`,
+  ).all()
+  return json(results)
+}
+
 async function decideAdjustment(
   request: Request,
   env: Env,
   id: string,
 ): Promise<Response> {
-  const admin = await requireAdmin(request, env)
+  // Screening is not a decision, so it does not need the admin role — a
+  // `send_for_approval` holder may move a claim to the approver and no
+  // further. Approving or rejecting still requires an administrator.
+  const user = await requireUser(request, env)
   const existing = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
     .bind(id)
     .first<AdjustmentRow>()
@@ -1375,8 +1401,25 @@ async function decideAdjustment(
 
   await assertMonthUnlocked(env, existing.month)
   const body = await readJson<{ status?: string }>(request)
+  if (body.status === 'awaiting_approval') {
+    if (user.role !== 'admin' && !parseRights(user).send_for_approval) {
+      throw new ApiError(403, 'You cannot send this claim for approval')
+    }
+    if (existing.status !== 'pending') {
+      throw new ApiError(400, 'Only a pending claim can be sent for approval')
+    }
+    await env.DB.prepare('UPDATE adjustments SET status = ? WHERE id = ?')
+      .bind('awaiting_approval', id)
+      .run()
+    await audit(env, user.id, 'screen_adjustment', id, { status: 'awaiting_approval' })
+    return json(
+      await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?').bind(id).first(),
+    )
+  }
+
+  const admin = await requireAdmin(request, env)
   if (body.status !== 'approved' && body.status !== 'rejected') {
-    throw new ApiError(400, "status must be 'approved' or 'rejected'")
+    throw new ApiError(400, "status must be 'awaiting_approval', 'approved' or 'rejected'")
   }
   await env.DB.prepare(
     'UPDATE adjustments SET status = ?, decided_by = ?, decided_at = ? WHERE id = ?',
@@ -2228,6 +2271,9 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'DELETE') return deleteEntry(request, env, entryMatch[1])
   }
 
+  if (path === '/api/adjustments/pending-reimbursements' && method === 'GET') {
+    return listPendingReimbursements(request, env)
+  }
   if (path === '/api/adjustments' && method === 'GET') return listAdjustments(request, env)
   if (path === '/api/adjustments' && method === 'POST') return createAdjustment(request, env)
   const adjMatch = /^\/api\/adjustments\/([\w-]+)$/.exec(path)

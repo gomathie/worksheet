@@ -27,6 +27,8 @@ import {
   canSpendFromPettyCash,
   consumesPettyCash,
   formatVoucherNumber,
+  parseFundingSource,
+  isReimbursable,
   allowedActions,
   statusAfter,
   summarize,
@@ -35,6 +37,7 @@ import {
   type ExpenseAction,
   type ExpenseActor,
   type ExpenseStatus,
+  type FundingSource,
   type PaymentMethod,
   type WorkflowConfig,
 } from '../shared/expenses'
@@ -130,6 +133,7 @@ async function buildActor(
     can_create: rights.add_expenses,
     can_review: rights.review_expenses,
     can_record: rights.record_expenses,
+    can_send_for_approval: rights.send_for_approval,
     can_approve: rights.approve_expenses,
     is_owner: voucher.employee_id === user.id,
     is_manager_of_owner: isManagerOfOwner,
@@ -144,6 +148,7 @@ const ACTION_PHRASES: Record<ExpenseAction, string> = {
   start_review: 'start reviewing this voucher',
   manager_approve: 'approve this voucher as a manager',
   manager_reject: 'reject this voucher as a manager',
+  request_approval: 'send this voucher for approval',
   admin_approve: 'give final approval on this voucher',
   admin_reject: 'reject this voucher',
   return: 'return this voucher for more information',
@@ -425,18 +430,19 @@ const SELECT_VOUCHER = `
 
 /**
  * Restrict a query to what the caller may see:
- *   admin / finance — everything
- *   reviewer        — their own plus their direct reports'
- *   everyone else   — their own only
+ *   admin / recorder — everything
+ *   reviewer         — their own plus their direct reports'
+ *   everyone else    — their own only, or whatever their data scope allows
  */
 async function visibilityClause(
   env: Env,
   user: Employee,
 ): Promise<{ sql: string; binds: unknown[] }> {
   const rights = parseRights(user)
-  // Finance verifies the whole organization's spend, so it is unrestricted
-  // regardless of the assigned data scope.
-  if (user.role === 'admin' || rights.record_expenses) return { sql: '', binds: [] }
+  // Whoever books the accounts reconciles the whole organization's spend, so
+  // it is unrestricted regardless of the assigned data scope.
+  if (user.role === 'admin' || rights.record_expenses || rights.send_for_approval)
+    return { sql: '', binds: [] }
 
   const scoped = await visibleEmployeeIds(env, user)
   const ids = new Set<string>(scoped ?? [])
@@ -539,6 +545,17 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     return json(await withDuplicateCounts(env, results))
   }
 
+  if (which === 'screening') {
+    if (!rights.send_for_approval && user.role !== 'admin') {
+      throw new ApiError(403, 'You do not have permission for this')
+    }
+    const { results } = await env.DB.prepare(
+      `${SELECT_VOUCHER} WHERE v.status = 'screening'
+       ORDER BY v.submission_date, v.created_at`,
+    ).all<{ id: string }>()
+    return json(await withDuplicateCounts(env, results))
+  }
+
   if (which === 'record') {
     if (!rights.record_expenses && user.role !== 'admin') {
       throw new ApiError(403, 'You do not have permission for this')
@@ -566,7 +583,7 @@ export async function listQueue(request: Request, env: Env): Promise<Response> {
     return json(await withDuplicateCounts(env, results))
   }
 
-  throw new ApiError(400, "queue must be 'manager', 'record', or 'approver'")
+  throw new ApiError(400, "queue must be 'manager', 'screening', 'record', or 'approver'")
 }
 
 export async function getVoucher(request: Request, env: Env, id: string): Promise<Response> {
@@ -579,7 +596,11 @@ export async function getVoucher(request: Request, env: Env, id: string): Promis
   const actor = await buildActor(env, user, voucher)
   const rights = parseRights(user)
   const visible =
-    actor.is_admin || actor.is_owner || actor.is_manager_of_owner || rights.record_expenses
+    actor.is_admin ||
+    actor.is_owner ||
+    actor.is_manager_of_owner ||
+    rights.record_expenses ||
+    rights.send_for_approval
   if (!visible) throw new ApiError(403, 'You cannot view this voucher')
 
   const [approvals, attachments, trailRows, duplicates] = await Promise.all([
@@ -629,12 +650,26 @@ interface VoucherBody {
   missing_receipt_reason?: string | null
   declaration_accepted?: boolean
   paid_from_petty_cash?: boolean
+  funding_source?: string
   /** Save and submit in one step. */
   submit?: boolean
+  /**
+   * Raise a reimbursement alongside an own-pocket voucher. Set from the
+   * dialog shown at submission time; ignored for every other funding source,
+   * because nobody else is out of pocket.
+   */
+  request_reimbursement?: boolean
 }
 
 function normalizeBody(body: VoucherBody, currency: string) {
+  // `funding_source` is authoritative; `paid_from_petty_cash` is derived from
+  // it so the petty-cash balance (which is computed from that column) stays
+  // correct. A body that only sends the old boolean still works.
+  const funding =
+    parseFundingSource(body.funding_source) ??
+    (body.paid_from_petty_cash ? 'petty_cash' : 'own_pocket')
   return {
+    funding_source: funding,
     expense_date: (body.expense_date ?? '').trim(),
     category_id: body.category_id || null,
     description: (body.description ?? '').trim().slice(0, 1000),
@@ -648,7 +683,7 @@ function normalizeBody(body: VoucherBody, currency: string) {
     missing_receipt_reason:
       (body.missing_receipt_reason ?? '')?.toString().trim().slice(0, 500) || null,
     declaration_accepted: body.declaration_accepted ? 1 : 0,
-    paid_from_petty_cash: body.paid_from_petty_cash ? 1 : 0,
+    paid_from_petty_cash: funding === 'petty_cash' ? 1 : 0,
   }
 }
 
@@ -755,8 +790,8 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
        (id, voucher_number, employee_id, department_id, expense_date, submission_date,
         category_id, description, vendor, amount, currency, payment_method,
         receipt_available, missing_receipt_reason, declaration_accepted,
-        declaration_text, status, created_by, paid_from_petty_cash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        declaration_text, status, created_by, paid_from_petty_cash, funding_source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -778,6 +813,7 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
       status,
       user.id,
       fields.paid_from_petty_cash,
+      fields.funding_source,
     )
     .run()
 
@@ -790,6 +826,10 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
 
   if (wantsSubmit) {
     await trail(env, id, user.id, 'submitted', 'status', 'draft', status)
+    if (body.request_reimbursement) {
+      const fresh = await loadVoucher(env, id)
+      await raiseReimbursement(env, fresh, user.id)
+    }
     await announceSubmission(env, id, number, employeeId, status, fields.amount, fields.currency, now)
   }
 
@@ -859,7 +899,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
        expense_date = ?, category_id = ?, description = ?, vendor = ?, amount = ?,
        currency = ?, payment_method = ?, receipt_available = ?,
        missing_receipt_reason = ?, declaration_accepted = ?, declaration_text = ?,
-       paid_from_petty_cash = ?, department_id = ?, updated_at = datetime('now')
+       paid_from_petty_cash = ?, funding_source = ?, department_id = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -875,6 +915,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       fields.declaration_accepted,
       fields.declaration_accepted ? DEFAULT_DECLARATION : null,
       fields.paid_from_petty_cash,
+      fields.funding_source,
       departmentId,
       id,
     )
@@ -895,6 +936,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       missing_receipt_reason: voucher.missing_receipt_reason,
       declaration_accepted: voucher.declaration_accepted,
       paid_from_petty_cash: voucher.paid_from_petty_cash,
+      funding_source: voucher.funding_source,
       department_id: voucher.department_id,
     },
     { ...fields, department_id: departmentId },
@@ -935,8 +977,8 @@ export async function duplicateVoucher(
        (id, voucher_number, employee_id, department_id, expense_date, submission_date,
         category_id, description, vendor, amount, currency, payment_method,
         receipt_available, missing_receipt_reason, declaration_accepted,
-        declaration_text, status, created_by, paid_from_petty_cash)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, 'draft', ?, ?)`,
+        declaration_text, status, created_by, paid_from_petty_cash, funding_source)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, 'draft', ?, ?, ?)`,
   )
     .bind(
       newId,
@@ -953,6 +995,7 @@ export async function duplicateVoucher(
       source.missing_receipt_reason,
       user.id,
       source.paid_from_petty_cash,
+      source.funding_source,
     )
     .run()
 
@@ -1028,18 +1071,81 @@ async function announceSubmission(
       body: `${bodyText}\n\nIt is waiting for your review.`,
       voucherId,
     })
-  } else if (status === 'admin_approval') {
-    // No manager step applied, so it goes straight to the approvers.
-    await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
-      kind: 'expense_needs_approval',
+  } else if (status === 'screening') {
+    // No manager step applied, so it goes straight to be screened.
+    await notifyUsers(env, await employeesWithRight(env, 'send_for_approval'), {
+      kind: 'expense_submitted',
       title,
-      body: `${bodyText}\n\nIt is waiting for your approval.`,
+      body: `${bodyText}\n\nIt is waiting to be screened and sent for approval.`,
       voucherId,
     })
   }
 }
 
 // -------------------------------------------------------------- transitions
+
+/**
+ * Raise the reimbursement an own-pocket voucher is entitled to.
+ *
+ * Created pending and linked to the voucher, so a decision on the voucher can
+ * reach the claim: rejecting the voucher rejects it too, and the money can
+ * never be paid out for an expense that was refused. Only the employee's own
+ * money is claimable — every other funding source already came from the
+ * organisation.
+ *
+ * Idempotent: a voucher returned to draft and resubmitted must not accumulate
+ * duplicate claims.
+ */
+async function raiseReimbursement(
+  env: Env,
+  voucher: ExpenseVoucherRow,
+  userId: string,
+): Promise<boolean> {
+  if (!isReimbursable((voucher.funding_source ?? 'own_pocket') as FundingSource)) return false
+
+  const existing = await env.DB.prepare(
+    "SELECT id FROM adjustments WHERE voucher_id = ? AND status != 'rejected'",
+  )
+    .bind(voucher.id)
+    .first<{ id: string }>()
+  if (existing) return false
+
+  await env.DB.prepare(
+    `INSERT INTO adjustments
+       (id, employee_id, month, type, amount, description, status, created_by, voucher_id)
+     VALUES (?, ?, ?, 'reimbursement', ?, ?, 'pending', ?, ?)`,
+  )
+    .bind(
+      crypto.randomUUID(),
+      voucher.employee_id,
+      voucher.expense_date.slice(0, 7),
+      voucher.amount,
+      `Expense voucher ${voucher.voucher_number}: ${voucher.description}`.slice(0, 500),
+      userId,
+      voucher.id,
+    )
+    .run()
+  await trail(env, voucher.id, userId, 'reimbursement_requested', null, null, voucher.amount)
+  return true
+}
+
+/**
+ * A voucher that will not be paid must not leave a live claim behind it.
+ * Called when a voucher is rejected; the claim is refused rather than deleted
+ * so the trail of what was asked for survives.
+ */
+async function withdrawReimbursement(
+  env: Env,
+  voucherId: string,
+  userId: string,
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE adjustments SET status = 'rejected', decided_by = ?, decided_at = ?
+      WHERE voucher_id = ? AND status IN ('pending', 'awaiting_approval')`,
+  )
+    .bind(userId, new Date().toISOString(), voucherId)
+    .run()
+}
 
 export async function submitVoucher(
   request: Request,
@@ -1084,6 +1190,16 @@ export async function submitVoucher(
     .run()
   await trail(env, id, user.id, 'submitted', 'status', voucher.status, next)
   await audit(env, user.id, 'submit_expense_voucher', id, { status: next })
+
+  // The dialog shown before an own-pocket voucher is sent asks whether to
+  // claim the money back; only an explicit yes raises the claim.
+  const body = await readJson<{ request_reimbursement?: boolean }>(request).catch(
+    () => ({}) as { request_reimbursement?: boolean },
+  )
+  if (body.request_reimbursement) {
+    await raiseReimbursement(env, voucher, user.id)
+  }
+
   await announceSubmission(
     env,
     id,
@@ -1120,6 +1236,7 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     'start_review',
     'manager_approve',
     'manager_reject',
+    'request_approval',
     'admin_approve',
     'admin_reject',
     'return',
@@ -1153,7 +1270,9 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
       ? 'approver'
       : action === 'mark_recorded'
         ? 'recorder'
-        : 'manager'
+        : action === 'request_approval'
+          ? 'screener'
+          : 'manager'
 
   const now = new Date().toISOString()
 
@@ -1183,7 +1302,9 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     const decision =
       action === 'mark_recorded'
         ? 'recorded'
-        : action === 'return' || action === 'reopen'
+        : action === 'request_approval'
+          ? 'escalated'
+          : action === 'return' || action === 'reopen'
           ? 'returned'
           : action.endsWith('reject')
             ? 'rejected'
@@ -1199,6 +1320,11 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
   await trail(env, id, user.id, action, 'status', voucher.status, next)
   if (comments) await trail(env, id, user.id, `${action}_comment`, 'comments', null, comments)
   await audit(env, user.id, 'decide_expense_voucher', id, { action, status: next })
+
+  // A refused expense must not leave a payable claim behind it.
+  if (next === 'rejected') {
+    await withdrawReimbursement(env, id, user.id)
+  }
 
   await announceDecision(env, {
     voucherId: id,
@@ -1232,12 +1358,11 @@ async function announceDecision(
 
   switch (d.action) {
     case 'manager_approve':
-      // Manager approval sends it straight to the approvers now that the
-      // finance review stage is gone.
-      await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
-        kind: 'expense_needs_approval',
-        title: `Expense voucher ${d.number} needs your approval`,
-        body: `${d.number} for ${money} passed manager review and is waiting for approval.${tail}`,
+      // Manager approval hands it to whoever screens before the approver.
+      await notifyUsers(env, await employeesWithRight(env, 'send_for_approval'), {
+        kind: 'expense_submitted',
+        title: `Expense voucher ${d.number} is ready to screen`,
+        body: `${d.number} for ${money} passed manager review and is waiting to be sent for approval.${tail}`,
         voucherId: d.voucherId,
       })
       await notifyUser(env, {
@@ -1245,6 +1370,15 @@ async function announceDecision(
         kind: 'expense_approved',
         title: `Expense voucher ${d.number} approved by your manager`,
         body: `${d.number} for ${money} passed manager review.${tail}`,
+        voucherId: d.voucherId,
+      })
+      break
+    case 'request_approval':
+      // Screened and put to the approvers; only they can decide it.
+      await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
+        kind: 'expense_needs_approval',
+        title: `Expense voucher ${d.number} needs your approval`,
+        body: `${d.number} for ${money} has been screened and sent for approval.${tail}`,
         voucherId: d.voucherId,
       })
       break

@@ -130,9 +130,27 @@ const canDuplicate = computed(
 )
 
 function submitVoucher() {
+  // Own-pocket money is the only kind that can be claimed back, so ask before
+  // sending rather than deciding for the employee. Matches the dialog on the
+  // form; confirm() is what the other consequential actions here use.
+  const ownPocket = (voucher.value?.funding_source ?? 'own_pocket') === 'own_pocket'
+  const claim =
+    ownPocket &&
+    confirm(
+      `You paid ${money.value} out of your own pocket.\n\n` +
+        'Request a reimbursement for it at the same time?\n\n' +
+        'The claim is raised pending and needs approving separately. ' +
+        'If this voucher is rejected, the claim is withdrawn with it.',
+    )
   return run(
-    () => api(`/api/expenses/${id.value}/submit`, { method: 'POST' }),
-    'Voucher submitted for approval.',
+    () =>
+      api(`/api/expenses/${id.value}/submit`, {
+        method: 'POST',
+        json: { request_reimbursement: claim },
+      }),
+    claim
+      ? 'Voucher submitted and reimbursement requested.'
+      : 'Voucher submitted for approval.',
   )
 }
 
@@ -447,6 +465,7 @@ const downloadPdf = () => window.print()
         v-if="
           can('manager_approve') ||
           can('admin_approve') ||
+          can('request_approval') ||
           can('manager_reject') ||
           can('admin_reject') ||
           can('return')
@@ -501,6 +520,14 @@ const downloadPdf = () => window.print()
           @click="decide('manager_approve', 'Approved.')"
         >
           Approve (manager)
+        </button>
+        <button
+          v-if="can('request_approval')"
+          class="btn btn-solid"
+          :disabled="busy"
+          @click="decide('request_approval', 'Screened and sent for approval.')"
+        >
+          Send for approval
         </button>
         <button
           v-if="can('admin_approve')"

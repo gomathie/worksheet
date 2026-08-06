@@ -7,7 +7,10 @@ import {
   DEFAULT_DECLARATION,
   PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
+  FUNDING_SOURCES,
+  FUNDING_SOURCE_LABELS,
   validateVoucher,
+  type FundingSource,
 } from '../../shared/expenses'
 import type {
   Department,
@@ -43,12 +46,16 @@ const form = ref({
   payment_method: 'cash',
   missing_receipt_reason: '',
   declaration_accepted: false,
-  paid_from_petty_cash: false,
+  funding_source: 'own_pocket' as FundingSource,
 })
 
 // Only offered to float holders; the API refuses it for anyone else.
 const pettyCash = ref<PettyCashPayload | null>(null)
 const canUsePettyCash = computed(() => pettyCash.value?.can_use ?? false)
+// The petty cash float is only an option for someone who actually holds one.
+const fundingChoices = computed(() =>
+  FUNDING_SOURCES.filter((s) => s !== 'petty_cash' || canUsePettyCash.value),
+)
 
 /** Live client-side mirror of the server rules, shown once the user submits. */
 const showIssues = ref(false)
@@ -104,7 +111,7 @@ onMounted(async () => {
         payment_method: v.payment_method,
         missing_receipt_reason: v.missing_receipt_reason ?? '',
         declaration_accepted: Boolean(v.declaration_accepted),
-        paid_from_petty_cash: Boolean(v.paid_from_petty_cash),
+        funding_source: (v.funding_source ?? (v.paid_from_petty_cash ? 'petty_cash' : 'own_pocket')) as FundingSource,
       }
     } else {
       form.value.department_id = auth.user!.department_id
@@ -129,9 +136,42 @@ function payload(submit: boolean) {
     payment_method: form.value.payment_method,
     missing_receipt_reason: form.value.missing_receipt_reason || null,
     declaration_accepted: form.value.declaration_accepted,
-    paid_from_petty_cash: form.value.paid_from_petty_cash,
+    funding_source: form.value.funding_source,
     submit,
+    // Only ever true for own-pocket money, and only after the dialog.
+    request_reimbursement: submit && wantsReimbursement.value,
   }
+}
+
+// --- reimbursement prompt
+//
+// Money the employee advanced themselves is the only kind that can be claimed
+// back, so submitting an own-pocket voucher asks first rather than deciding on
+// their behalf. The answer travels with the submission.
+const wantsReimbursement = ref(false)
+const askReimbursement = ref(false)
+
+const isOwnPocket = computed(() => form.value.funding_source === 'own_pocket')
+
+/** Submitting an own-pocket voucher stops to ask about the claim first. */
+function trySubmit() {
+  error.value = ''
+  showIssues.value = true
+  if (issues.value.length > 0) {
+    error.value = 'Fix the highlighted fields before submitting.'
+    return
+  }
+  if (isOwnPocket.value) {
+    askReimbursement.value = true
+    return
+  }
+  save(true)
+}
+
+function answerReimbursement(claim: boolean) {
+  wantsReimbursement.value = claim
+  askReimbursement.value = false
+  save(true)
 }
 
 async function save(submit: boolean) {
@@ -173,7 +213,7 @@ async function save(submit: boolean) {
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
 
-    <form v-if="loaded" class="panel" @submit.prevent="save(true)">
+    <form v-if="loaded" class="panel" @submit.prevent="trySubmit">
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div v-if="auth.isAdmin" class="col-span-2">
           <label class="field-label" for="v-emp">Employee</label>
@@ -285,22 +325,46 @@ async function save(submit: boolean) {
         </div>
       </div>
 
-      <!-- ==================================================== receipt block -->
-      <fieldset v-if="canUsePettyCash" class="mt-5 border-t border-line pt-4">
-        <legend class="field-label">Petty cash</legend>
-        <label class="flex items-start gap-2 text-sm">
-          <input v-model="form.paid_from_petty_cash" type="checkbox" class="mt-1" />
-          <span>
-            Paid from the petty cash I am holding
-            <span class="block text-xs text-muted">
-              You are holding
-              <span class="mono">{{ pettyCash?.currency
-              }}{{ (pettyCash?.balance ?? 0).toFixed(2) }}</span
-              >. Submitting reduces it by this voucher's amount; a rejected or
-              reopened voucher puts it back.
+      <!-- =================================================== funding source -->
+      <fieldset class="mt-5 border-t border-line pt-4">
+        <legend class="field-label">Where the money came from</legend>
+        <p class="mb-3 text-xs text-muted">
+          Who fronted the cash — separate from how it was paid. Only money out
+          of your own pocket can be claimed back.
+        </p>
+        <div class="space-y-2 text-sm">
+          <label
+            v-for="src in fundingChoices"
+            :key="src"
+            class="flex items-start gap-2"
+          >
+            <input
+              v-model="form.funding_source"
+              type="radio"
+              :value="src"
+              class="mt-1"
+            />
+            <span>
+              {{ FUNDING_SOURCE_LABELS[src] }}
+              <span
+                v-if="src === 'petty_cash'"
+                class="block text-xs text-muted"
+              >
+                You are holding
+                <span class="mono">{{ pettyCash?.currency
+                }}{{ (pettyCash?.balance ?? 0).toFixed(2) }}</span
+                >. Submitting reduces it by this voucher's amount; a rejected or
+                reopened voucher puts it back.
+              </span>
+              <span
+                v-else-if="src === 'own_pocket'"
+                class="block text-xs text-muted"
+              >
+                You will be asked whether to claim it back when you submit.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        </div>
       </fieldset>
 
       <fieldset class="mt-5 border-t border-line pt-4">
@@ -353,5 +417,56 @@ async function save(submit: boolean) {
         <RouterLink :to="{ name: 'expenses' }" class="btn">Cancel</RouterLink>
       </div>
     </form>
+
+    <!-- ============================================ reimbursement question -->
+    <!-- Asked before an own-pocket voucher is sent, because claiming the money
+         back is the employee's decision, not an automatic consequence. -->
+    <div
+      v-if="askReimbursement"
+      class="fixed inset-0 z-30 flex items-center justify-center bg-ink/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reimb-title"
+    >
+      <div class="panel w-full max-w-md">
+        <h3 id="reimb-title" class="display mb-2 text-xl">Claim this back?</h3>
+        <p class="mb-4 text-sm">
+          You are recording
+          <span class="mono">{{ form.currency }}{{ Number(form.amount).toFixed(2) }}</span>
+          paid from your own pocket. Would you like a reimbursement raised for
+          it at the same time?
+        </p>
+        <p class="mb-4 text-xs text-muted">
+          The claim is created pending and needs approving in its own right. If
+          this voucher is rejected, the claim is withdrawn with it.
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn btn-solid"
+            :disabled="busy"
+            @click="answerReimbursement(true)"
+          >
+            Yes, request reimbursement
+          </button>
+          <button
+            type="button"
+            class="btn"
+            :disabled="busy"
+            @click="answerReimbursement(false)"
+          >
+            No, just submit
+          </button>
+          <button
+            type="button"
+            class="btn"
+            :disabled="busy"
+            @click="askReimbursement = false"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

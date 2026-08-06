@@ -76,6 +76,12 @@ const router = createRouter({
       },
     },
     {
+      path: '/expenses/screening',
+      name: 'expense-screening',
+      component: () => import('../views/ExpenseScreeningView.vue'),
+      meta: { auth: true, right: 'send_for_approval' },
+    },
+    {
       path: '/expenses/finance',
       name: 'expense-finance',
       component: () => import('../views/ExpenseFinanceView.vue'),

@@ -64,6 +64,8 @@ export interface ExpenseVoucherRow {
   declaration_accepted: number
   declaration_text: string | null
   paid_from_petty_cash: number
+  /** Who fronted the money; authoritative over paid_from_petty_cash. */
+  funding_source: string
   status: string
   created_by: string | null
   // Legacy payment columns, superseded by the recorded_* set in 0010.
@@ -174,11 +176,15 @@ export interface AdjustmentRow {
   type: 'bonus' | 'reimbursement'
   amount: number
   description: string | null
-  status: 'pending' | 'approved' | 'rejected'
+  // 'pending' is raised but not yet screened; 'awaiting_approval' has been put
+  // to an approver by a `send_for_approval` holder.
+  status: 'pending' | 'awaiting_approval' | 'approved' | 'rejected'
   created_by: string | null
   created_at: string
   decided_by: string | null
   decided_at: string | null
+  /** The expense voucher that raised this claim, when it was automatic. */
+  voucher_id: string | null
 }
 
 export interface PaymentRow {

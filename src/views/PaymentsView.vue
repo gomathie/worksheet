@@ -127,8 +127,12 @@ function setPaid(employeeId: string, paid: boolean) {
   )
 }
 
+// Claims an approver may decide: screened and put in front of them. An
+// unscreened 'pending' claim belongs to the screening desk, not here.
 const pendingRequests = computed(() =>
-  adjustments.value.filter((a) => a.type === 'reimbursement' && a.status === 'pending'),
+  adjustments.value.filter(
+    (a) => a.type === 'reimbursement' && a.status === 'awaiting_approval',
+  ),
 )
 
 // The signed-in employee's own reimbursement requests (any status) — shown in
@@ -137,8 +141,13 @@ const myReimbursements = computed(() =>
   adjustments.value.filter((a) => a.type === 'reimbursement'),
 )
 
-const statusLabel = (a: Adjustment) =>
-  a.status === 'pending' ? 'Pending' : a.status === 'approved' ? 'Approved' : 'Rejected'
+const ADJUSTMENT_STATUS_LABELS: Record<Adjustment['status'], string> = {
+  pending: 'Awaiting screening',
+  awaiting_approval: 'With the approver',
+  approved: 'Approved',
+  rejected: 'Rejected',
+}
+const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.status
 </script>
 
 <template>
@@ -283,7 +292,7 @@ const statusLabel = (a: Adjustment) =>
               {{ statusLabel(a) }}
             </span>
             <button
-              v-if="a.status === 'pending'"
+              v-if="a.status === 'pending' || a.status === 'awaiting_approval'"
               class="btn btn-sm"
               :disabled="busy"
               @click="withdrawRequest(a)"

@@ -41,6 +41,7 @@ const blankRights = () => ({
   direct_counts: false,
   add_expenses: true,
   review_expenses: false,
+  send_for_approval: false,
   record_expenses: false,
   approve_expenses: false,
   add_users: false,
@@ -220,6 +221,7 @@ function rightsSummary(e: Employee): string {
     ['direct_counts', 'Direct counts'],
     ['add_expenses', 'File expenses'],
     ['review_expenses', 'Review expenses'],
+    ['send_for_approval', 'Send for approval'],
     ['record_expenses', 'Record expenses'],
     ['add_users', 'Add users'],
     ['use_petty_cash', 'Petty cash'],
@@ -544,6 +546,10 @@ const managerName = (e: Employee) =>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.review_expenses" type="checkbox" />
               Review expenses (their direct reports)
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.send_for_approval" type="checkbox" />
+              Screen submissions &amp; send for approval
             </label>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.record_expenses" type="checkbox" />

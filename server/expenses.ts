@@ -865,6 +865,11 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       body.paid_from_petty_cash !== undefined
         ? body.paid_from_petty_cash
         : Boolean(voucher.paid_from_petty_cash),
+    // Bug: this was missing entirely, so normalizeBody's fallback
+    // (paid_from_petty_cash ? 'petty_cash' : 'own_pocket') decided funding on
+    // every edit — collapsing 'office_cash' and 'company_account' to
+    // 'own_pocket' on any resubmit, since that boolean can't tell them apart.
+    funding_source: body.funding_source ?? voucher.funding_source,
   }
   const fields = normalizeBody(merged as VoucherBody, settings.currency)
   const wantsSubmit = Boolean(body.submit)

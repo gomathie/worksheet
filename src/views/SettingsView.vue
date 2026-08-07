@@ -293,6 +293,7 @@ async function sendSmsTest() {
       to: string
       message?: string
       summary?: {
+        _id?: string | number
         total_sent?: number
         total_rejected?: number
         credit_used?: number
@@ -302,14 +303,17 @@ async function sendSmsTest() {
       method: 'POST',
       json: { to: smsTestTo.value || undefined },
     })
-    // mnotify accepting the request is not proof of delivery — show its own
-    // summary alongside so a stuck message (0 sent, or credit_left at 0) is
-    // visible here rather than only discoverable in the mnotify dashboard.
+    // mnotify accepting the request is not proof of delivery — its own
+    // dashboard is the only place true delivery status shows. Surface the
+    // campaign id here so it's one copy-paste away when checking that
+    // dashboard or filing a support ticket, alongside the accept-time summary
+    // (a stuck message can still show 0 rejected here and fail downstream).
     const s = res.summary
     const bits = [
       s?.total_sent !== undefined ? `${s.total_sent} sent` : null,
       s?.total_rejected ? `${s.total_rejected} rejected` : null,
       s?.credit_left !== undefined ? `${s.credit_left} credits left` : null,
+      s?._id !== undefined ? `campaign ${s._id}` : null,
     ].filter(Boolean)
     smsTestMsg.value = `Test SMS sent to ${res.to}.${bits.length ? ` mnotify: ${bits.join(', ')}.` : ''}`
   } catch (e) {

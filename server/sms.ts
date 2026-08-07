@@ -63,6 +63,10 @@ export interface MnotifyResponse {
   // to dig through logs: mnotify's own delivery is out of our control, but
   // this is the one signal their API gives us about it.
   summary?: {
+    // mnotify's own campaign/message id — hand this to their support or use
+    // it to look up delivery status, since "accepted" here is not the same
+    // as "delivered": that only shows on mnotify's own dashboard.
+    _id?: string | number
     total_sent?: number
     total_rejected?: number
     contact_count?: number

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '../api'
 import { downloadJson } from '../csv'
+import PasswordField from '../components/PasswordField.vue'
 import type {
   Department,
   ExpenseCategory,
@@ -563,12 +564,10 @@ function sendSmsTest() {
           <label class="field-label" for="sms-key">
             mnotify API key {{ sms.has_key ? '(set — blank keeps it)' : '' }}
           </label>
-          <input
+          <PasswordField
             id="sms-key"
             v-model="sms.api_key"
-            type="password"
             autocomplete="off"
-            class="field-input"
             placeholder="your mnotify API key"
           />
           <p class="mt-1 text-xs text-muted">

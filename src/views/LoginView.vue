@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import PasswordField from '../components/PasswordField.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -46,13 +47,12 @@ async function signIn() {
           placeholder="username"
         />
         <label class="field-label" for="password">Password</label>
-        <input
+        <PasswordField
           id="password"
           v-model="password"
-          type="password"
           required
           autocomplete="current-password"
-          class="field-input mb-4"
+          class="mb-4"
           placeholder="••••••••"
         />
         <button class="btn btn-solid w-full" :disabled="busy">

@@ -33,7 +33,9 @@
       "Bash(curl -s -b /tmp/ck.txt http://127.0.0.1:8788/api/me)",
       "Bash(curl -s -b /tmp/ck.txt http://127.0.0.1:8788/api/work-types)",
       "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const j=JSON.parse\\(s\\);\\(Array.isArray\\(j\\)?j:j.work_types||[]\\).forEach\\(w=>console.log\\(' ',w.id,'| card_based=',w.card_based\\)\\)}\\)\")",
-      "Bash(curl -s -o /dev/null -w \"  /api/petty-cash -> %{http_code}\\\\n\" -b /tmp/ck.txt http://127.0.0.1:8788/api/petty-cash)"
+      "Bash(curl -s -o /dev/null -w \"  /api/petty-cash -> %{http_code}\\\\n\" -b /tmp/ck.txt http://127.0.0.1:8788/api/petty-cash)",
+      "Bash(NODE_PATH=\"c:/Users/gomat/Downloads/worksheet/node_modules\" node password-toggle-check.js)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8788 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; \"stopped $_\" })"
     ]
   }
 }

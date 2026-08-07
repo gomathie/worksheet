@@ -130,6 +130,12 @@ const router = createRouter({
       meta: { auth: true, admin: true },
     },
     {
+      path: '/tasks',
+      name: 'tasks',
+      component: () => import('../views/TasksView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/card-audit',
       name: 'card-audit',
       component: () => import('../views/CardAuditView.vue'),

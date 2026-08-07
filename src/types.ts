@@ -1,4 +1,5 @@
 import type { DailyTotal, MonthlyReport, RateSettings } from '../shared/logic'
+import type { TaskAction, TaskPriority, TaskStatus } from '../shared/tasks'
 import type {
   ExpenseAction,
   ExpenseStatus,
@@ -32,6 +33,10 @@ export interface Rights {
   approve_users: boolean
   /** Holds a petty cash float and may charge vouchers to it. */
   use_petty_cash: boolean
+  /** Assign tasks to other people and see the whole board. */
+  manage_tasks: boolean
+  /** Delete a task outright. Separate because deletion cannot be undone. */
+  delete_tasks: boolean
 }
 
 export type Role = 'admin' | 'manager' | 'employee'
@@ -441,4 +446,21 @@ export interface MyRemuneration {
   paid_at: string | null
   confirmed_at: string | null
   adjustments: Adjustment[]
+}
+
+export interface Task {
+  id: string
+  title: string
+  details: string | null
+  assignee_id: string | null
+  assignee_name: string | null
+  created_by: string | null
+  created_by_name: string | null
+  status: TaskStatus
+  priority: TaskPriority
+  due_date: string | null
+  completed_at: string | null
+  created_at: string
+  /** What the signed-in user may do to this task; computed server-side. */
+  actions: TaskAction[]
 }

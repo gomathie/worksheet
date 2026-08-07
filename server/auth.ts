@@ -114,6 +114,13 @@ export interface Rights {
   approve_users: boolean
   /** Holds a petty cash float and may spend vouchers against it. */
   use_petty_cash: boolean
+  // Tasks. Anyone may raise one for themselves; this right is what lets a
+  // person give work to someone else and see the whole board.
+  manage_tasks: boolean
+  // Deleting a task is irreversible, so it is its own authority rather than
+  // something manage_tasks carries: you can run the board without being able
+  // to erase what was asked for. Cancelling is the reversible alternative.
+  delete_tasks: boolean
 }
 
 /** Whose records a person may see. Stored on employees.data_scope. */
@@ -176,6 +183,8 @@ export const DEFAULT_RIGHTS: Rights = {
   add_users: false,
   approve_users: false,
   use_petty_cash: false,
+  manage_tasks: false,
+  delete_tasks: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -195,6 +204,8 @@ const ALL_RIGHTS: Rights = {
   record_expenses: true,
   add_users: true,
   use_petty_cash: true,
+  manage_tasks: true,
+  delete_tasks: true,
   // Not granted here — see the carve-out in parseRights.
   approve_expenses: false,
   approve_users: false,
@@ -278,6 +289,8 @@ export function parseRights(employee: Employee): Rights {
       add_users: Boolean(raw.add_users),
       approve_users: Boolean(raw.approve_users),
       use_petty_cash: Boolean(raw.use_petty_cash),
+      manage_tasks: Boolean(raw.manage_tasks),
+      delete_tasks: Boolean(raw.delete_tasks),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

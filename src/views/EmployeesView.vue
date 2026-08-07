@@ -47,6 +47,8 @@ const blankRights = () => ({
   add_users: false,
   approve_users: false,
   use_petty_cash: false,
+  manage_tasks: false,
+  delete_tasks: false,
 })
 
 const form = ref({
@@ -225,6 +227,8 @@ function rightsSummary(e: Employee): string {
     ['record_expenses', 'Record expenses'],
     ['add_users', 'Add users'],
     ['use_petty_cash', 'Petty cash'],
+    ['manage_tasks', 'Manage tasks'],
+    ['delete_tasks', 'Delete tasks'],
   ]
   // approve_* are deliberately absent: both require the admin role, so for a
   // non-admin they would claim an authority the API refuses to honour.
@@ -434,6 +438,14 @@ const managerName = (e: Employee) =>
             <label class="flex items-center gap-2">
               <input v-model="form.rights.use_petty_cash" type="checkbox" />
               Hold a petty cash float
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.manage_tasks" type="checkbox" />
+              Manage tasks (assign to others, see all)
+            </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.delete_tasks" type="checkbox" />
+              Delete tasks assigned to other people
             </label>
           </div>
           <p class="mt-1 text-xs text-muted">

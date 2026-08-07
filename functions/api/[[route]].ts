@@ -58,6 +58,13 @@ import {
   notifyUsers,
 } from '../../server/notify'
 import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
+ import {
+  createTask,
+  deleteTask,
+  listTasks,
+  patchTask,
+  taskSummary,
+} from '../../server/tasks'
 import {
   decidePettyCashRequest,
   getPettyCash,
@@ -2399,6 +2406,14 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (path === '/api/card-names' && method === 'GET') return listCardNames(request, env)
+  if (path === '/api/tasks' && method === 'GET') return listTasks(request, env)
+  if (path === '/api/tasks' && method === 'POST') return createTask(request, env)
+  if (path === '/api/tasks/summary' && method === 'GET') return taskSummary(request, env)
+  const taskMatch = /^\/api\/tasks\/([\w-]+)$/.exec(path)
+  if (taskMatch) {
+    if (method === 'PATCH') return patchTask(request, env, taskMatch[1])
+    if (method === 'DELETE') return deleteTask(request, env, taskMatch[1])
+  }
   if (path === '/api/card-audit' && method === 'GET') return cardAudit(request, env)
   if (path === '/api/cards-on-date' && method === 'GET') return cardsOnDate(request, env)
   if (path === '/api/work-types' && method === 'GET') return listWorkTypes(request, env)

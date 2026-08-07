@@ -237,6 +237,13 @@ async function changePassword() {
           >Time Entry</RouterLink
         >
         <RouterLink
+          :to="{ name: 'tasks' }"
+          class="btn"
+          active-class="btn-solid"
+          @click="navOpen = false"
+          >Tasks</RouterLink
+        >
+        <RouterLink
           v-if="auth.rights.view_dashboard"
           :to="{ name: 'dashboard' }"
           class="btn"

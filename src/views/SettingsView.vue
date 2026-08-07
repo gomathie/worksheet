@@ -18,7 +18,7 @@ const form = ref<RateSettings>({
 })
 const workTypes = ref<WorkTypeInfo[]>([])
 const codePrefix = ref('EMP-')
-const newType = ref({ name: '', points_per_unit: 1, card_based: false })
+const newType = ref({ name: '', points_per_unit: 1, card_based: false, module: '' })
 const error = ref('')
 const saved = ref(false)
 const busy = ref(false)
@@ -82,7 +82,7 @@ function saveSettings() {
 function addType() {
   return run(async () => {
     await api('/api/work-types', { method: 'POST', json: newType.value })
-    newType.value = { name: '', points_per_unit: 1, card_based: false }
+    newType.value = { name: '', points_per_unit: 1, card_based: false, module: '' }
     await loadTypes()
   })
 }
@@ -157,7 +157,12 @@ function saveType(wt: WorkTypeInfo) {
   return run(async () => {
     await api(`/api/work-types/${wt.id}`, {
       method: 'PATCH',
-      json: { name: wt.name, points_per_unit: wt.points_per_unit, card_based: wt.card_based },
+      json: {
+        name: wt.name,
+        points_per_unit: wt.points_per_unit,
+        card_based: wt.card_based,
+        module: wt.module ?? null,
+      },
     })
     await loadTypes()
   })
@@ -239,7 +244,9 @@ function sendTest() {
       <p class="mb-5 text-sm text-muted">
         Each work type is worth points per unit. Assign types to employees in the
         Employees tab — employees can only log the types assigned to them.
-        Changing a rate recalculates every past and future figure.
+        Changing a rate recalculates every past and future figure. A module
+        groups related types together, e.g. Classification and QAP under
+        <em>Data Analytics</em>; leave it blank for a standalone type.
       </p>
 
       <div class="table-wrap mb-5">
@@ -247,6 +254,7 @@ function sendTest() {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Module</th>
               <th class="num">Points per unit</th>
               <th>Cards</th>
               <th>Status</th>
@@ -257,6 +265,14 @@ function sendTest() {
             <tr v-for="wt in workTypes" :key="wt.id" :class="{ 'opacity-50': !wt.active }">
               <td>
                 <input v-model="wt.name" class="field-input !w-44" />
+              </td>
+              <td>
+                <input
+                  v-model="wt.module"
+                  class="field-input !w-40"
+                  placeholder="none"
+                  :aria-label="`Module for ${wt.name}`"
+                />
               </td>
               <td class="num">
                 <input
@@ -304,6 +320,16 @@ function sendTest() {
             maxlength="60"
             class="field-input"
             placeholder="e.g. Graphic design"
+          />
+        </div>
+        <div>
+          <label class="field-label" for="nt-module">Module (optional)</label>
+          <input
+            id="nt-module"
+            v-model="newType.module"
+            maxlength="60"
+            class="field-input !w-40"
+            placeholder="e.g. Data Analytics"
           />
         </div>
         <div>

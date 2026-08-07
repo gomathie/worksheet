@@ -157,7 +157,12 @@ function exportCsv() {
 
     <div v-for="g in groups" :key="g.card_name" class="panel mb-4">
       <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 class="display text-xl">{{ g.card_name }}</h3>
+        <div>
+          <h3 class="display text-xl">{{ g.card_name }}</h3>
+          <p v-if="g.rows[0]?.module" class="field-label !mb-0 text-teal">
+            {{ g.rows[0].module }}
+          </p>
+        </div>
         <div class="flex flex-wrap gap-2">
           <!-- Red says the same work type was done twice in one day, which
                cannot be rework. Amber says it recurred on different days,

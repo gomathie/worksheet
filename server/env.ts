@@ -150,6 +150,8 @@ export interface WorkTypeRow {
   active: number
   position: number
   card_based: number // 1 = logged as individual cards, not a typed count
+  /** Optional grouping label, e.g. 'Data Analytics'. NULL = ungrouped. */
+  module: string | null
   created_at: string
 }
 

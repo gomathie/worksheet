@@ -62,6 +62,24 @@ const isCardMode = (w: WorkTypeInfo) => Boolean(w.card_based) && !canDirect.valu
 const numericTypes = computed(() => formTypes.value.filter((w) => !isCardMode(w)))
 const cardTypes = computed(() => formTypes.value.filter((w) => isCardMode(w)))
 
+/**
+ * Card types grouped by their module, e.g. "Data Analytics".
+ *
+ * Classification and QAP are one body of work rather than two unrelated types,
+ * so the form says so instead of leaving the reader to infer it. Types with no
+ * module fall into a nameless group and render exactly as they did before.
+ */
+const cardModules = computed(() => {
+  const byModule = new Map<string, WorkTypeInfo[]>()
+  for (const w of cardTypes.value) {
+    const key = w.module ?? ''
+    const list = byModule.get(key)
+    if (list) list.push(w)
+    else byModule.set(key, [w])
+  }
+  return [...byModule.entries()].map(([name, types]) => ({ name, types }))
+})
+
 const cardsFor = (typeId: string) =>
   form.value.cards.filter((c) => c.work_type_id === typeId)
 function addCard(typeId: string) {
@@ -393,12 +411,18 @@ const tableColspan = computed(
           </p>
         </div>
 
-        <!-- Card-based types: one row per card; the count is the number of cards. -->
-        <div
-          v-for="wt in cardTypes"
-          :key="wt.id"
-          class="col-span-2 rounded-lg border border-line p-3 md:col-span-4"
-        >
+        <!-- Card-based types: one row per card; the count is the number of
+             cards. Grouped under the module heading, so Classification and QAP
+             read as one body of work rather than two unrelated types. -->
+        <template v-for="mod in cardModules" :key="mod.name">
+          <p v-if="mod.name" class="col-span-2 mt-2 md:col-span-4">
+            <span class="field-label !mb-0 text-teal">{{ mod.name }}</span>
+          </p>
+          <div
+            v-for="wt in mod.types"
+            :key="wt.id"
+            class="col-span-2 rounded-lg border border-line p-3 md:col-span-4"
+          >
           <div class="mb-2 flex items-center justify-between">
             <span class="field-label">
               {{ wt.name }} cards
@@ -491,7 +515,8 @@ const tableColspan = computed(
           <p v-if="cardsFor(wt.id).length === 0" class="text-xs text-muted">
             No cards yet — add one per {{ wt.name }} card completed.
           </p>
-        </div>
+          </div>
+        </template>
         <div class="col-span-2 md:col-span-4">
           <label class="field-label" for="notes">Notes (optional)</label>
           <input

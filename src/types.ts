@@ -68,6 +68,8 @@ export interface WorkTypeInfo {
   points_per_unit?: number
   active?: number
   position?: number
+  /** Grouping label, e.g. 'Data Analytics'. Null when ungrouped. */
+  module?: string | null
 }
 
 export interface EntryCard {

@@ -209,6 +209,8 @@ export interface CardAuditRow {
   card_name: string
   work_type_id: string
   work_type_name: string
+  /** The work type's module, e.g. 'Data Analytics'. Null when ungrouped. */
+  module?: string | null
   employee_id: string
   employee_name: string
   work_date: string

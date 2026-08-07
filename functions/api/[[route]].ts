@@ -226,6 +226,7 @@ async function cardAudit(request: Request, env: Env): Promise<Response> {
   const month = url.searchParams.get('month') ?? ''
 
   let sql = `SELECT c.card_name, c.work_type_id, wt.name AS work_type_name,
+                    wt.module AS module,
                     e.employee_id, emp.name AS employee_name, e.work_date,
                     c.total_audits, c.time_completed, c.entry_id
                FROM entry_cards c
@@ -283,11 +284,17 @@ async function listWorkTypes(request: Request, env: Env): Promise<Response> {
     'SELECT * FROM work_types ORDER BY position, created_at',
   ).all<WorkTypeRow>()
   if (user.role === 'admin') return json(results)
-  // Rates are money-sensitive; non-admins only need names + the card flag.
+  // Rates are money-sensitive; non-admins only need names, the card flag and
+  // the module, which is what groups the entry form.
   return json(
     results
       .filter((w) => w.active)
-      .map((w) => ({ id: w.id, name: w.name, card_based: w.card_based })),
+      .map((w) => ({
+        id: w.id,
+        name: w.name,
+        card_based: w.card_based,
+        module: w.module,
+      })),
   )
 }
 
@@ -299,19 +306,34 @@ function assertPointsPerUnit(value: unknown): number {
   return n
 }
 
+/**
+ * A module is a grouping label on a work type, e.g. "Data Analytics". Blank
+ * means ungrouped, which is stored as NULL so the two cannot drift apart.
+ */
+function normalizeModule(value: unknown): string | null {
+  const s = String(value ?? '').trim().slice(0, 60)
+  return s || null
+}
+
 async function createWorkType(request: Request, env: Env): Promise<Response> {
   const admin = await requireAdmin(request, env)
-  const body = await readJson<{ name?: string; points_per_unit?: number; card_based?: boolean }>(request)
+  const body = await readJson<{
+    name?: string
+    points_per_unit?: number
+    card_based?: boolean
+    module?: string | null
+  }>(request)
   const name = (body.name ?? '').trim().slice(0, 60)
   if (!name) throw new ApiError(400, 'name is required')
   const rate = assertPointsPerUnit(body.points_per_unit ?? 1)
   const cardBased = body.card_based ? 1 : 0
+  const mod = normalizeModule(body.module)
 
   const id = crypto.randomUUID()
   await env.DB.prepare(
-    'INSERT INTO work_types (id, name, points_per_unit, card_based, position) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM work_types))',
+    'INSERT INTO work_types (id, name, points_per_unit, card_based, module, position) VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM work_types))',
   )
-    .bind(id, name, rate, cardBased)
+    .bind(id, name, rate, cardBased, mod)
     .run()
   await audit(env, admin.id, 'create_work_type', id, { name, points_per_unit: rate, card_based: cardBased })
   const created = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')
@@ -336,6 +358,7 @@ async function patchWorkType(
     points_per_unit?: number
     active?: number | boolean
     card_based?: number | boolean
+    module?: string | null
   }>(request)
   const name =
     body.name !== undefined ? String(body.name).trim().slice(0, 60) : existing.name
@@ -347,11 +370,12 @@ async function patchWorkType(
   const active = body.active !== undefined ? (body.active ? 1 : 0) : existing.active
   const cardBased =
     body.card_based !== undefined ? (body.card_based ? 1 : 0) : existing.card_based
+  const mod = body.module !== undefined ? normalizeModule(body.module) : existing.module
 
   await env.DB.prepare(
-    'UPDATE work_types SET name = ?, points_per_unit = ?, active = ?, card_based = ? WHERE id = ?',
+    'UPDATE work_types SET name = ?, points_per_unit = ?, active = ?, card_based = ?, module = ? WHERE id = ?',
   )
-    .bind(name, rate, active, cardBased, id)
+    .bind(name, rate, active, cardBased, mod, id)
     .run()
   await audit(env, admin.id, 'update_work_type', id, { name, points_per_unit: rate, active, card_based: cardBased })
   const updated = await env.DB.prepare('SELECT * FROM work_types WHERE id = ?')

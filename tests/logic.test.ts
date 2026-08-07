@@ -6,6 +6,7 @@ import {
   aggregateMonthly,
   normalizeCardName,
   groupCardAudit,
+  findSameDayCardClashes,
   type CardAuditRow,
   parseTime,
   type RateSettings,
@@ -308,5 +309,93 @@ describe('groupCardAudit', () => {
 
   it('returns nothing for no rows', () => {
     expect(groupCardAudit([])).toEqual([])
+  })
+})
+
+describe('findSameDayCardClashes', () => {
+  const existing = [
+    {
+      card_name: 'Alza_cz',
+      work_type_id: 'wt-classification',
+      work_type_name: 'Classification',
+      employee_id: 'ama',
+      employee_name: 'Ama',
+      entry_id: 'entry-1',
+    },
+  ]
+
+  it('flags the same card and work type already done that day', () => {
+    const c = findSameDayCardClashes(
+      [{ card_name: 'Alza_cz', work_type_id: 'wt-classification' }],
+      existing,
+      'kojo',
+    )
+    expect(c).toHaveLength(1)
+    expect(c[0]).toMatchObject({ employee_name: 'Ama', own: false })
+  })
+
+  it('marks it as your own when you already did it yourself', () => {
+    const c = findSameDayCardClashes(
+      [{ card_name: 'Alza_cz', work_type_id: 'wt-classification' }],
+      existing,
+      'ama',
+    )
+    expect(c[0].own).toBe(true)
+  })
+
+  it('does not flag the same card under the other work type', () => {
+    // Classified once and QAP'd once on the same day is the normal flow.
+    expect(
+      findSameDayCardClashes(
+        [{ card_name: 'Alza_cz', work_type_id: 'wt-qap' }],
+        existing,
+        'kojo',
+      ),
+    ).toEqual([])
+  })
+
+  it('does not flag a different card', () => {
+    expect(
+      findSameDayCardClashes(
+        [{ card_name: 'Boost_us', work_type_id: 'wt-classification' }],
+        existing,
+        'kojo',
+      ),
+    ).toEqual([])
+  })
+
+  it('ignores the entry being edited, so it cannot clash with itself', () => {
+    expect(
+      findSameDayCardClashes(
+        [{ card_name: 'Alza_cz', work_type_id: 'wt-classification' }],
+        existing,
+        'ama',
+        'entry-1',
+      ),
+    ).toEqual([])
+  })
+
+  it('reports one clash per person, not one per duplicate row', () => {
+    const twice = [...existing, { ...existing[0], entry_id: 'entry-2' }]
+    expect(
+      findSameDayCardClashes(
+        [{ card_name: 'Alza_cz', work_type_id: 'wt-classification' }],
+        twice,
+        'kojo',
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('ignores blank names and trims before comparing', () => {
+    expect(
+      findSameDayCardClashes([{ card_name: '  ', work_type_id: 'wt-classification' }], existing, 'k'),
+    ).toEqual([])
+    expect(
+      findSameDayCardClashes(
+        [{ card_name: ' Alza_cz ', work_type_id: 'wt-classification' }],
+        existing,
+        'kojo',
+      ),
+    ).toHaveLength(1)
   })
 })

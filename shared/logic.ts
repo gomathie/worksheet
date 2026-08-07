@@ -278,3 +278,50 @@ export function groupCardAudit(rows: CardAuditRow[]): CardAuditGroup[] {
     (a, b) => b.repeats.length - a.repeats.length || a.card_name.localeCompare(b.card_name),
   )
 }
+
+/** A card already logged on a given day, for the same-day clash check. */
+export interface SameDayCard {
+  card_name: string
+  work_type_id: string
+  work_type_name: string
+  employee_id: string
+  employee_name: string
+}
+
+export interface CardClash extends SameDayCard {
+  /** True when the person logging it is the one who already did it. */
+  own: boolean
+}
+
+/**
+ * Cards about to be logged that were already done, for the same work type, on
+ * the same day.
+ *
+ * Same day is the useful window: a card classified today and QAP'd today is
+ * normal, and rework days apart is legitimate, but the same work type twice in
+ * one day is either a double entry or two people unknowingly on the same card.
+ *
+ * `excludeEntryId` keeps an entry from clashing with itself when it is edited.
+ */
+export function findSameDayCardClashes(
+  proposed: { card_name: string; work_type_id: string }[],
+  existing: (SameDayCard & { entry_id?: string })[],
+  actorEmployeeId: string,
+  excludeEntryId?: string,
+): CardClash[] {
+  const clashes: CardClash[] = []
+  const seen = new Set<string>()
+  for (const p of proposed) {
+    const name = p.card_name.trim()
+    if (!name) continue
+    for (const e of existing) {
+      if (excludeEntryId && e.entry_id === excludeEntryId) continue
+      if (e.card_name !== name || e.work_type_id !== p.work_type_id) continue
+      const key = `${name}|${p.work_type_id}|${e.employee_id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      clashes.push({ ...e, own: e.employee_id === actorEmployeeId })
+    }
+  }
+  return clashes
+}

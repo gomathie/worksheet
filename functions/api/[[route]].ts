@@ -46,13 +46,16 @@ import {
   computeRemuneration,
   normalizeCardName,
   groupCardAudit,
+  findSameDayCardClashes,
   type CardAuditRow,
+  type SameDayCard,
   parseTime,
 } from '../../shared/logic'
 import { getCookie } from '../../server/http'
 import {
   listNotifications,
   markNotificationsRead,
+  notifyUsers,
 } from '../../server/notify'
 import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
 import {
@@ -245,6 +248,33 @@ async function cardAudit(request: Request, env: Env): Promise<Response> {
     .bind(...binds)
     .all<CardAuditRow>()
   return json(groupCardAudit(results))
+}
+
+/**
+ * Cards already logged on one date, so the entry form can warn before saving.
+ *
+ * Open to anyone who logs work: the whole point is that someone about to start
+ * a card can see it has already been done today, which only works if they can
+ * see other people's cards for that day. Scoped to a single date, so it is not
+ * a route into the whole history — that is the audit page, which is gated.
+ */
+async function cardsOnDate(request: Request, env: Env): Promise<Response> {
+  await requireUser(request, env)
+  const date = new URL(request.url).searchParams.get('date') ?? ''
+  if (!DATE_RE.test(date)) throw new ApiError(400, 'date must be YYYY-MM-DD')
+
+  const { results } = await env.DB.prepare(
+    `SELECT c.card_name, c.work_type_id, wt.name AS work_type_name,
+            e.employee_id, emp.name AS employee_name, c.entry_id
+       FROM entry_cards c
+       JOIN entries e ON e.id = c.entry_id
+       JOIN employees emp ON emp.id = e.employee_id
+       JOIN work_types wt ON wt.id = c.work_type_id
+      WHERE e.work_date = ?`,
+  )
+    .bind(date)
+    .all()
+  return json(results)
 }
 
 async function listWorkTypes(request: Request, env: Env): Promise<Response> {
@@ -1014,6 +1044,58 @@ async function normalizeCards(
   return cards
 }
 
+/**
+ * Tell the administrators when a card is logged for work already done that
+ * day. The entry form warns first and says this will happen, so the notice is
+ * that promise being kept — the save itself is never blocked, because a repeat
+ * can be legitimate rework and only a human can judge which it is.
+ */
+async function notifyAdminsOfCardClash(
+  env: Env,
+  actor: Employee,
+  workDate: string,
+  entryId: string,
+): Promise<void> {
+  const { results: existing } = await env.DB.prepare(
+    `SELECT c.card_name, c.work_type_id, wt.name AS work_type_name,
+            e.employee_id, emp.name AS employee_name, c.entry_id
+       FROM entry_cards c
+       JOIN entries e ON e.id = c.entry_id
+       JOIN employees emp ON emp.id = e.employee_id
+       JOIN work_types wt ON wt.id = c.work_type_id
+      WHERE e.work_date = ? AND c.entry_id != ?`,
+  )
+    .bind(workDate, entryId)
+    .all<SameDayCard & { entry_id: string }>()
+  if (existing.length === 0) return
+
+  const { results: mine } = await env.DB.prepare(
+    'SELECT card_name, work_type_id FROM entry_cards WHERE entry_id = ?',
+  )
+    .bind(entryId)
+    .all<{ card_name: string; work_type_id: string }>()
+
+  const clashes = findSameDayCardClashes(mine, existing, actor.id, entryId)
+  if (clashes.length === 0) return
+
+  const { results } = await env.DB.prepare(
+    "SELECT id FROM employees WHERE role = 'admin' AND active = 1",
+  ).all<{ id: string }>()
+  const admins = results.map((r) => r.id).filter((id) => id !== actor.id)
+  if (admins.length === 0) return
+
+  const lines = clashes.map(
+    (c) => `• ${c.card_name} (${c.work_type_name}) — already done by ${c.employee_name}`,
+  )
+  await notifyUsers(env, admins, {
+    kind: 'card_duplicate',
+    title: `${actor.name} logged a card already done on ${workDate}`,
+    body:
+      `${actor.name} logged ${clashes.length} card${clashes.length === 1 ? '' : 's'} ` +
+      `on ${workDate} that had already been done that day:\n\n${lines.join('\n')}`,
+  })
+}
+
 async function writeEntryCards(
   env: Env,
   entryId: string,
@@ -1169,6 +1251,7 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
     .run()
   await writeEntryItems(env, id, units)
   await writeEntryCards(env, id, cards)
+  await notifyAdminsOfCardClash(env, user, body.work_date!, id)
   await audit(env, user.id, 'create_entry', id, { employee_id: employeeId })
   const created = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
     .bind(id)
@@ -1253,6 +1336,7 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
     const cards = await normalizeCards(env, next.employee_id, body.cards, cardTypes)
     await writeEntryItems(env, id, unitsWithCards(items, cards))
     await writeEntryCards(env, id, cards)
+    await notifyAdminsOfCardClash(env, user, next.work_date, id)
   }
   await audit(env, user.id, 'update_entry', id)
   const updated = await env.DB.prepare('SELECT * FROM entries WHERE id = ?')
@@ -2292,6 +2376,7 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/card-names' && method === 'GET') return listCardNames(request, env)
   if (path === '/api/card-audit' && method === 'GET') return cardAudit(request, env)
+  if (path === '/api/cards-on-date' && method === 'GET') return cardsOnDate(request, env)
   if (path === '/api/work-types' && method === 'GET') return listWorkTypes(request, env)
   if (path === '/api/work-types' && method === 'POST') return createWorkType(request, env)
   const wtMatch = /^\/api\/work-types\/([\w-]+)$/.exec(path)

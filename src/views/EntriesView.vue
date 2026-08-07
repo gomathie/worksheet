@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
-import { computeHours } from '../../shared/logic'
+import {
+  computeHours,
+  findSameDayCardClashes,
+  type CardClash,
+  type SameDayCard,
+} from '../../shared/logic'
 import { downloadCsv } from '../csv'
 import { useAuthStore } from '../stores/auth'
 import type { Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
@@ -144,6 +149,54 @@ function startEdit(entry: Entry) {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+// --- same-day duplicate warning
+//
+// A card classified once and QAP'd once in a day is the normal flow; the same
+// work type twice in one day is either a double entry or two people on the
+// same card. Warn before saving and say plainly that administrators are told,
+// then let the person decide — rework is legitimate, so this never blocks.
+const clashes = ref<CardClash[]>([])
+const askClash = ref(false)
+
+/** Cards in the form that were already done, by anyone, on this date. */
+async function findClashes(): Promise<CardClash[]> {
+  const proposed = form.value.cards
+    .filter((c) => c.card_name.trim())
+    .map((c) => ({ work_type_id: c.work_type_id, card_name: c.card_name.trim() }))
+  if (proposed.length === 0) return []
+  try {
+    const onDate = await api<(SameDayCard & { entry_id: string })[]>(
+      `/api/cards-on-date?date=${form.value.work_date}`,
+    )
+    return findSameDayCardClashes(
+      proposed,
+      onDate,
+      form.value.employee_id,
+      editingId.value ?? undefined,
+    )
+  } catch {
+    // The check is advisory; never block logging work because it failed.
+    return []
+  }
+}
+
+/** Runs the check first; submit() itself is what actually saves. */
+async function trySubmit() {
+  error.value = ''
+  const found = await findClashes()
+  if (found.length > 0) {
+    clashes.value = found
+    askClash.value = true
+    return
+  }
+  await submit()
+}
+
+function confirmClash() {
+  askClash.value = false
+  submit()
+}
+
 async function submit() {
   error.value = ''
   busy.value = true
@@ -265,7 +318,7 @@ const tableColspan = computed(
       <h2 class="display mb-4 text-2xl">
         {{ editingId ? 'Edit entry' : 'Log time' }}
       </h2>
-      <form class="grid grid-cols-2 gap-4 md:grid-cols-4" @submit.prevent="submit">
+      <form class="grid grid-cols-2 gap-4 md:grid-cols-4" @submit.prevent="trySubmit">
         <div class="col-span-2">
           <label class="field-label" for="emp">Employee</label>
           <select
@@ -589,6 +642,54 @@ const tableColspan = computed(
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ========================================== same-day duplicate warning -->
+    <!-- Shown before saving, never after: the point is to let someone stop
+         while stopping is still free. Rework is legitimate, so continuing is
+         allowed — it is simply not silent. -->
+    <div
+      v-if="askClash"
+      class="fixed inset-0 z-30 flex items-center justify-center bg-ink/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clash-title"
+    >
+      <div class="panel w-full max-w-lg">
+        <h3 id="clash-title" class="display mb-2 text-xl text-amber">
+          Already done today
+        </h3>
+        <p class="mb-3 text-sm">
+          {{ clashes.length === 1 ? 'This card has' : 'These cards have' }} already
+          been logged for the same work type on
+          <span class="mono">{{ form.work_date }}</span
+          >:
+        </p>
+        <ul class="mb-4 space-y-1 text-sm">
+          <li v-for="c in clashes" :key="`${c.card_name}-${c.work_type_id}-${c.employee_id}`">
+            <span class="mono">{{ c.card_name }}</span>
+            — {{ c.work_type_name }}, by
+            <span class="font-medium">{{ c.own ? 'you' : c.employee_name }}</span>
+          </li>
+        </ul>
+        <p class="mb-4 rounded-lg border border-amber bg-amber-soft p-3 text-xs">
+          If you continue, the administrators will be notified that this card was
+          logged twice today. Continue only if this is genuine rework.
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" class="btn" :disabled="busy" @click="askClash = false">
+            Go back and change it
+          </button>
+          <button
+            type="button"
+            class="btn btn-solid"
+            :disabled="busy"
+            @click="confirmClash"
+          >
+            {{ busy ? 'Saving…' : 'Continue and notify admins' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>

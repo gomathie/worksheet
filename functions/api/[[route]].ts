@@ -2210,15 +2210,19 @@ async function testSms(request: Request, env: Env): Promise<Response> {
   const cfg = await loadSms(env)
   if (!cfg.api_key) throw new ApiError(400, 'Configure the mnotify API key first')
   try {
-    await sendSms(
+    const result = await sendSms(
       cfg,
       to,
       'OpenSignal Ledger — this is a test SMS confirming your mnotify settings work.',
     )
+    // mnotify accepting the request isn't proof of delivery — pass its own
+    // summary (credits used/left, rejected count) back so the admin can spot
+    // an unregistered sender ID or an empty wallet without digging through
+    // logs, since actual delivery happens outside our system entirely.
+    return json({ ok: true, to, message: result.message, summary: result.summary })
   } catch (e) {
     throw new ApiError(400, e instanceof Error ? e.message : 'Send failed')
   }
-  return json({ ok: true, to })
 }
 
 async function listLocks(request: Request, env: Env): Promise<Response> {

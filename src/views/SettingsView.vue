@@ -272,11 +272,29 @@ function saveSms() {
 function sendSmsTest() {
   smsTestMsg.value = ''
   return run(async () => {
-    const res = await api<{ to: string }>('/api/settings/sms/test', {
+    const res = await api<{
+      to: string
+      message?: string
+      summary?: {
+        total_sent?: number
+        total_rejected?: number
+        credit_used?: number
+        credit_left?: number
+      }
+    }>('/api/settings/sms/test', {
       method: 'POST',
       json: { to: smsTestTo.value || undefined },
     })
-    smsTestMsg.value = `Test SMS sent to ${res.to}.`
+    // mnotify accepting the request is not proof of delivery — show its own
+    // summary alongside so a stuck message (0 sent, or credit_left at 0) is
+    // visible here rather than only discoverable in the mnotify dashboard.
+    const s = res.summary
+    const bits = [
+      s?.total_sent !== undefined ? `${s.total_sent} sent` : null,
+      s?.total_rejected ? `${s.total_rejected} rejected` : null,
+      s?.credit_left !== undefined ? `${s.credit_left} credits left` : null,
+    ].filter(Boolean)
+    smsTestMsg.value = `Test SMS sent to ${res.to}.${bits.length ? ` mnotify: ${bits.join(', ')}.` : ''}`
   })
 }
 </script>

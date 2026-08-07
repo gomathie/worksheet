@@ -52,16 +52,34 @@ function digitsOnly(raw: string): string {
   return raw.replace(/\D/g, '')
 }
 
-interface MnotifyResponse {
+export interface MnotifyResponse {
   status?: string
   code?: string | number
   message?: string
+  // A "success" HTTP reply doesn't guarantee the carrier actually delivered
+  // the message — mnotify accepts the request and reports outcome here. When
+  // present, surface it to the admin (see testSms in functions/api/[[route]].ts)
+  // so an unregistered sender ID or empty wallet is visible without needing
+  // to dig through logs: mnotify's own delivery is out of our control, but
+  // this is the one signal their API gives us about it.
+  summary?: {
+    total_sent?: number
+    total_rejected?: number
+    contact_count?: number
+    credit_used?: number
+    credit_left?: number
+  }
 }
 
 /** Send one SMS. Throws (with mnotify's own message where available) on any
  * non-success reply — callers that must not fail the caller's action should
- * use `notifySms` instead, which swallows errors. */
-export async function sendSms(cfg: SmsConfig, to: string, message: string): Promise<void> {
+ * use `notifySms` instead, which swallows errors. Returns mnotify's parsed
+ * response on success, for callers that want to surface its delivery summary. */
+export async function sendSms(
+  cfg: SmsConfig,
+  to: string,
+  message: string,
+): Promise<MnotifyResponse> {
   if (!cfg.api_key) throw new Error('mnotify API key is required')
   if (!cfg.sender_id) throw new Error('mnotify sender ID is required')
   const recipient = digitsOnly(to)
@@ -89,6 +107,7 @@ export async function sendSms(cfg: SmsConfig, to: string, message: string): Prom
   if (!res.ok || (data.status && data.status !== 'success')) {
     throw new Error(data.message || `mnotify request failed (HTTP ${res.status})`)
   }
+  return data
 }
 
 // ------------------------------------------------------------- notifications

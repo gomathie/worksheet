@@ -1,3 +1,4 @@
+
 # OpenSignal Ledger — how to use it
 
 A practical guide to the app, in two parts:
@@ -218,10 +219,11 @@ administrators (and holders of specific rights) can do.
 
 **Employees** — add someone, or edit anyone.
 
-Each person has a **name**, optional **email**, a **username and password** for
-signing in, an auto-generated **staff code** (`EMP-001`), a **department**, and a
-**Reports to** manager — set that last one to make somebody a manager for expense
-review.
+Each person has a **name**, optional **email** and **phone**, a **username and
+password** for signing in, an auto-generated **staff code** (`EMP-001`), a
+**department**, and a **Reports to** manager — set that last one to make
+somebody a manager for expense review. Phone is only used for SMS
+notifications (see **Other settings** below) — it's not needed to sign in.
 
 ### Data scope
 
@@ -370,6 +372,10 @@ Unlock if corrections are needed.
 - **Departments** and **expense categories** — add, rename, deactivate.
 - **Email (SMTP)** — point the app at any SMTP server (port 587 STARTTLS or 465
   TLS). The password is write-only; **Send test email** verifies it.
+- **SMS (mnotify)** — same idea, over SMS: enter your mnotify API key and a
+  sender ID (max 11 characters), then **Send test** to check it. Only reaches
+  employees who have a **phone** number set (Employees tab); the API key is
+  write-only, same as the SMTP password.
 - **Download backup** — a full JSON export.
 
 ## Activity log

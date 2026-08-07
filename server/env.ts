@@ -12,6 +12,7 @@ export interface Employee {
   id: string
   name: string
   email: string | null
+  phone: string | null // for SMS notifications; optional, digits as entered
   username: string | null
   password_hash: string | null
   role: 'admin' | 'manager' | 'employee'

@@ -39,6 +39,7 @@ import {
   saveSmtp,
   sendMail,
 } from '../../server/email'
+import { loadSms, saveSms, sendSms } from '../../server/sms'
 import {
   aggregateMonthly,
   computeHours,
@@ -549,6 +550,7 @@ function publicEmployee(
     employee_code: e.employee_code,
     name: e.name,
     email: e.email,
+    phone: e.phone,
     username: e.username,
     role: e.role,
     rights: parseRights(e),
@@ -641,6 +643,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
 interface EmployeeBody {
   name?: string
   email?: string | null
+  phone?: string | null
   username?: string | null
   password?: string
   role?: string
@@ -709,6 +712,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   const body = await readJson<EmployeeBody>(request)
   const name = (body.name ?? '').trim()
   const email = (body.email ?? '').trim().toLowerCase() || null
+  const phone = (body.phone ?? '').trim() || null
   const role = parseRole(body.role)
   if (!name) throw new ApiError(400, 'name is required')
 
@@ -747,13 +751,14 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   const code = await nextEmployeeCode(env)
   try {
     await env.DB.prepare(
-      'INSERT INTO employees (id, employee_code, name, email, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id, data_scope, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO employees (id, employee_code, name, email, phone, username, password_hash, role, rights, max_entries_per_day, leave_allowance, department_id, manager_id, data_scope, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
       .bind(
         id,
         code,
         name,
         email,
+        phone,
         username,
         passwordHash,
         role,
@@ -788,6 +793,7 @@ async function createEmployee(request: Request, env: Env): Promise<Response> {
   await audit(env, admin.id, 'create_employee', id, {
     name,
     email,
+    phone,
     username,
     role,
     rights,
@@ -824,6 +830,8 @@ async function patchEmployee(
     body.email !== undefined
       ? String(body.email ?? '').trim().toLowerCase() || null
       : existing.email
+  const phone =
+    body.phone !== undefined ? String(body.phone ?? '').trim() || null : existing.phone
   const username =
     body.username !== undefined ? normalizeUsername(body.username) : existing.username
   const role = body.role !== undefined ? parseRole(body.role) : existing.role
@@ -872,11 +880,12 @@ async function patchEmployee(
 
   try {
     await env.DB.prepare(
-      'UPDATE employees SET name = ?, email = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, department_id = ?, manager_id = ?, data_scope = ?, active = ? WHERE id = ?',
+      'UPDATE employees SET name = ?, email = ?, phone = ?, username = ?, password_hash = ?, role = ?, rights = ?, max_entries_per_day = ?, leave_allowance = ?, department_id = ?, manager_id = ?, data_scope = ?, active = ? WHERE id = ?',
     )
       .bind(
         name,
         email,
+        phone,
         username,
         passwordHash,
         role,
@@ -903,6 +912,7 @@ async function patchEmployee(
   await audit(env, admin.id, 'update_employee', id, {
     name,
     email,
+    phone,
     username,
     role,
     rights,
@@ -2166,6 +2176,51 @@ async function testSmtp(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, to })
 }
 
+// -------------------------------------------------------- SMS (mnotify) settings
+
+async function getSms(request: Request, env: Env): Promise<Response> {
+  await requireAdmin(request, env)
+  const cfg = await loadSms(env)
+  // Never return the stored key; expose only whether one is set.
+  const { api_key, ...rest } = cfg
+  return json({ ...rest, has_key: api_key ? 1 : 0 })
+}
+
+async function putSms(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{
+    enabled?: boolean
+    api_key?: string
+    sender_id?: string
+  }>(request)
+  await saveSms(env, {
+    enabled: body.enabled,
+    api_key: body.api_key, // blank keeps the existing key
+    sender_id: body.sender_id?.trim(),
+  })
+  await audit(env, admin.id, 'update_sms', null, { enabled: body.enabled })
+  return json({ ok: true })
+}
+
+async function testSms(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{ to?: string }>(request)
+  const to = (body.to ?? admin.phone ?? '').trim()
+  if (!to) throw new ApiError(400, 'No recipient — set a test number or your own phone')
+  const cfg = await loadSms(env)
+  if (!cfg.api_key) throw new ApiError(400, 'Configure the mnotify API key first')
+  try {
+    await sendSms(
+      cfg,
+      to,
+      'OpenSignal Ledger — this is a test SMS confirming your mnotify settings work.',
+    )
+  } catch (e) {
+    throw new ApiError(400, e instanceof Error ? e.message : 'Send failed')
+  }
+  return json({ ok: true, to })
+}
+
 async function listLocks(request: Request, env: Env): Promise<Response> {
   await requireAdmin(request, env)
   const { results } = await env.DB.prepare(
@@ -2480,6 +2535,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/settings/smtp' && method === 'GET') return getSmtp(request, env)
   if (path === '/api/settings/smtp' && method === 'PUT') return putSmtp(request, env)
   if (path === '/api/settings/smtp/test' && method === 'POST') return testSmtp(request, env)
+  if (path === '/api/settings/sms' && method === 'GET') return getSms(request, env)
+  if (path === '/api/settings/sms' && method === 'PUT') return putSms(request, env)
+  if (path === '/api/settings/sms/test' && method === 'POST') return testSms(request, env)
 
   if (path === '/api/reports/monthly' && method === 'GET') {
     return monthlyReport(request, env)

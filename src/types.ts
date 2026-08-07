@@ -110,6 +110,7 @@ export interface Employee {
   employee_code: string | null
   name: string
   email: string | null
+  phone: string | null
   username: string | null
   role: Role
   rights: Rights

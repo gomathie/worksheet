@@ -48,6 +48,7 @@ onMounted(async () => {
     api<RateSettings & { employee_code_prefix?: string }>('/api/settings'),
     loadTypes(),
     loadSmtp(),
+    loadSms(),
     loadExpenseConfig(),
   ])
   form.value = settings
@@ -233,6 +234,48 @@ function sendTest() {
       json: { to: testTo.value || undefined },
     })
     testMsg.value = `Test email sent to ${res.to}.`
+  })
+}
+
+// ---- SMS / mnotify notifications
+interface SmsForm {
+  enabled: boolean
+  api_key: string
+  sender_id: string
+  has_key?: number
+}
+const sms = ref<SmsForm>({
+  enabled: false,
+  api_key: '',
+  sender_id: '',
+})
+const smsSaved = ref(false)
+const smsTestTo = ref('')
+const smsTestMsg = ref('')
+
+async function loadSms() {
+  sms.value = { ...sms.value, ...(await api<SmsForm>('/api/settings/sms')), api_key: '' }
+}
+
+function saveSms() {
+  smsSaved.value = false
+  smsTestMsg.value = ''
+  return run(async () => {
+    await api('/api/settings/sms', { method: 'PUT', json: sms.value })
+    sms.value.api_key = ''
+    await loadSms()
+    smsSaved.value = true
+  })
+}
+
+function sendSmsTest() {
+  smsTestMsg.value = ''
+  return run(async () => {
+    const res = await api<{ to: string }>('/api/settings/sms/test', {
+      method: 'POST',
+      json: { to: smsTestTo.value || undefined },
+    })
+    smsTestMsg.value = `Test SMS sent to ${res.to}.`
   })
 }
 </script>
@@ -498,6 +541,81 @@ function sendTest() {
         </div>
         <button class="btn" :disabled="busy" @click="sendTest">Send test</button>
         <span v-if="testMsg" class="text-sm text-teal">{{ testMsg }}</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">SMS notifications (mnotify)</h2>
+      <p class="mb-4 text-sm text-muted">
+        Sends the same events as email, over SMS via
+        <a href="https://mnotify.com" target="_blank" rel="noopener" class="underline"
+          >mnotify</a
+        >, to any employee with a phone number set (Employees tab). Only
+        matters when the phone number belongs to someone with SMS-worthy
+        notifications — everyone gets an in-app notification either way.
+      </p>
+      <form class="grid grid-cols-1 gap-4 md:grid-cols-2" @submit.prevent="saveSms">
+        <label class="flex items-center gap-2 text-sm md:col-span-2">
+          <input v-model="sms.enabled" type="checkbox" />
+          Enable SMS notifications
+        </label>
+        <div>
+          <label class="field-label" for="sms-key">
+            mnotify API key {{ sms.has_key ? '(set — blank keeps it)' : '' }}
+          </label>
+          <input
+            id="sms-key"
+            v-model="sms.api_key"
+            type="password"
+            autocomplete="off"
+            class="field-input"
+            placeholder="your mnotify API key"
+          />
+          <p class="mt-1 text-xs text-muted">
+            From your
+            <a
+              href="https://apps.mnotify.net"
+              target="_blank"
+              rel="noopener"
+              class="underline"
+              >mnotify dashboard</a
+            >, under API keys.
+          </p>
+        </div>
+        <div>
+          <label class="field-label" for="sms-sender">Sender ID</label>
+          <input
+            id="sms-sender"
+            v-model="sms.sender_id"
+            maxlength="11"
+            class="field-input"
+            placeholder="e.g. OpenSignal"
+          />
+          <p class="mt-1 text-xs text-muted">
+            Up to 11 characters, registered with mnotify — this is the name
+            recipients see as the sender.
+          </p>
+        </div>
+        <div class="md:col-span-2">
+          <button class="btn btn-solid" :disabled="busy">
+            {{ busy ? 'Saving…' : 'Save SMS settings' }}
+          </button>
+          <span v-if="smsSaved" class="ml-3 text-sm text-teal">Saved.</span>
+        </div>
+      </form>
+      <div class="mt-4 flex flex-wrap items-end gap-2 border-t border-line pt-4">
+        <div>
+          <label class="field-label" for="sms-test">Send a test SMS to</label>
+          <input
+            id="sms-test"
+            v-model="smsTestTo"
+            type="tel"
+            class="field-input mono"
+            placeholder="your own phone number"
+          />
+        </div>
+        <button class="btn" :disabled="busy" @click="sendSmsTest">Send test</button>
+        <span v-if="smsTestMsg" class="text-sm text-teal">{{ smsTestMsg }}</span>
       </div>
     </div>
 

@@ -54,6 +54,7 @@ const blankRights = () => ({
 const form = ref({
   name: '',
   email: '',
+  phone: '',
   username: '',
   password: '',
   role: 'employee',
@@ -97,6 +98,7 @@ function startEdit(e: Employee) {
   form.value = {
     name: e.name,
     email: e.email ?? '',
+    phone: e.phone ?? '',
     username: e.username ?? '',
     password: '',
     role: e.role,
@@ -116,6 +118,7 @@ function resetForm() {
   form.value = {
     name: '',
     email: '',
+    phone: '',
     username: '',
     password: '',
     role: 'employee',
@@ -142,6 +145,7 @@ async function submit() {
     const payload: Record<string, unknown> = {
       name: form.value.name,
       email: form.value.email || null,
+      phone: form.value.phone || null,
       username: form.value.username || null,
       role: form.value.role,
       rights: form.value.rights,
@@ -288,6 +292,16 @@ const managerName = (e: Employee) =>
           <div>
             <label class="field-label" for="email">Email (optional)</label>
             <input id="email" v-model="form.email" type="email" class="field-input" />
+          </div>
+          <div>
+            <label class="field-label" for="phone">Phone (optional, for SMS)</label>
+            <input
+              id="phone"
+              v-model="form.phone"
+              type="tel"
+              class="field-input mono"
+              placeholder="e.g. 0241234567"
+            />
           </div>
           <div>
             <label class="field-label" for="role">Role</label>
@@ -612,6 +626,7 @@ const managerName = (e: Employee) =>
               <td>
                 {{ e.name }}
                 <div v-if="e.email" class="mono text-xs text-muted">{{ e.email }}</div>
+                <div v-if="e.phone" class="mono text-xs text-muted">{{ e.phone }}</div>
               </td>
               <td class="mono text-[13px]">{{ e.username ?? '—' }}</td>
               <td>

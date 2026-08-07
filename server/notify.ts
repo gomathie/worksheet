@@ -1,12 +1,13 @@
-// In-app notifications, with email delivery layered on top.
+// In-app notifications, with email and SMS delivery layered on top.
 //
 // Every notification is recorded in the `notifications` table (that is what
-// the header bell reads). If SMTP is configured, the same message also goes
-// out by email — best effort, and never allowed to fail the action that
-// triggered it.
+// the header bell reads). If SMTP/mnotify are configured, the same message
+// also goes out by email and/or SMS — best effort, and never allowed to fail
+// the action that triggered it.
 
 import type { Env, NotificationRow } from './env'
 import { notify as sendEmail } from './email'
+import { notifySms } from './sms'
 import { pushToEmployees } from './push'
 
 export interface NotifyInput {
@@ -27,10 +28,10 @@ export async function notifyUser(env: Env, input: NotifyInput): Promise<void> {
   const { employeeId, kind, title, body = '', voucherId = null } = input
   try {
     const recipient = await env.DB.prepare(
-      'SELECT email FROM employees WHERE id = ? AND active = 1',
+      'SELECT email, phone FROM employees WHERE id = ? AND active = 1',
     )
       .bind(employeeId)
-      .first<{ email: string | null }>()
+      .first<{ email: string | null; phone: string | null }>()
     if (!recipient) return
 
     const id = crypto.randomUUID()
@@ -46,6 +47,11 @@ export async function notifyUser(env: Env, input: NotifyInput): Promise<void> {
     if (emailable) {
       // sendEmail already swallows SMTP errors and no-ops when disabled.
       await sendEmail(env, recipient.email, title, body)
+    }
+    if (!input.inAppOnly && recipient.phone) {
+      // notifySms already swallows mnotify errors and no-ops when disabled.
+      // Kept short and flat — SMS is billed per segment, unlike email.
+      await notifySms(env, recipient.phone, body ? `${title}: ${body}` : title)
     }
 
     // Wake any device this person has subscribed; it fetches the detail itself.

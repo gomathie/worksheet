@@ -88,6 +88,13 @@ async function loadCardNames() {
 
 const namesFor = (typeId: string) => cardNames.value[typeId] ?? []
 
+/** The cards behind an entry's count for one work type, for the entries list. */
+const cardNamesFor = (entry: Entry, typeId: string) =>
+  (entry.cards ?? [])
+    .filter((c) => c.work_type_id === typeId)
+    .map((c) => c.card_name)
+    .join(', ')
+
 async function loadEntries() {
   const params = new URLSearchParams({ month: month.value })
   if (auth.isAdmin && filterEmployee.value) {
@@ -519,8 +526,18 @@ const tableColspan = computed(
               <td class="num">{{ e.time_start }}</td>
               <td class="num">{{ e.time_end }}</td>
               <td class="num">{{ e.hours.toFixed(2) }}</td>
+              <!-- The count alone does not say *which* cards were done, which
+                   is the question asked when something needs checking. The
+                   names already come down with the entry, so list them under
+                   the figure rather than making someone open the entry. -->
               <td v-for="wt in activeTypes" :key="wt.id" class="num">
                 {{ e.units[wt.id] ?? 0 }}
+                <span
+                  v-if="cardNamesFor(e, wt.id)"
+                  class="mt-0.5 block text-[11px] leading-snug font-normal text-muted"
+                  :title="cardNamesFor(e, wt.id)"
+                  >{{ cardNamesFor(e, wt.id) }}</span
+                >
               </td>
               <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
                 {{ e.notes }}

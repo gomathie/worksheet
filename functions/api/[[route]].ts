@@ -45,6 +45,8 @@ import {
   computePoints,
   computeRemuneration,
   normalizeCardName,
+  groupCardAudit,
+  type CardAuditRow,
   parseTime,
 } from '../../shared/logic'
 import { getCookie } from '../../server/http'
@@ -196,6 +198,53 @@ async function listCardNames(request: Request, env: Env): Promise<Response> {
   const byType: Record<string, string[]> = {}
   for (const id of await cardBasedTypeIds(env)) byType[id] = names
   return json(byType)
+}
+
+/**
+ * Who logged which card, and when.
+ *
+ * A card carries no employee of its own — it belongs to an entry, and the
+ * entry names whose work it was — so the answer is a join rather than a stored
+ * field. Filterable by card name and month, because the question is usually
+ * asked about one card after something has gone wrong.
+ *
+ * Unscoped by design: this exists to answer "who did this card", which is
+ * meaningless if it only ever returns your own work. Gated on `view_reports`,
+ * the same right that already exposes everyone's output.
+ */
+async function cardAudit(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (user.role !== 'admin' && !parseRights(user).view_reports) {
+    throw new ApiError(403, 'You do not have permission to audit cards')
+  }
+
+  const url = new URL(request.url)
+  const q = (url.searchParams.get('q') ?? '').trim()
+  const month = url.searchParams.get('month') ?? ''
+
+  let sql = `SELECT c.card_name, c.work_type_id, wt.name AS work_type_name,
+                    e.employee_id, emp.name AS employee_name, e.work_date,
+                    c.total_audits, c.time_completed, c.entry_id
+               FROM entry_cards c
+               JOIN entries e ON e.id = c.entry_id
+               JOIN employees emp ON emp.id = e.employee_id
+               JOIN work_types wt ON wt.id = c.work_type_id
+              WHERE 1 = 1`
+  const binds: unknown[] = []
+  if (q) {
+    sql += ' AND c.card_name LIKE ?'
+    binds.push(`%${q}%`)
+  }
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    sql += ' AND e.work_date LIKE ?'
+    binds.push(`${month}%`)
+  }
+  sql += ' ORDER BY c.card_name, e.work_date, wt.name'
+
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds)
+    .all<CardAuditRow>()
+  return json(groupCardAudit(results))
 }
 
 async function listWorkTypes(request: Request, env: Env): Promise<Response> {
@@ -2242,6 +2291,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (path === '/api/card-names' && method === 'GET') return listCardNames(request, env)
+  if (path === '/api/card-audit' && method === 'GET') return cardAudit(request, env)
   if (path === '/api/work-types' && method === 'GET') return listWorkTypes(request, env)
   if (path === '/api/work-types' && method === 'POST') return createWorkType(request, env)
   const wtMatch = /^\/api\/work-types\/([\w-]+)$/.exec(path)

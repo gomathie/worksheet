@@ -13,7 +13,7 @@ const route = useRoute()
 // top-level pill's highlight and whether that section's row of page buttons
 // is shown underneath — no dropdown/overlay, just a second nav row in flow.
 const reportsActive = computed(() =>
-  ['report', 'trends', 'absences', 'activity'].includes(String(route.name)),
+  ['report', 'trends', 'absences', 'card-audit', 'activity'].includes(String(route.name)),
 )
 // Payments, Payslip, and everything expense-related all move money —
 // grouped under one "Finance" section rather than splitting Pay/Expenses.
@@ -290,6 +290,13 @@ async function changePassword() {
       >
       <RouterLink :to="{ name: 'absences' }" class="btn btn-sm" active-class="btn-solid"
         >Absences</RouterLink
+      >
+      <RouterLink
+        v-if="auth.rights.view_reports"
+        :to="{ name: 'card-audit' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Card Audit</RouterLink
       >
       <RouterLink
         v-if="auth.isAdmin"

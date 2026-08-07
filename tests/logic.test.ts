@@ -5,6 +5,8 @@ import {
   computeRemuneration,
   aggregateMonthly,
   normalizeCardName,
+  groupCardAudit,
+  type CardAuditRow,
   parseTime,
   type RateSettings,
   type WorkType,
@@ -227,5 +229,84 @@ describe('normalizeCardName', () => {
 
   it('caps the length after folding', () => {
     expect(normalizeCardName('a'.repeat(200))).toHaveLength(120)
+  })
+})
+
+describe('groupCardAudit', () => {
+  const row = (
+    card_name: string,
+    work_type_id: string,
+    employee_name: string,
+    work_date: string,
+  ): CardAuditRow => ({
+    card_name,
+    work_type_id,
+    work_type_name: work_type_id === 'wt-qap' ? 'QAP' : 'Classification',
+    employee_id: employee_name.toLowerCase(),
+    employee_name,
+    work_date,
+    total_audits: 10,
+    time_completed: null,
+    entry_id: `${employee_name}-${work_date}`,
+  })
+
+  it('groups every logging of a card together', () => {
+    const g = groupCardAudit([
+      row('Alza_cz', 'wt-classification', 'Ama', '2026-08-01'),
+      row('Alza_cz', 'wt-qap', 'Kojo', '2026-08-02'),
+      row('Boost_us', 'wt-qap', 'Ama', '2026-08-03'),
+    ])
+    expect(g).toHaveLength(2)
+    expect(g.find((x) => x.card_name === 'Alza_cz')!.rows).toHaveLength(2)
+  })
+
+  it('does not flag the normal case: classified once, QAP\u2019d once', () => {
+    const g = groupCardAudit([
+      row('Alza_cz', 'wt-classification', 'Ama', '2026-08-01'),
+      row('Alza_cz', 'wt-qap', 'Kojo', '2026-08-02'),
+    ])
+    expect(g[0].repeats).toEqual([])
+  })
+
+  it('flags the same work type logged twice, naming both people', () => {
+    const g = groupCardAudit([
+      row('Target_us', 'wt-classification', 'Ama', '2026-08-01'),
+      row('Target_us', 'wt-classification', 'Kojo', '2026-08-05'),
+    ])
+    expect(g[0].repeats).toEqual([
+      { work_type_name: 'Classification', times: 2, people: ['Ama', 'Kojo'] },
+    ])
+  })
+
+  it('flags one person doing the same card twice, without repeating the name', () => {
+    const g = groupCardAudit([
+      row('Alza_cz_app', 'wt-qap', 'Ama', '2026-08-06'),
+      row('Alza_cz_app', 'wt-qap', 'Ama', '2026-08-06'),
+    ])
+    expect(g[0].repeats[0]).toMatchObject({ times: 2, people: ['Ama'] })
+  })
+
+  it('flags each repeated work type separately', () => {
+    const g = groupCardAudit([
+      row('Both', 'wt-classification', 'Ama', '2026-08-01'),
+      row('Both', 'wt-classification', 'Ama', '2026-08-02'),
+      row('Both', 'wt-qap', 'Kojo', '2026-08-03'),
+      row('Both', 'wt-qap', 'Kojo', '2026-08-04'),
+    ])
+    expect(g[0].repeats).toHaveLength(2)
+  })
+
+  it('sorts cards needing attention first, then alphabetically', () => {
+    const g = groupCardAudit([
+      row('Zebra', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Apple', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Middle', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Middle', 'wt-qap', 'Kojo', '2026-08-02'),
+    ])
+    expect(g.map((x) => x.card_name)).toEqual(['Middle', 'Apple', 'Zebra'])
+  })
+
+  it('returns nothing for no rows', () => {
+    expect(groupCardAudit([])).toEqual([])
   })
 })

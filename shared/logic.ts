@@ -201,3 +201,80 @@ export function normalizeCardName(raw: unknown): string {
     .replace(/\s+/g, '_')
     .slice(0, 120)
 }
+
+// ------------------------------------------------------------- card audit
+
+/** One occasion a card was logged, joined back to who did it. */
+export interface CardAuditRow {
+  card_name: string
+  work_type_id: string
+  work_type_name: string
+  employee_id: string
+  employee_name: string
+  work_date: string
+  total_audits: number
+  time_completed: string | null
+  entry_id: string
+}
+
+export interface CardRepeat {
+  work_type_name: string
+  times: number
+  /** Distinct people, in the order they first appear. */
+  people: string[]
+}
+
+export interface CardAuditGroup {
+  card_name: string
+  rows: CardAuditRow[]
+  /**
+   * Work types logged more than once for this card. A card should normally be
+   * classified once and QAP'd once, so a repeat is either rework or two people
+   * unknowingly doing the same card — which is the thing worth looking at.
+   */
+  repeats: CardRepeat[]
+}
+
+/**
+ * Group card history by card name, flagging repeats per work type.
+ *
+ * Deliberately reports rather than judges: a repeat can be legitimate rework,
+ * so it is surfaced for a human to interpret, never treated as an error.
+ */
+export function groupCardAudit(rows: CardAuditRow[]): CardAuditGroup[] {
+  const byCard = new Map<string, CardAuditRow[]>()
+  for (const r of rows) {
+    const list = byCard.get(r.card_name)
+    if (list) list.push(r)
+    else byCard.set(r.card_name, [r])
+  }
+
+  const groups: CardAuditGroup[] = []
+  for (const [card_name, cardRows] of byCard) {
+    const byType = new Map<string, CardAuditRow[]>()
+    for (const r of cardRows) {
+      const list = byType.get(r.work_type_id)
+      if (list) list.push(r)
+      else byType.set(r.work_type_id, [r])
+    }
+    const repeats: CardRepeat[] = []
+    for (const typeRows of byType.values()) {
+      if (typeRows.length < 2) continue
+      const people: string[] = []
+      for (const r of typeRows) {
+        if (!people.includes(r.employee_name)) people.push(r.employee_name)
+      }
+      repeats.push({
+        work_type_name: typeRows[0].work_type_name,
+        times: typeRows.length,
+        people,
+      })
+    }
+    groups.push({ card_name, rows: cardRows, repeats })
+  }
+
+  // Cards needing attention first, then alphabetically.
+  return groups.sort(
+    (a, b) => b.repeats.length - a.repeats.length || a.card_name.localeCompare(b.card_name),
+  )
+}

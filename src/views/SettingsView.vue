@@ -211,6 +211,11 @@ const smtp = ref<SmtpForm>({
 const smtpSaved = ref(false)
 const testTo = ref('')
 const testMsg = ref('')
+// True when testMsg holds an error rather than a success message. Kept local
+// to this button rather than routed through the page's shared `error` ref,
+// which renders in one box at the very bottom of a long page — easy to miss
+// entirely for an action this far up.
+const testFailed = ref(false)
 
 async function loadSmtp() {
   smtp.value = { ...smtp.value, ...(await api<SmtpForm>('/api/settings/smtp')), pass: '' }
@@ -227,15 +232,23 @@ function saveSmtp() {
   })
 }
 
-function sendTest() {
+async function sendTest() {
+  smtpSaved.value = false
   testMsg.value = ''
-  return run(async () => {
+  testFailed.value = false
+  busy.value = true
+  try {
     const res = await api<{ to: string }>('/api/settings/smtp/test', {
       method: 'POST',
       json: { to: testTo.value || undefined },
     })
     testMsg.value = `Test email sent to ${res.to}.`
-  })
+  } catch (e) {
+    testFailed.value = true
+    testMsg.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    busy.value = false
+  }
 }
 
 // ---- SMS / mnotify notifications
@@ -253,6 +266,7 @@ const sms = ref<SmsForm>({
 const smsSaved = ref(false)
 const smsTestTo = ref('')
 const smsTestMsg = ref('')
+const smsTestFailed = ref(false)
 
 async function loadSms() {
   sms.value = { ...sms.value, ...(await api<SmsForm>('/api/settings/sms')), api_key: '' }
@@ -269,9 +283,12 @@ function saveSms() {
   })
 }
 
-function sendSmsTest() {
+async function sendSmsTest() {
+  smsSaved.value = false
   smsTestMsg.value = ''
-  return run(async () => {
+  smsTestFailed.value = false
+  busy.value = true
+  try {
     const res = await api<{
       to: string
       message?: string
@@ -295,7 +312,12 @@ function sendSmsTest() {
       s?.credit_left !== undefined ? `${s.credit_left} credits left` : null,
     ].filter(Boolean)
     smsTestMsg.value = `Test SMS sent to ${res.to}.${bits.length ? ` mnotify: ${bits.join(', ')}.` : ''}`
-  })
+  } catch (e) {
+    smsTestFailed.value = true
+    smsTestMsg.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    busy.value = false
+  }
 }
 </script>
 
@@ -559,7 +581,9 @@ function sendSmsTest() {
           />
         </div>
         <button class="btn" :disabled="busy" @click="sendTest">Send test</button>
-        <span v-if="testMsg" class="text-sm text-teal">{{ testMsg }}</span>
+        <span v-if="testMsg" class="text-sm" :class="testFailed ? 'text-red' : 'text-teal'">{{
+          testMsg
+        }}</span>
       </div>
     </div>
 
@@ -632,7 +656,12 @@ function sendSmsTest() {
           />
         </div>
         <button class="btn" :disabled="busy" @click="sendSmsTest">Send test</button>
-        <span v-if="smsTestMsg" class="text-sm text-teal">{{ smsTestMsg }}</span>
+        <span
+          v-if="smsTestMsg"
+          class="text-sm"
+          :class="smsTestFailed ? 'text-red' : 'text-teal'"
+          >{{ smsTestMsg }}</span
+        >
       </div>
     </div>
 

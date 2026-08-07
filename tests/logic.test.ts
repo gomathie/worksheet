@@ -6,6 +6,7 @@ import {
   aggregateMonthly,
   normalizeCardName,
   groupCardAudit,
+  hasSameDayDuplicate,
   findSameDayCardClashes,
   type CardAuditRow,
   parseTime,
@@ -275,8 +276,66 @@ describe('groupCardAudit', () => {
       row('Target_us', 'wt-classification', 'Kojo', '2026-08-05'),
     ])
     expect(g[0].repeats).toEqual([
-      { work_type_name: 'Classification', times: 2, people: ['Ama', 'Kojo'] },
+      {
+        work_type_name: 'Classification',
+        times: 2,
+        people: ['Ama', 'Kojo'],
+        // Different days — could be rework, so not a same-day duplicate.
+        same_day_dates: [],
+      },
     ])
+    expect(hasSameDayDuplicate(g[0])).toBe(false)
+  })
+
+  it('records the date when the same work type is logged twice in one day', () => {
+    const g = groupCardAudit([
+      row('Target_us', 'wt-classification', 'Ama', '2026-08-01'),
+      row('Target_us', 'wt-classification', 'Kojo', '2026-08-01'),
+    ])
+    expect(g[0].repeats[0].same_day_dates).toEqual(['2026-08-01'])
+    expect(hasSameDayDuplicate(g[0])).toBe(true)
+  })
+
+  it('flags QAP twice in a day just as it flags Classification', () => {
+    const g = groupCardAudit([
+      row('Target_us', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Target_us', 'wt-qap', 'Ama', '2026-08-01'),
+    ])
+    expect(g[0].repeats[0]).toMatchObject({
+      work_type_name: 'QAP',
+      same_day_dates: ['2026-08-01'],
+    })
+  })
+
+  it('does not treat classify-and-QAP on one day as a same-day duplicate', () => {
+    const g = groupCardAudit([
+      row('Target_us', 'wt-classification', 'Ama', '2026-08-01'),
+      row('Target_us', 'wt-qap', 'Kojo', '2026-08-01'),
+    ])
+    expect(hasSameDayDuplicate(g[0])).toBe(false)
+    expect(g[0].repeats).toEqual([])
+  })
+
+  it('lists every date a work type was doubled up on', () => {
+    const g = groupCardAudit([
+      row('Target_us', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Target_us', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Target_us', 'wt-qap', 'Kojo', '2026-08-03'),
+      row('Target_us', 'wt-qap', 'Kojo', '2026-08-03'),
+    ])
+    expect(g[0].repeats[0].same_day_dates).toEqual(['2026-08-01', '2026-08-03'])
+  })
+
+  it('sorts same-day duplicates above repeats on other days', () => {
+    const g = groupCardAudit([
+      // Repeated, but days apart.
+      row('Apart', 'wt-qap', 'Ama', '2026-08-01'),
+      row('Apart', 'wt-qap', 'Ama', '2026-08-04'),
+      // Twice in one day — the serious one, must come first.
+      row('Zulu', 'wt-qap', 'Kojo', '2026-08-02'),
+      row('Zulu', 'wt-qap', 'Kojo', '2026-08-02'),
+    ])
+    expect(g.map((x) => x.card_name)).toEqual(['Zulu', 'Apart'])
   })
 
   it('flags one person doing the same card twice, without repeating the name', () => {

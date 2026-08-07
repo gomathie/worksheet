@@ -657,7 +657,7 @@ const tableColspan = computed(
       aria-labelledby="clash-title"
     >
       <div class="panel w-full max-w-lg">
-        <h3 id="clash-title" class="display mb-2 text-xl text-amber">
+        <h3 id="clash-title" class="display mb-2 text-xl text-red">
           Already done today
         </h3>
         <p class="mb-3 text-sm">
@@ -673,9 +673,10 @@ const tableColspan = computed(
             <span class="font-medium">{{ c.own ? 'you' : c.employee_name }}</span>
           </li>
         </ul>
-        <p class="mb-4 rounded-lg border border-amber bg-amber-soft p-3 text-xs">
-          If you continue, the administrators will be notified that this card was
-          logged twice today. Continue only if this is genuine rework.
+        <p class="mb-4 rounded-lg border border-red bg-red-soft p-3 text-xs">
+          If you continue, the admins will be notified that this card was
+          logged twice today. Continue only if this is genuine rework. 
+          If not geniune, your points may be deducted.
         </p>
         <div class="flex flex-wrap gap-2">
           <button type="button" class="btn" :disabled="busy" @click="askClash = false">

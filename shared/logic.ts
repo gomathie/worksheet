@@ -222,6 +222,15 @@ export interface CardRepeat {
   times: number
   /** Distinct people, in the order they first appear. */
   people: string[]
+  /**
+   * Dates on which this work type was logged more than once for this card.
+   *
+   * Twice on one day is the serious case — the work cannot plausibly have been
+   * done twice over, so it is a double entry or two people on the same card.
+   * A repeat days apart is far weaker evidence, because rework is normal. The
+   * two are kept apart so the interface can say which it is.
+   */
+  same_day_dates: string[]
 }
 
 export interface CardAuditGroup {
@@ -264,19 +273,36 @@ export function groupCardAudit(rows: CardAuditRow[]): CardAuditGroup[] {
       for (const r of typeRows) {
         if (!people.includes(r.employee_name)) people.push(r.employee_name)
       }
+      const perDate = new Map<string, number>()
+      for (const r of typeRows) perDate.set(r.work_date, (perDate.get(r.work_date) ?? 0) + 1)
+      const same_day_dates = [...perDate.entries()]
+        .filter(([, n]) => n > 1)
+        .map(([date]) => date)
+        .sort()
       repeats.push({
         work_type_name: typeRows[0].work_type_name,
         times: typeRows.length,
         people,
+        same_day_dates,
       })
     }
     groups.push({ card_name, rows: cardRows, repeats })
   }
 
-  // Cards needing attention first, then alphabetically.
+  // Same-day duplicates first, then other repeats, then alphabetically.
+  const sameDay = (g: CardAuditGroup) =>
+    g.repeats.some((r) => r.same_day_dates.length > 0) ? 1 : 0
   return groups.sort(
-    (a, b) => b.repeats.length - a.repeats.length || a.card_name.localeCompare(b.card_name),
+    (a, b) =>
+      sameDay(b) - sameDay(a) ||
+      b.repeats.length - a.repeats.length ||
+      a.card_name.localeCompare(b.card_name),
   )
+}
+
+/** Did this card have the same work type logged twice in one day? */
+export function hasSameDayDuplicate(group: CardAuditGroup): boolean {
+  return group.repeats.some((r) => r.same_day_dates.length > 0)
 }
 
 /** A card already logged on a given day, for the same-day clash check. */

@@ -5,6 +5,7 @@
 // Cloudflare and won't work. Auth is AUTH LOGIN (username/password).
 import { connect } from 'cloudflare:sockets'
 import type { Env } from './env'
+import { headerSafe } from './header-safe'
 
 export interface SmtpConfig {
   enabled: boolean
@@ -154,7 +155,7 @@ export async function sendMail(cfg: SmtpConfig, msg: MailMessage): Promise<void>
 
   const run = async () => {
     await session.expect([220], 'greeting')
-    await session.write(`EHLO ${cfg.host}`)
+    await session.write(`EHLO ${headerSafe(cfg.host)}`)
     await session.expect([250], 'EHLO')
 
     if (!implicitTls) {
@@ -162,7 +163,7 @@ export async function sendMail(cfg: SmtpConfig, msg: MailMessage): Promise<void>
       await session.expect([220], 'STARTTLS')
       const secure = (socket as unknown as { startTls: () => never }).startTls()
       session.rebindAfterTls(secure)
-      await session.write(`EHLO ${cfg.host}`)
+      await session.write(`EHLO ${headerSafe(cfg.host)}`)
       await session.expect([250], 'EHLO (TLS)')
     }
 
@@ -175,17 +176,22 @@ export async function sendMail(cfg: SmtpConfig, msg: MailMessage): Promise<void>
       await session.expect([235], 'AUTH password')
     }
 
-    await session.write(`MAIL FROM:<${cfg.from}>`)
+    // headerSafe on the envelope addresses too: MAIL FROM/RCPT TO are their
+    // own SMTP commands, so a raw CRLF there would inject extra commands
+    // into the session rather than extra headers into the message.
+    const from = headerSafe(cfg.from)
+    const to = headerSafe(msg.to)
+    await session.write(`MAIL FROM:<${from}>`)
     await session.expect([250], 'MAIL FROM')
-    await session.write(`RCPT TO:<${msg.to}>`)
+    await session.write(`RCPT TO:<${to}>`)
     await session.expect([250, 251], 'RCPT TO')
     await session.write('DATA')
     await session.expect([354], 'DATA')
 
     const headers = [
-      `From: ${cfg.from_name} <${cfg.from}>`,
-      `To: ${msg.to}`,
-      `Subject: ${msg.subject}`,
+      `From: ${headerSafe(cfg.from_name)} <${from}>`,
+      `To: ${to}`,
+      `Subject: ${headerSafe(msg.subject)}`,
       `Date: ${new Date().toUTCString()}`,
       'MIME-Version: 1.0',
       'Content-Type: text/plain; charset=utf-8',

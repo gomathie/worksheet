@@ -1472,7 +1472,11 @@ export async function uploadAttachment(
   const file = form?.get('file')
   if (!file || typeof file === 'string') throw new ApiError(400, 'No file uploaded')
 
-  const fileName = (file.name || 'receipt').slice(0, 200)
+  // Control characters stripped up front: this name is stored and later
+  // echoed back verbatim in the download response's Content-Disposition
+  // header, so a name carrying a raw CR/LF must not survive to become part
+  // of a header line.
+  const fileName = (file.name || 'receipt').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 200) || 'receipt'
   const issues = validateAttachment(fileName, file.type || null, file.size)
   if (issues.length) fail(issues)
 
@@ -1533,6 +1537,12 @@ export async function downloadAttachment(
       // Receipts are viewed inline; the filename is quoted for safety.
       'Content-Disposition': `inline; filename="${row.file_name.replace(/"/g, '')}"`,
       'Cache-Control': 'private, max-age=300',
+      // Uploads are restricted to PDF/JPG/PNG by extension and declared
+      // MIME type (validateAttachment), but nothing re-checks the actual
+      // bytes — a file renamed/mislabelled as one of those could still be
+      // polyglot HTML/SVG. nosniff stops a browser from rendering it as
+      // anything other than the declared type.
+      'X-Content-Type-Options': 'nosniff',
     },
   })
 }

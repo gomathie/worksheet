@@ -5,6 +5,8 @@
 // .xls it carries real cell types, so numbers arrive as numbers and long
 // reference strings are not mangled into scientific notation.
 
+import { neutralizeFormula } from './spreadsheet-safety'
+
 type Cell = string | number | null | undefined
 
 function escapeXml(s: string): string {
@@ -23,7 +25,7 @@ function cellXml(value: Cell): string {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return `<Cell><Data ss:Type="Number">${value}</Data></Cell>`
   }
-  return `<Cell><Data ss:Type="String">${escapeXml(String(value))}</Data></Cell>`
+  return `<Cell><Data ss:Type="String">${escapeXml(neutralizeFormula(String(value)))}</Data></Cell>`
 }
 
 function triggerDownload(blob: Blob, filename: string): void {

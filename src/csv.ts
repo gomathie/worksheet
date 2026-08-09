@@ -1,9 +1,11 @@
 // Tiny CSV builder + download trigger (no dependencies).
 
+import { neutralizeFormula } from './spreadsheet-safety'
+
 type Cell = string | number | null | undefined
 
 function escapeCell(v: Cell): string {
-  const s = v === null || v === undefined ? '' : String(v)
+  const s = v === null || v === undefined ? '' : neutralizeFormula(String(v))
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 

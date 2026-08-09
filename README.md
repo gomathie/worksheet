@@ -79,6 +79,45 @@ generated sequentially and are unique.
 - **Approval workflow (opt-in):** when enabled, employee entries start *pending* and count toward
   pay only once an admin approves; admin-logged entries auto-approve. Editing re-queues for approval.
 
+### Tasks
+A standalone to-do list, deliberately unconnected to entries, cards or pay — a task is a note about
+intent, not a record that feeds a points or money calculation.
+
+- Anyone may raise a task for themselves (title, optional details, priority, due date). Assigning a
+  task **to someone else**, or opening one to **Everyone**, requires the `manage_tasks` right.
+- Each task gets a short code (`TASK-001`) and its own detail/view page, reachable via the **View**
+  button — the same page a reassignment or an Accept happens on, with no detour through Edit.
+- States: **To do → In progress → Done**, or **Cancelled**. The assignee moves it along; only a
+  task manager or whoever raised it may reword it — otherwise "do X" could quietly become "do Y"
+  and then be marked done.
+- **Everyone tasks:** instead of naming one person, a task manager can open a task to **Everyone**.
+  It sits unclaimed — visible to the whole team, not just managers — until somebody **accepts** it,
+  at which point it behaves exactly like a normally-assigned task. Accepting needs no right at all,
+  since nobody is being volun-told; it's a single button on the task's own page or its row in the
+  list.
+- **Deadline nudge:** anyone with an open task due today or tomorrow gets a pop-up reminder — up to
+  twice a day (once in the morning, once in the afternoon, tracked client-side) — warning that a
+  missed deadline attracts a point reduction. It is a nudge, not an enforcement; nothing server-side
+  actually deducts points from it today.
+- Deleting your own unassigned-or-self-assigned to-do needs no right. Once a task has been given to
+  someone else, deleting it (as opposed to cancelling it) needs the `delete_tasks` right — organising
+  work and erasing the record of it are different powers.
+
+### Telematics installations & device types
+The **Telematics Installation** work type is card-based like Classification/QAP, but each card
+records a job rather than a repeatable audit, so installation cards are **never duplicate-checked** —
+three installs of the same device type in a day is normal, not a repeat.
+
+- Each card records an **installation type** (currently *Telematics device*), a **device make**
+  (Teltonika, Concox, iStartek, Calamp, ...), and whether it was a **new installation** or a
+  **replacement** of a faulty unit. A replacement also records **which make came out**, so reporting
+  can answer "which devices fail most often, and what replaces them" (Reports → Installations).
+- **Device makes are admin-managed**, not a fixed list — Settings → Device types (add, rename,
+  deactivate). Anyone assigned installation work can also **suggest a new device type** from the
+  entry form; the suggestion is inactive and unselectable anywhere until an administrator approves
+  or rejects it (Settings → Device types → *Suggested by installers*). Rejecting requires a note.
+  This mirrors the pending-employee-account approval pattern.
+
 ### Dashboard, reports & payslips
 - **Dashboard:** monthly totals, per-type stat cards, a daily bar chart, per-person summary.
   Employees see the team's work performance but money **only for themselves** — rates and
@@ -89,6 +128,15 @@ generated sequentially and are unique.
   total due, paid/confirmed status, employee code). Employees see their own; admins can print
   anyone's.
 - **Trends:** per-employee charts over the last 3 / 6 / 12 months.
+- **Card Audit** (`view_reports`): who classified or QAP'd a given card, flagging the same work type
+  logged twice on one day (red) versus the same card recurring on different days (amber, often
+  legitimate rework).
+- **Installations** (`view_reports`): telematics installation activity — counts by device type and
+  action, and a **most-replaced devices** ranking, so a device make failing unusually often stands
+  out.
+- **Recent entries / Daily detail are grouped by calendar day**, not listed as flat rows — a day
+  logged more than once (up to the daily cap) shows as one heading with a total and an entry count,
+  with its rows underneath, on the entries list, the Dashboard, and the Monthly Report alike.
 
 ### Month-end locking
 Admins can **lock a month**, which freezes both the data and the rates. The lock captures a
@@ -224,13 +272,22 @@ against it.
 ### Notifications
 - **In-app:** a header bell icon with unread count. Notifications are sent on key events —
   expense submissions, approvals, rejections, recording, requests for more information, payment
-  marks, reimbursement decisions, and user approval decisions.
+  marks, reimbursement decisions, user approval decisions, task assignment/acceptance/completion,
+  and device type proposals/decisions.
 - **Web Push:** payload-less push notifications via VAPID (RFC 8292), sent directly from the Worker
   with no third-party service. The service worker wakes, fetches `/api/notifications`, and shows
   the newest unread. Nothing sensitive passes through the push service. VAPID keys are generated on
   first use and stored in the database. iOS requires installing the PWA to the home screen.
 - **Email (SMTP):** point the app at any SMTP server (port 587 STARTTLS or 465 TLS) in Settings.
-  Password is stored write-only; a **Send test email** button verifies the config.
+  Password is stored write-only; a **Send test email** button verifies the config. The client is a
+  minimal hand-rolled implementation (`server/email.ts`, over `cloudflare:sockets`) — every value
+  that becomes part of a header (subject, addresses, hostname) is passed through `headerSafe`
+  (`server/header-safe.ts`) first, since free text elsewhere in the app is only trimmed and length
+  capped, not stripped of embedded CR/LF.
+- **SMS (mnotify):** the same events, over SMS, via [mnotify](https://mnotify.com)'s Quick SMS
+  endpoint — enter an API key and a sender ID (Settings). Only reaches employees with a phone number
+  set. The API key is stored write-only, same as the SMTP password; a **Send test** button verifies
+  it.
 
 ### Receipt attachments (R2) — currently off
 Receipt **file uploads are disabled**: no R2 bucket is bound in `wrangler.toml`. Everything else
@@ -290,32 +347,39 @@ server/                      Worker-side helpers
   auth.ts                    Authentication, session management, PBKDF2 hashing
   env.ts                     Cloudflare bindings and environment types
   expenses.ts                Expense voucher handlers (workflow, attachments, reports)
-  notify.ts                  In-app notifications, with email layered on top
+  tasks.ts                   Task handlers (CRUD, reassignment, Everyone/accept)
+  notify.ts                  In-app notifications, with email + SMS layered on top
   pettycash.ts               Petty cash float ledger, top-up requests
   push.ts                    Web Push (VAPID signing, subscription management)
   scope.ts                   Data-scope filtering (own / direct_reports / department / all)
   settings.ts                Global settings reader/writer
   users.ts                   New-user proposal and approval workflow
   http.ts                    HTTP helpers (JSON parsing, error responses)
-  email.ts                   SMTP email sender
+  email.ts                   Hand-rolled SMTP client (over cloudflare:sockets)
+  header-safe.ts             CR/LF stripping for values that become SMTP header lines
+  sms.ts                     mnotify SMS client
 shared/                      Pure logic shared between server and client
   logic.ts                   Hours, points, and aggregation calculations
   expenses.ts                Expense state machine, validation, summaries
+  tasks.ts                   Task permissions and state machine (incl. Everyone/accept)
+  installations.ts           Installation-card types, device-type/action vocabulary
 src/                         Vue 3 app
   App.vue                    Shell, navigation, account menu
   api.ts                     Fetch wrapper for /api calls
   push.ts                    Browser-side Web Push subscription
   csv.ts                     Dependency-free CSV writer
   xls.ts                     Dependency-free Excel (SpreadsheetML) writer
+  spreadsheet-safety.ts      Formula-injection guard shared by csv.ts and xls.ts
+  dates.ts                   Day-grouping helper shared by the entries/report/dashboard tables
   usePortraitPrint.ts        Portrait print layout composable
   types.ts                   TypeScript type definitions
   stores/auth.ts             Pinia auth store (session, rights, role)
   router/index.ts            Vue Router with auth/right/role guards
-  views/                     19 page-level components (see below)
-  components/                Reusable components (charts, notification bell, etc.)
+  views/                     24 page-level components (see below)
+  components/                Reusable components (charts, notification bell, deadline alert, etc.)
 public/                      PWA assets (manifest, service worker, icons)
-migrations/                  D1 SQL migrations (17 files, 0001–0015)
-tests/                       Vitest tests for shared/logic.ts and shared/expenses.ts
+migrations/                  D1 SQL migrations (29 files, 0001–0027 — see note on duplicate numbers)
+tests/                       Vitest tests for shared/* and the sanitization helpers
 scripts/                     Helpers (seed admin, generate PWA icons)
 ```
 
@@ -340,6 +404,10 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `ExpensePackView` | `/expenses/pack` | Authenticated |
 | `ExpenseReportsView` | `/expenses/reports` | Authenticated |
 | `PettyCashView` | `/petty-cash` | `use_petty_cash` or admin |
+| `TasksView` | `/tasks` | Authenticated |
+| `TaskDetailView` | `/tasks/:id` | Authenticated (visibility scoped per task) |
+| `CardAuditView` | `/card-audit` | `view_reports` |
+| `InstallationsReportView` | `/installations-report` | `view_reports` |
 | `EmployeesView` | `/employees` | Admin |
 | `SettingsView` | `/settings` | Admin |
 | `AuditView` | `/activity` | Admin |
@@ -378,13 +446,17 @@ bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
 ## Migrations
 
 Plain SQL in `migrations/`, applied with wrangler's migration tracking
-(`npm run db:migrate:local` / `npm run db:migrate:prod`). 17 migration files covering: employees,
-departments, work types and assignments, entries and their per-type items, entry cards (card-based
-work types), adjustments (bonuses/reimbursements), payments, absences, expense vouchers (with
-categories, approvals, attachments, audit logs), petty cash (ledger and top-up requests), in-app
-notifications, push subscriptions, month locks (with rate snapshots), employee codes, manager role
-and data scopes, user approval workflow, settings, and the audit log. Money-sensitive data is
-filtered server-side for non-admins.
+(`npm run db:migrate:local` / `npm run db:migrate:prod`). 29 migration files (0001–0027, with two
+numbers used twice — see below) covering: employees, departments, work types and assignments,
+entries and their per-type items, entry cards (card-based work types), adjustments
+(bonuses/reimbursements), payments, absences, expense vouchers (with categories, approvals,
+attachments, audit logs, funding source, screening), petty cash (ledger and top-up requests), in-app
+notifications, push subscriptions, month locks (with rate snapshots), employee codes (incl. the
+`ID-2023NNN` scheme), manager role and data scopes, user approval workflow, settings, work-type
+modules, tasks (incl. task codes and the Everyone/broadcast flag), employee phone numbers,
+installation cards (installation type, device type, new/replacement action, replaced device type),
+device types (admin-managed list with a propose/approve workflow), and the audit log. Money-sensitive
+data is filtered server-side for non-admins.
 
 > **Migrations that contain `CREATE TRIGGER` (or other `BEGIN … END` blocks) fail on
 > `db:migrate:prod`.** The remote endpoint used by `wrangler d1 migrations apply --remote` splits SQL

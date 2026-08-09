@@ -64,6 +64,22 @@ logged as **individual cards**, not a single number:
 > **If you hold the "direct counts" right**, you get a plain number box for these
 > types instead of the card list.
 
+### Telematics installations
+
+If you're assigned **Telematics Installation** work, cards for it work a bit
+differently — there's no duplicate warning (several installs of the same device
+in a day is normal, not a repeat), and each card asks for:
+
+- **Installation type** — currently just *Telematics device*.
+- **Device type** — the make you installed (Teltonika, Concox, ...).
+- **New or replacement** — whether this was a fresh install or you swapped out a
+  faulty unit. Pick **replacement** and you'll also be asked which make **came
+  out**, so the organisation can see which devices fail most often.
+
+**Can't find your device?** Use *Can't find your device? Suggest a device type*
+under the card list. It's sent for an administrator to approve — your suggestion
+won't appear in the device list until then, so it isn't usable on a card yet.
+
 ### The duplicate warning
 
 If you log a card that has **already been done for the same work type on the
@@ -79,15 +95,22 @@ decision rather than an accident.
 ### Recent entries
 
 Below the form, the month's entries are listed with the **card names** under each
-count, so you can see what a day actually was without opening it. Change the
-month with the picker, and **Download CSV** for a copy.
+count, so you can see what a day actually was without opening it. Entries are
+**grouped by day** — if you logged twice in one day, you'll see one heading for
+that date (with the total hours and how many entries) rather than two
+unconnected-looking rows. Change the month with the picker, and **Download CSV**
+for a copy.
 
 ## Tasks
 
 **Tasks** is a shared to-do list for work that isn't a time entry or an expense.
 
 - **Anyone can add a task for themselves** — a title, and optionally details, a
-  priority and a date you want it done by.
+  priority and a date you want it done by. Assigning a task to **someone else**,
+  or opening one to **Everyone** (see below), needs the **Manage tasks** right.
+- Each task gets a short code (**TASK-001**) and a **View** button that opens its
+  own page — where status changes, reassignment, and accepting an Everyone task
+  all happen directly, with no detour through Edit.
 - A task moves **To do → In progress → Done**, or **Cancelled** if it's dropped.
 - Anything open and past its date is marked **overdue**. Finished and cancelled
   tasks are never flagged, and a task with no date can't be late.
@@ -97,6 +120,18 @@ month with the picker, and **Download CSV** for a copy.
 is told when you finish. You can move it along but **not change its wording** —
 otherwise "do X" could quietly become "do Y" and then be marked done. If a task
 is wrong, ask the person who raised it to change it.
+
+**Everyone tasks.** Instead of naming one person, whoever has **Manage tasks**
+can open a task to **Everyone**. It shows an *Everyone* badge and sits unclaimed
+— visible to the whole team, not just managers — until somebody taps **Accept**,
+either from the list or the task's own page. Accepting needs no special right;
+after that it behaves exactly like any other task assigned to you, and whoever
+raised it is told you took it.
+
+**Deadline reminders.** If you have an open task due today or tomorrow, you'll
+get a pop-up when you load the app — up to twice a day, once in the morning and
+once in the afternoon — warning that missing a deadline attracts a reduction in
+points. **Got it** or **View tasks** dismisses it until the next check.
 
 **Deleting.** Your own to-do list is yours to clear out. But once a task has been
 given to someone else it records what was asked of them, so deleting it needs
@@ -207,6 +242,8 @@ What you see here depends on your rights.
 - **Monthly Report** — the fuller per-person report.
 - **Trends** — your figures over the last 3, 6 or 12 months.
 - **Card Audit** — who classified or QAP'd a given card. See Part 2.
+- **Installations** — telematics installation activity by device type and
+  action, including which devices get replaced most. See Part 2.
 
 ---
 
@@ -337,6 +374,24 @@ name, or leave it blank for everything, across one month or all.
 This is also where a duplicate reported by the entry-form warning ends up, so
 it's the place to check when a notification says somebody continued past one.
 
+## Installations & device types
+
+**Reports → Installations** breaks down telematics installation activity by
+device type and new-vs-replacement, and ranks **which devices get replaced
+most** — the number to watch if a particular make is proving unreliable.
+
+**Settings → Device types** is where the make list itself is managed (add,
+rename, deactivate) — the same list offered on an installation card. Anyone
+doing installation work can suggest one that's missing from the entry form; it
+shows up here under **Suggested by installers** with who proposed it, and:
+
+- **Approve** — it joins the list immediately, usable on any card from then on.
+- **Reject** — needs a note explaining why; the suggestion never becomes
+  selectable.
+
+A suggestion is inactive and invisible everywhere else until you decide it, so
+nothing is usable on a card without your say-so.
+
 ## Payments
 
 - **Bonuses** — add one with a description; it counts immediately.
@@ -370,6 +425,8 @@ Unlock if corrections are needed.
 
 - **Employee code prefix** — the `EMP-` in `EMP-001`.
 - **Departments** and **expense categories** — add, rename, deactivate.
+- **Device types** — the telematics device make list, including the queue of
+  suggestions from installers. See *Installations & device types* above.
 - **Email (SMTP)** — point the app at any SMTP server (port 587 STARTTLS or 465
   TLS). The password is write-only; **Send test email** verifies it.
 - **SMS (mnotify)** — same idea, over SMS: enter your mnotify API key and a

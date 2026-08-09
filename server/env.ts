@@ -44,6 +44,11 @@ export interface DeviceTypeRow {
   name: string
   active: number
   position: number
+  approval_status: string // 'pending' | 'approved' | 'rejected'
+  created_by: string | null
+  approved_by: string | null
+  approved_at: string | null
+  approval_note: string | null
   created_at: string
 }
 

@@ -64,6 +64,7 @@ import { getCookie } from '../../server/http'
 import {
   listNotifications,
   markNotificationsRead,
+  notifyUser,
   notifyUsers,
 } from '../../server/notify'
 import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
@@ -492,11 +493,32 @@ async function patchWorkType(
 // code, so a newly-carried brand doesn't need a deploy. See
 // shared/installations.ts for how a card's device_type/replaced_device_type
 // use these ids.
+//
+// Anyone actually doing installation work may also *propose* one (see
+// proposeDeviceType below) — it lands 'pending' until an admin approves it,
+// the same shape as the pending-employee-account flow in server/users.ts.
+
+/** Assigned to at least one installation-style work type — the "telematics
+ * installation rights" that let someone suggest a device type. Framed around
+ * the work type rather than a named right, and around the general
+ * card_style rather than "Telematics Installation" by name, so it still
+ * makes sense if a second installation-style type is ever added. */
+async function canProposeDeviceType(env: Env, employeeId: string): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `SELECT 1 FROM employee_work_types ewt
+       JOIN work_types wt ON wt.id = ewt.work_type_id
+      WHERE ewt.employee_id = ? AND wt.card_style = 'installation'
+      LIMIT 1`,
+  )
+    .bind(employeeId)
+    .first()
+  return Boolean(row)
+}
 
 async function listDeviceTypes(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const { results } = await env.DB.prepare(
-    'SELECT * FROM device_types ORDER BY position, created_at',
+    "SELECT * FROM device_types WHERE approval_status = 'approved' ORDER BY position, created_at",
   ).all<DeviceTypeRow>()
   if (user.role === 'admin') return json(results)
   return json(results.filter((d) => d.active).map((d) => ({ id: d.id, name: d.name })))
@@ -544,10 +566,144 @@ async function patchDeviceType(request: Request, env: Env, id: string): Promise<
   return json(await env.DB.prepare('SELECT * FROM device_types WHERE id = ?').bind(id).first())
 }
 
-/** Active device types, id -> name — for validating/labelling installation cards. */
+function publicPendingDeviceType(d: DeviceTypeRow & { created_by_name?: string | null }) {
+  return {
+    id: d.id,
+    name: d.name,
+    approval_status: d.approval_status,
+    created_by: d.created_by,
+    created_by_name: d.created_by_name ?? null,
+    approval_note: d.approval_note,
+    created_at: d.created_at,
+  }
+}
+
+/** Propose a new device type. Called by anyone with installation work —
+ * admins add device types directly instead, via createDeviceType. */
+async function proposeDeviceType(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (!(await canProposeDeviceType(env, user.id))) {
+    throw new ApiError(403, 'Only people assigned installation work can suggest a device type')
+  }
+  const body = await readJson<{ name?: string }>(request)
+  const name = (body.name ?? '').trim().slice(0, 60)
+  if (!name) throw new ApiError(400, 'name is required')
+
+  const id = crypto.randomUUID()
+  try {
+    await env.DB.prepare(
+      `INSERT INTO device_types (id, name, position, active, approval_status, created_by)
+       VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM device_types), 0, 'pending', ?)`,
+    )
+      .bind(id, name, user.id)
+      .run()
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) {
+      throw new ApiError(409, 'That device type already exists (or is already awaiting approval)')
+    }
+    throw e
+  }
+  await audit(env, user.id, 'propose_device_type', id, { name })
+
+  const { results: admins } = await env.DB.prepare(
+    "SELECT id FROM employees WHERE role = 'admin' AND active = 1",
+  ).all<{ id: string }>()
+  await notifyUsers(
+    env,
+    admins.map((a) => a.id),
+    {
+      kind: 'device_type_pending_approval',
+      title: `New device type "${name}" needs approval`,
+      body: `${user.name} suggested "${name}" as a device type. It won't appear as an option until approved.`,
+    },
+  )
+
+  const created = await env.DB.prepare('SELECT * FROM device_types WHERE id = ?')
+    .bind(id)
+    .first<DeviceTypeRow>()
+  return json(publicPendingDeviceType(created!), 201)
+}
+
+/** The approval queue: admins see everything pending, a proposer sees only
+ * their own — so they can track it without seeing anyone else's. */
+async function listPendingDeviceTypes(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  let sql = `SELECT d.*, c.name AS created_by_name
+               FROM device_types d
+               LEFT JOIN employees c ON c.id = d.created_by
+              WHERE d.approval_status = 'pending'`
+  const binds: unknown[] = []
+  if (user.role !== 'admin') {
+    sql += ' AND d.created_by = ?'
+    binds.push(user.id)
+  }
+  sql += ' ORDER BY d.created_at'
+  const { results } = await env.DB.prepare(sql)
+    .bind(...binds)
+    .all<DeviceTypeRow & { created_by_name: string | null }>()
+  return json(results.map(publicPendingDeviceType))
+}
+
+/** Approve or reject a pending device type. */
+async function decideDeviceType(request: Request, env: Env, id: string): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const existing = await env.DB.prepare('SELECT * FROM device_types WHERE id = ?')
+    .bind(id)
+    .first<DeviceTypeRow>()
+  if (!existing) throw new ApiError(404, 'Device type not found')
+  if (existing.approval_status !== 'pending') {
+    throw new ApiError(400, 'That device type has already been decided')
+  }
+
+  const body = await readJson<{ decision?: string; note?: string }>(request)
+  if (body.decision !== 'approved' && body.decision !== 'rejected') {
+    throw new ApiError(400, "decision must be 'approved' or 'rejected'")
+  }
+  const note = (body.note ?? '').trim().slice(0, 500) || null
+  if (body.decision === 'rejected' && !note) {
+    throw new ApiError(400, 'A note is required when rejecting a device type')
+  }
+
+  await env.DB.prepare(
+    `UPDATE device_types
+        SET approval_status = ?, approved_by = ?, approved_at = ?, approval_note = ?, active = ?
+      WHERE id = ?`,
+  )
+    .bind(
+      body.decision,
+      admin.id,
+      new Date().toISOString(),
+      note,
+      body.decision === 'approved' ? 1 : 0,
+      id,
+    )
+    .run()
+  await audit(env, admin.id, 'decide_device_type', id, { decision: body.decision, note })
+
+  if (existing.created_by) {
+    await notifyUser(env, {
+      employeeId: existing.created_by,
+      kind: `device_type_${body.decision}`,
+      title: `Device type "${existing.name}" ${body.decision}`,
+      body:
+        body.decision === 'approved'
+          ? `"${existing.name}" was approved and is now available on the entry form.`
+          : `"${existing.name}" was rejected.\n\nNote: ${note}`,
+    })
+  }
+
+  return json(
+    publicPendingDeviceType(
+      (await env.DB.prepare('SELECT * FROM device_types WHERE id = ?').bind(id).first<DeviceTypeRow>())!,
+    ),
+  )
+}
+
+/** Active, approved device types, id -> name — for validating/labelling
+ * installation cards. A pending or rejected proposal is neither. */
 async function activeDeviceTypes(env: Env): Promise<Map<string, string>> {
   const { results } = await env.DB.prepare(
-    'SELECT id, name FROM device_types WHERE active = 1',
+    "SELECT id, name FROM device_types WHERE active = 1 AND approval_status = 'approved'",
   ).all<{ id: string; name: string }>()
   return new Map(results.map((r) => [r.id, r.name]))
 }
@@ -2753,6 +2909,16 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/device-types' && method === 'GET') return listDeviceTypes(request, env)
   if (path === '/api/device-types' && method === 'POST') return createDeviceType(request, env)
+  if (path === '/api/device-types/propose' && method === 'POST') {
+    return proposeDeviceType(request, env)
+  }
+  if (path === '/api/device-types/pending' && method === 'GET') {
+    return listPendingDeviceTypes(request, env)
+  }
+  const dtDecideMatch = /^\/api\/device-types\/([\w-]+)\/decide$/.exec(path)
+  if (dtDecideMatch && method === 'POST') {
+    return decideDeviceType(request, env, dtDecideMatch[1])
+  }
   const dtMatch = /^\/api\/device-types\/([\w-]+)$/.exec(path)
   if (dtMatch && method === 'PATCH') return patchDeviceType(request, env, dtMatch[1])
 

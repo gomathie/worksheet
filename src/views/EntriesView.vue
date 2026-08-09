@@ -25,6 +25,14 @@ const auth = useAuthStore()
 const employees = ref<Employee[]>([])
 const workTypes = ref<WorkTypeInfo[]>([])
 const deviceTypes = ref<DeviceTypeInfo[]>([])
+// "Suggest a device type" — for anyone assigned installation work; the
+// suggestion is pending until an admin approves it (see Settings), so it
+// isn't added to deviceTypes or made pickable here right away.
+const showProposeDevice = ref(false)
+const proposeDeviceName = ref('')
+const proposeMsg = ref('')
+const proposeFailed = ref(false)
+const proposeBusy = ref(false)
 const entries = ref<Entry[]>([])
 const month = ref('')
 const filterEmployee = ref('')
@@ -137,6 +145,26 @@ function addCard(wt: WorkTypeInfo) {
 function removeCard(card: EntryCard) {
   const i = form.value.cards.indexOf(card)
   if (i >= 0) form.value.cards.splice(i, 1)
+}
+
+async function proposeDeviceType() {
+  proposeMsg.value = ''
+  proposeFailed.value = false
+  if (!proposeDeviceName.value.trim()) return
+  proposeBusy.value = true
+  try {
+    await api('/api/device-types/propose', {
+      method: 'POST',
+      json: { name: proposeDeviceName.value.trim() },
+    })
+    proposeDeviceName.value = ''
+    proposeMsg.value = "Sent for admin approval — it'll appear here once approved."
+  } catch (e) {
+    proposeFailed.value = true
+    proposeMsg.value = e instanceof Error ? e.message : 'Failed to submit'
+  } finally {
+    proposeBusy.value = false
+  }
 }
 
 // Card names used before, per type — the same cards recur, so they are offered
@@ -497,6 +525,55 @@ const tableColspan = computed(
                make — no free-text name, no duplicate check (see
                shared/installations.ts). -->
           <template v-if="isInstallationType(wt)">
+            <div class="mb-3">
+              <button
+                v-if="!showProposeDevice"
+                type="button"
+                class="text-xs text-teal underline"
+                @click="showProposeDevice = true"
+              >
+                Can't find your device? Suggest a device type
+              </button>
+              <form
+                v-else
+                class="flex flex-wrap items-end gap-2"
+                @submit.prevent="proposeDeviceType"
+              >
+                <div>
+                  <label class="field-label" for="propose-device-name">
+                    New device type name
+                  </label>
+                  <input
+                    id="propose-device-name"
+                    v-model="proposeDeviceName"
+                    maxlength="60"
+                    class="field-input"
+                    placeholder="e.g. Ruptela"
+                  />
+                </div>
+                <button class="btn btn-sm" :disabled="proposeBusy">
+                  {{ proposeBusy ? 'Sending…' : 'Send for approval' }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  @click="showProposeDevice = false"
+                >
+                  Cancel
+                </button>
+              </form>
+              <p
+                v-if="proposeMsg"
+                class="mt-1 text-xs"
+                :class="proposeFailed ? 'text-red' : 'text-teal'"
+              >
+                {{ proposeMsg }}
+              </p>
+              <p class="mt-1 text-xs text-muted">
+                Suggestions need an admin's approval before they're selectable —
+                yours won't show in the list below right away.
+              </p>
+            </div>
             <div
               v-if="cardsFor(wt.id).length > 0"
               class="mb-1 hidden gap-2 md:grid md:grid-cols-[1fr_1fr_1fr_1fr_auto]"

@@ -327,6 +327,7 @@ const statusTone: Record<TaskStatus, string> = {
 
         <div class="flex flex-wrap gap-2">
           <RouterLink :to="{ name: 'task-detail', params: { id: t.id } }" class="btn btn-sm btn-view">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3C5 3 1.7 7.1 1 10c.7 2.9 4 7 9 7s8.3-4.1 9-7c-.7-2.9-4-7-9-7Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg>
             View
           </RouterLink>
           <button

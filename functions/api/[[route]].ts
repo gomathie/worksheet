@@ -52,6 +52,14 @@ import {
   type SameDayCard,
   parseTime,
 } from '../../shared/logic'
+import {
+  installationCardLabel,
+  needsAction,
+  needsDeviceType,
+  parseDeviceType,
+  parseInstallationAction,
+  parseInstallationType,
+} from '../../shared/installations'
 import { getCookie } from '../../server/http'
 import {
   listNotifications,
@@ -234,6 +242,8 @@ async function cardAudit(request: Request, env: Env): Promise<Response> {
   const q = (url.searchParams.get('q') ?? '').trim()
   const month = url.searchParams.get('month') ?? ''
 
+  // Installation cards are never duplicate-checked (see shared/installations.ts),
+  // so they have no place in an audit built around "was this logged twice".
   let sql = `SELECT c.card_name, c.work_type_id, wt.name AS work_type_name,
                     wt.module AS module,
                     e.employee_id, emp.name AS employee_name, e.work_date,
@@ -242,7 +252,7 @@ async function cardAudit(request: Request, env: Env): Promise<Response> {
                JOIN entries e ON e.id = c.entry_id
                JOIN employees emp ON emp.id = e.employee_id
                JOIN work_types wt ON wt.id = c.work_type_id
-              WHERE 1 = 1`
+              WHERE wt.card_style != 'installation'`
   const binds: unknown[] = []
   if (q) {
     sql += ' AND c.card_name LIKE ?'
@@ -280,7 +290,7 @@ async function cardsOnDate(request: Request, env: Env): Promise<Response> {
        JOIN entries e ON e.id = c.entry_id
        JOIN employees emp ON emp.id = e.employee_id
        JOIN work_types wt ON wt.id = c.work_type_id
-      WHERE e.work_date = ?`,
+      WHERE e.work_date = ? AND wt.card_style != 'installation'`,
   )
     .bind(date)
     .all()
@@ -293,8 +303,9 @@ async function listWorkTypes(request: Request, env: Env): Promise<Response> {
     'SELECT * FROM work_types ORDER BY position, created_at',
   ).all<WorkTypeRow>()
   if (user.role === 'admin') return json(results)
-  // Rates are money-sensitive; non-admins only need names, the card flag and
-  // the module, which is what groups the entry form.
+  // Rates are money-sensitive; non-admins only need names, the card flag,
+  // its style (audit vs. installation — which fields the entry form shows),
+  // and the module, which is what groups the entry form.
   return json(
     results
       .filter((w) => w.active)
@@ -302,6 +313,7 @@ async function listWorkTypes(request: Request, env: Env): Promise<Response> {
         id: w.id,
         name: w.name,
         card_based: w.card_based,
+        card_style: w.card_style,
         module: w.module,
       })),
   )
@@ -1008,6 +1020,12 @@ interface CardInput {
   card_name?: string
   total_audits?: number
   time_completed?: string | null
+  // Installation-style cards only (see shared/installations.ts) — card_name,
+  // total_audits and time_completed are derived server-side for these, not
+  // taken from the request.
+  installation_type?: string
+  device_type?: string
+  installation_action?: string
 }
 
 interface EntryBody {
@@ -1028,6 +1046,22 @@ async function cardBasedTypeIds(env: Env): Promise<Set<string>> {
   return new Set(results.map((r) => r.id))
 }
 
+/** card_style per card-based work-type id — 'audit' or 'installation'. */
+async function cardStylesByTypeId(env: Env): Promise<Map<string, string>> {
+  const { results } = await env.DB.prepare(
+    'SELECT id, card_style FROM work_types WHERE card_based = 1',
+  ).all<{ id: string; card_style: string }>()
+  return new Map(results.map((r) => [r.id, r.card_style]))
+}
+
+/** Work-type ids using the installation card style — never direct-typeable. */
+async function installationTypeIds(env: Env): Promise<Set<string>> {
+  const { results } = await env.DB.prepare(
+    "SELECT id FROM work_types WHERE card_based = 1 AND card_style = 'installation'",
+  ).all<{ id: string }>()
+  return new Set(results.map((r) => r.id))
+}
+
 /**
  * Validate logged units: integers ≥ 0, only for types assigned to the employee.
  * Card-based types can't be typed directly unless `allowDirect` (the
@@ -1037,7 +1071,7 @@ async function normalizeItems(
   env: Env,
   employeeId: string,
   raw: Record<string, number> | undefined,
-  opts: { cardTypes?: Set<string>; allowDirect?: boolean } = {},
+  opts: { cardTypes?: Set<string>; allowDirect?: boolean; installationTypeIds?: Set<string> } = {},
 ): Promise<Record<string, number>> {
   const items: Record<string, number> = {}
   if (!raw) return items
@@ -1048,8 +1082,12 @@ async function normalizeItems(
     if (!assigned.has(typeId)) {
       throw new ApiError(400, 'This employee is not assigned that type of work')
     }
-    if (opts.cardTypes?.has(typeId) && !opts.allowDirect) {
-      throw new ApiError(400, 'This work type must be logged as cards')
+    if (opts.cardTypes?.has(typeId)) {
+      // Installation-style types can never be typed directly, even by an
+      // admin or a direct_counts holder — each job needs its own
+      // installation/device type, which a plain number cannot carry.
+      const mustBeCard = opts.installationTypeIds?.has(typeId) || !opts.allowDirect
+      if (mustBeCard) throw new ApiError(400, 'This work type must be logged as cards')
     }
     items[typeId] = units
   }
@@ -1066,6 +1104,7 @@ async function normalizeCards(
   const cards: Omit<EntryCardRow, 'id' | 'entry_id' | 'created_at'>[] = []
   if (!raw) return cards
   const assigned = new Set(await assignedTypeIds(env, employeeId))
+  const styles = await cardStylesByTypeId(env)
   for (const c of raw) {
     const typeId = c.work_type_id ?? ''
     if (!cardTypes.has(typeId)) {
@@ -1074,6 +1113,32 @@ async function normalizeCards(
     if (!assigned.has(typeId)) {
       throw new ApiError(400, 'This employee is not assigned that type of work')
     }
+
+    if (styles.get(typeId) === 'installation') {
+      const installationType = parseInstallationType(c.installation_type)
+      if (!installationType) throw new ApiError(400, 'Unknown installation type')
+      let deviceType: ReturnType<typeof parseDeviceType> = null
+      if (needsDeviceType(installationType)) {
+        deviceType = parseDeviceType(c.device_type)
+        if (!deviceType) throw new ApiError(400, 'Device type is required for this installation')
+      }
+      let action: ReturnType<typeof parseInstallationAction> = null
+      if (needsAction(installationType)) {
+        action = parseInstallationAction(c.installation_action)
+        if (!action) throw new ApiError(400, 'Say whether this was a new installation or a replacement')
+      }
+      cards.push({
+        work_type_id: typeId,
+        card_name: installationCardLabel(installationType, deviceType, action),
+        total_audits: 1,
+        time_completed: null,
+        installation_type: installationType,
+        device_type: deviceType,
+        installation_action: action,
+      })
+      continue
+    }
+
     // Card names are `retailer_country`. Spaces are a typo for the underscore
     // and used to split one card into two suggestions ("Boost us" vs
     // "Boost_us"), so they are folded here rather than left to the typist.
@@ -1081,7 +1146,15 @@ async function normalizeCards(
     if (!name) throw new ApiError(400, 'Each card needs a name')
     const audits = assertCount(c.total_audits ?? 0, 'total_audits')
     const time = c.time_completed ? String(c.time_completed).slice(0, 20) : null
-    cards.push({ work_type_id: typeId, card_name: name, total_audits: audits, time_completed: time })
+    cards.push({
+      work_type_id: typeId,
+      card_name: name,
+      total_audits: audits,
+      time_completed: time,
+      installation_type: null,
+      device_type: null,
+      installation_action: null,
+    })
   }
   return cards
 }
@@ -1105,14 +1178,16 @@ async function notifyAdminsOfCardClash(
        JOIN entries e ON e.id = c.entry_id
        JOIN employees emp ON emp.id = e.employee_id
        JOIN work_types wt ON wt.id = c.work_type_id
-      WHERE e.work_date = ? AND c.entry_id != ?`,
+      WHERE e.work_date = ? AND c.entry_id != ? AND wt.card_style != 'installation'`,
   )
     .bind(workDate, entryId)
     .all<SameDayCard & { entry_id: string }>()
   if (existing.length === 0) return
 
   const { results: mine } = await env.DB.prepare(
-    'SELECT card_name, work_type_id FROM entry_cards WHERE entry_id = ?',
+    `SELECT c.card_name, c.work_type_id FROM entry_cards c
+       JOIN work_types wt ON wt.id = c.work_type_id
+      WHERE c.entry_id = ? AND wt.card_style != 'installation'`,
   )
     .bind(entryId)
     .all<{ card_name: string; work_type_id: string }>()
@@ -1147,8 +1222,20 @@ async function writeEntryCards(
     env.DB.prepare('DELETE FROM entry_cards WHERE entry_id = ?').bind(entryId),
     ...cards.map((c) =>
       env.DB.prepare(
-        'INSERT INTO entry_cards (id, entry_id, work_type_id, card_name, total_audits, time_completed) VALUES (?, ?, ?, ?, ?, ?)',
-      ).bind(crypto.randomUUID(), entryId, c.work_type_id, c.card_name, c.total_audits, c.time_completed),
+        `INSERT INTO entry_cards
+           (id, entry_id, work_type_id, card_name, total_audits, time_completed, installation_type, device_type, installation_action)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        crypto.randomUUID(),
+        entryId,
+        c.work_type_id,
+        c.card_name,
+        c.total_audits,
+        c.time_completed,
+        c.installation_type,
+        c.device_type,
+        c.installation_action,
+      ),
     ),
   ]
   await env.DB.batch(statements)
@@ -1262,7 +1349,11 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
   }
   const cardTypes = await cardBasedTypeIds(env)
   const canDirect = user.role === 'admin' || parseRights(user).direct_counts
-  const items = await normalizeItems(env, employeeId, body.items, { cardTypes, allowDirect: canDirect })
+  const items = await normalizeItems(env, employeeId, body.items, {
+    cardTypes,
+    allowDirect: canDirect,
+    installationTypeIds: await installationTypeIds(env),
+  })
   const cards = await normalizeCards(env, employeeId, body.cards, cardTypes)
   const units = unitsWithCards(items, cards)
   const hours = computeHours(body.time_start!, body.time_end!)
@@ -1374,6 +1465,7 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
     const items = await normalizeItems(env, next.employee_id, body.items, {
       cardTypes,
       allowDirect: canDirect,
+      installationTypeIds: await installationTypeIds(env),
     })
     const cards = await normalizeCards(env, next.employee_id, body.cards, cardTypes)
     await writeEntryItems(env, id, unitsWithCards(items, cards))

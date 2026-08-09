@@ -69,6 +69,9 @@ export interface WorkTypeInfo {
   id: string
   name: string
   card_based?: number // 1 = logged as cards
+  /** 'audit' (Classification/QAP-style) or 'installation' (type + device).
+   * See shared/installations.ts. Only meaningful when card_based. */
+  card_style?: string
   // Admin-only fields; absent for regular employees.
   points_per_unit?: number
   active?: number
@@ -83,6 +86,10 @@ export interface EntryCard {
   card_name: string
   total_audits: number
   time_completed: string | null
+  /** Installation-style cards only (see shared/installations.ts). */
+  installation_type?: string | null
+  device_type?: string | null
+  installation_action?: string | null
 }
 
 export interface Me {

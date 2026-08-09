@@ -7,6 +7,17 @@ import {
   type CardClash,
   type SameDayCard,
 } from '../../shared/logic'
+import {
+  DEVICE_TYPES,
+  DEVICE_TYPE_LABELS,
+  INSTALLATION_ACTIONS,
+  INSTALLATION_ACTION_LABELS,
+  INSTALLATION_TYPES,
+  INSTALLATION_TYPE_LABELS,
+  needsAction,
+  needsDeviceType,
+  type InstallationType,
+} from '../../shared/installations'
 import { downloadCsv } from '../csv'
 import { useAuthStore } from '../stores/auth'
 import type { Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
@@ -56,11 +67,28 @@ const formTypes = computed(() => {
   return activeTypes.value.filter((w) => assigned.has(w.id))
 })
 
-// Card-based types are logged as cards unless the user may enter counts directly.
+// Installation-style cards (e.g. Telematics Installation) carry a type and,
+// for some types, a device make — never a free-text name, and never
+// duplicate-checked, since installing several of the same device in a day is
+// normal. See shared/installations.ts.
+const isInstallationType = (w: WorkTypeInfo) => w.card_style === 'installation'
+const deviceTypeRequired = (c: EntryCard) =>
+  needsDeviceType((c.installation_type ?? '') as InstallationType)
+const actionRequired = (c: EntryCard) =>
+  needsAction((c.installation_type ?? '') as InstallationType)
+
+// Card-based types are logged as cards unless the user may enter counts
+// directly — except installation types, which are always cards: a plain
+// number can't carry a per-job installation/device type.
 const canDirect = computed(() => auth.isAdmin || auth.rights.direct_counts)
-const isCardMode = (w: WorkTypeInfo) => Boolean(w.card_based) && !canDirect.value
+const isCardMode = (w: WorkTypeInfo) =>
+  Boolean(w.card_based) && (isInstallationType(w) || !canDirect.value)
 const numericTypes = computed(() => formTypes.value.filter((w) => !isCardMode(w)))
 const cardTypes = computed(() => formTypes.value.filter((w) => isCardMode(w)))
+
+const installationTypeIds = computed(
+  () => new Set(cardTypes.value.filter(isInstallationType).map((w) => w.id)),
+)
 
 /**
  * Card types grouped by their module, e.g. "Data Analytics".
@@ -82,9 +110,21 @@ const cardModules = computed(() => {
 
 const cardsFor = (typeId: string) =>
   form.value.cards.filter((c) => c.work_type_id === typeId)
-function addCard(typeId: string) {
+function addCard(wt: WorkTypeInfo) {
+  if (isInstallationType(wt)) {
+    form.value.cards.push({
+      work_type_id: wt.id,
+      card_name: '',
+      total_audits: 1,
+      time_completed: null,
+      installation_type: INSTALLATION_TYPES[0],
+      device_type: '',
+      installation_action: '',
+    })
+    return
+  }
   form.value.cards.push({
-    work_type_id: typeId,
+    work_type_id: wt.id,
     card_name: '',
     total_audits: 0,
     time_completed: '',
@@ -178,8 +218,9 @@ const askClash = ref(false)
 
 /** Cards in the form that were already done, by anyone, on this date. */
 async function findClashes(): Promise<CardClash[]> {
+  // Installation cards are never duplicate-checked — see shared/installations.ts.
   const proposed = form.value.cards
-    .filter((c) => c.card_name.trim())
+    .filter((c) => !installationTypeIds.value.has(c.work_type_id) && c.card_name.trim())
     .map((c) => ({ work_type_id: c.work_type_id, card_name: c.card_name.trim() }))
   if (proposed.length === 0) return []
   try {
@@ -227,13 +268,27 @@ async function submit() {
     }
     const cardIds = new Set(cardTypes.value.map((w) => w.id))
     const cards = form.value.cards
-      .filter((c) => cardIds.has(c.work_type_id) && c.card_name.trim())
-      .map((c) => ({
-        work_type_id: c.work_type_id,
-        card_name: c.card_name.trim(),
-        total_audits: Number(c.total_audits) || 0,
-        time_completed: c.time_completed || null,
-      }))
+      .filter((c) => cardIds.has(c.work_type_id))
+      .filter((c) =>
+        installationTypeIds.value.has(c.work_type_id)
+          ? Boolean(c.installation_type)
+          : c.card_name.trim(),
+      )
+      .map((c) =>
+        installationTypeIds.value.has(c.work_type_id)
+          ? {
+              work_type_id: c.work_type_id,
+              installation_type: c.installation_type,
+              device_type: c.device_type || undefined,
+              installation_action: c.installation_action || undefined,
+            }
+          : {
+              work_type_id: c.work_type_id,
+              card_name: c.card_name.trim(),
+              total_audits: Number(c.total_audits) || 0,
+              time_completed: c.time_completed || null,
+            },
+      )
     const payload = {
       employee_id: form.value.employee_id,
       work_date: form.value.work_date,
@@ -428,93 +483,195 @@ const tableColspan = computed(
               {{ wt.name }} cards
               <span class="mono ml-2 text-teal">{{ cardsFor(wt.id).length }}</span>
             </span>
-            <button type="button" class="btn btn-sm" @click="addCard(wt.id)">
+            <button type="button" class="btn btn-sm" @click="addCard(wt)">
               + Add card
             </button>
           </div>
-          <!-- Previously used names for this type. A datalist suggests them
-               while still allowing a new name to be typed. -->
-          <datalist :id="`card-names-${wt.id}`">
-            <option v-for="n in namesFor(wt.id)" :key="n" :value="n" />
-          </datalist>
-          <!-- One set of column headings for the whole list. Hidden below md,
-               where the row grid collapses and each field carries its own. -->
-          <div
-            v-if="cardsFor(wt.id).length > 0"
-            class="mb-1 hidden gap-2 md:grid md:grid-cols-[2fr_1fr_1fr_auto]"
-          >
-            <span class="field-label">Card name</span>
-            <span class="field-label">Total audits</span>
-            <span class="field-label">Time completed</span>
-            <span aria-hidden="true" />
-          </div>
-          <div
-            v-for="(c, i) in cardsFor(wt.id)"
-            :key="i"
-            class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]"
-          >
-            <!-- The label wrappers carry `md:hidden`, not the labels:
-                 `.field-label` sets `display: block` from unlayered CSS, which
-                 outranks Tailwind's layered utilities and would win. -->
-            <div>
-              <div class="md:hidden">
-                <label class="field-label" :for="`card-${wt.id}-${i}-name`">
-                  Card name
-                </label>
-              </div>
-              <input
-                :id="`card-${wt.id}-${i}-name`"
-                v-model="c.card_name"
-                :list="`card-names-${wt.id}`"
-                autocomplete="off"
-                :placeholder="namesFor(wt.id).length ? 'Pick or type a name' : 'Card name'"
-                class="field-input"
-              />
-            </div>
-            <div>
-              <div class="md:hidden">
-                <label class="field-label" :for="`card-${wt.id}-${i}-audits`">
-                  Total audits
-                </label>
-              </div>
-              <input
-                :id="`card-${wt.id}-${i}-audits`"
-                v-model.number="c.total_audits"
-                type="number"
-                min="0"
-                step="1"
-                placeholder="Total audits"
-                class="field-input mono"
-              />
-            </div>
-            <div>
-              <div class="md:hidden">
-                <label class="field-label" :for="`card-${wt.id}-${i}-time`">
-                  Time completed
-                </label>
-              </div>
-              <input
-                :id="`card-${wt.id}-${i}-time`"
-                v-model="c.time_completed"
-                type="time"
-                class="field-input mono"
-              />
-            </div>
-            <!-- Full-width on a one-column phone layout reads as an error bar,
-                 so keep it shrink-wrapped and right-aligned there. -->
-            <button
-              type="button"
-              class="btn btn-sm btn-danger justify-self-end md:self-start"
-              :aria-label="`Remove card ${i + 1}`"
-              @click="removeCard(c)"
+          <!-- Installation-style cards: a type, and for some types a device
+               make — no free-text name, no duplicate check (see
+               shared/installations.ts). -->
+          <template v-if="isInstallationType(wt)">
+            <div
+              v-if="cardsFor(wt.id).length > 0"
+              class="mb-1 hidden gap-2 md:grid md:grid-cols-[1fr_1fr_1fr_auto]"
             >
-              <span class="md:hidden">Remove</span>
-              <span class="hidden md:inline">✕</span>
-            </button>
-          </div>
-          <p v-if="cardsFor(wt.id).length === 0" class="text-xs text-muted">
-            No cards yet — add one per {{ wt.name }} card completed.
-          </p>
+              <span class="field-label">Installation type</span>
+              <span class="field-label">New or replacement</span>
+              <span class="field-label">Device type</span>
+              <span aria-hidden="true" />
+            </div>
+            <div
+              v-for="(c, i) in cardsFor(wt.id)"
+              :key="i"
+              class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
+            >
+              <div>
+                <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-itype`">
+                    Installation type
+                  </label>
+                </div>
+                <select
+                  :id="`card-${wt.id}-${i}-itype`"
+                  v-model="c.installation_type"
+                  class="field-input"
+                >
+                  <option v-for="t in INSTALLATION_TYPES" :key="t" :value="t">
+                    {{ INSTALLATION_TYPE_LABELS[t] }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-action`">
+                    New or replacement
+                  </label>
+                </div>
+                <select
+                  v-if="actionRequired(c)"
+                  :id="`card-${wt.id}-${i}-action`"
+                  v-model="c.installation_action"
+                  class="field-input"
+                >
+                  <option value="" disabled>Select…</option>
+                  <option v-for="a in INSTALLATION_ACTIONS" :key="a" :value="a">
+                    {{ INSTALLATION_ACTION_LABELS[a] }}
+                  </option>
+                </select>
+                <input
+                  v-else
+                  :id="`card-${wt.id}-${i}-action`"
+                  value="Not applicable"
+                  readonly
+                  class="field-input text-muted"
+                />
+              </div>
+              <div>
+                <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-device`">
+                    Device type
+                  </label>
+                </div>
+                <select
+                  v-if="deviceTypeRequired(c)"
+                  :id="`card-${wt.id}-${i}-device`"
+                  v-model="c.device_type"
+                  class="field-input"
+                >
+                  <option value="" disabled>Select…</option>
+                  <option v-for="d in DEVICE_TYPES" :key="d" :value="d">
+                    {{ DEVICE_TYPE_LABELS[d] }}
+                  </option>
+                </select>
+                <input
+                  v-else
+                  :id="`card-${wt.id}-${i}-device`"
+                  value="Not applicable"
+                  readonly
+                  class="field-input text-muted"
+                />
+              </div>
+              <button
+                type="button"
+                class="btn btn-sm btn-danger justify-self-end md:self-start"
+                :aria-label="`Remove card ${i + 1}`"
+                @click="removeCard(c)"
+              >
+                <span class="md:hidden">Remove</span>
+                <span class="hidden md:inline">✕</span>
+              </button>
+            </div>
+            <p v-if="cardsFor(wt.id).length === 0" class="text-xs text-muted">
+              No installations yet — add one per job completed.
+            </p>
+          </template>
+
+          <template v-else>
+            <!-- Previously used names for this type. A datalist suggests them
+                 while still allowing a new name to be typed. -->
+            <datalist :id="`card-names-${wt.id}`">
+              <option v-for="n in namesFor(wt.id)" :key="n" :value="n" />
+            </datalist>
+            <!-- One set of column headings for the whole list. Hidden below
+                 md, where the row grid collapses and each field carries its
+                 own. -->
+            <div
+              v-if="cardsFor(wt.id).length > 0"
+              class="mb-1 hidden gap-2 md:grid md:grid-cols-[2fr_1fr_1fr_auto]"
+            >
+              <span class="field-label">Card name</span>
+              <span class="field-label">Total audits</span>
+              <span class="field-label">Time completed</span>
+              <span aria-hidden="true" />
+            </div>
+            <div
+              v-for="(c, i) in cardsFor(wt.id)"
+              :key="i"
+              class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[2fr_1fr_1fr_auto]"
+            >
+              <!-- The label wrappers carry `md:hidden`, not the labels:
+                   `.field-label` sets `display: block` from unlayered CSS,
+                   which outranks Tailwind's layered utilities and would win. -->
+              <div>
+                <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-name`">
+                    Card name
+                  </label>
+                </div>
+                <input
+                  :id="`card-${wt.id}-${i}-name`"
+                  v-model="c.card_name"
+                  :list="`card-names-${wt.id}`"
+                  autocomplete="off"
+                  :placeholder="namesFor(wt.id).length ? 'Pick or type a name' : 'Card name'"
+                  class="field-input"
+                />
+              </div>
+              <div>
+                <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-audits`">
+                    Total audits
+                  </label>
+                </div>
+                <input
+                  :id="`card-${wt.id}-${i}-audits`"
+                  v-model.number="c.total_audits"
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="Total audits"
+                  class="field-input mono"
+                />
+              </div>
+              <div>
+                <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-time`">
+                    Time completed
+                  </label>
+                </div>
+                <input
+                  :id="`card-${wt.id}-${i}-time`"
+                  v-model="c.time_completed"
+                  type="time"
+                  class="field-input mono"
+                />
+              </div>
+              <!-- Full-width on a one-column phone layout reads as an error
+                   bar, so keep it shrink-wrapped and right-aligned there. -->
+              <button
+                type="button"
+                class="btn btn-sm btn-danger justify-self-end md:self-start"
+                :aria-label="`Remove card ${i + 1}`"
+                @click="removeCard(c)"
+              >
+                <span class="md:hidden">Remove</span>
+                <span class="hidden md:inline">✕</span>
+              </button>
+            </div>
+            <p v-if="cardsFor(wt.id).length === 0" class="text-xs text-muted">
+              No cards yet — add one per {{ wt.name }} card completed.
+            </p>
+          </template>
           </div>
         </template>
         <div class="col-span-2 md:col-span-4">

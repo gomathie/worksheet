@@ -153,6 +153,9 @@ export interface WorkTypeRow {
   card_based: number // 1 = logged as individual cards, not a typed count
   /** Optional grouping label, e.g. 'Data Analytics'. NULL = ungrouped. */
   module: string | null
+  /** 'audit' (Classification/QAP-style, duplicate-checked) or 'installation'
+   * (type + device, never duplicate-checked). See shared/installations.ts. */
+  card_style: string
   created_at: string
 }
 
@@ -169,6 +172,10 @@ export interface EntryCardRow {
   card_name: string
   total_audits: number
   time_completed: string | null
+  /** Set only for installation-style cards; NULL for audit-style ones. */
+  installation_type: string | null
+  device_type: string | null
+  installation_action: string | null
   created_at: string
 }
 

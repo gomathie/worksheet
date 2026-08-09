@@ -40,7 +40,7 @@ export function groupByDay<T>(
 }
 
 /**
- * "Fri, 7 Aug 2026" — parsed as UTC so the weekday matches the stored date
+ * "Fri, Aug 7, 2026" — parsed as UTC so the weekday matches the stored date
  * regardless of the viewer's own time zone.
  */
 export function formatDayHeading(date: string): string {

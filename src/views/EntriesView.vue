@@ -17,6 +17,7 @@ import {
   type InstallationType,
 } from '../../shared/installations'
 import { downloadCsv } from '../csv'
+import { formatDayHeading, groupByDay } from '../dates'
 import { useAuthStore } from '../stores/auth'
 import type { DeviceTypeInfo, Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
 
@@ -425,45 +426,13 @@ const tableColspan = computed(
 // two unrelated rows that happen to share a date. Grouping here is purely a
 // display concern: `entries` itself, and everything keyed off it (CSV
 // export, the daily-limit check), stays a flat list.
-interface DayGroup {
-  date: string
-  entries: Entry[]
-  totalHours: number
-}
-
-const dayGroups = computed<DayGroup[]>(() => {
-  const order: string[] = []
-  const byDate = new Map<string, Entry[]>()
-  // entries is already ORDER BY work_date DESC, time_start DESC from the
-  // server, so first-seen order here is already the right day order.
-  for (const e of entries.value) {
-    if (!byDate.has(e.work_date)) {
-      byDate.set(e.work_date, [])
-      order.push(e.work_date)
-    }
-    byDate.get(e.work_date)!.push(e)
-  }
-  return order.map((date) => {
-    const dayEntries = byDate.get(date)!
-    return {
-      date,
-      entries: dayEntries,
-      totalHours: Math.round(dayEntries.reduce((sum, e) => sum + e.hours, 0) * 100) / 100,
-    }
-  })
-})
-
-/** "Fri, 7 Aug 2026" — parsed as UTC so the weekday matches the stored date
- * regardless of the viewer's own time zone. */
-function formatDayHeading(date: string): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
+const dayGroups = computed(() =>
+  groupByDay(
+    entries.value,
+    (e) => e.work_date,
+    (e) => e.hours,
+  ),
+)
 </script>
 
 <template>
@@ -920,12 +889,12 @@ function formatDayHeading(date: string): string {
                 <td :colspan="tableColspan">
                   {{ formatDayHeading(g.date) }}
                   <span class="mono ml-2 text-teal">{{ g.totalHours.toFixed(2) }}h</span>
-                  <span v-if="g.entries.length > 1" class="ml-2 normal-case text-muted"
-                    >· {{ g.entries.length }} entries</span
+                  <span v-if="g.rows.length > 1" class="ml-2 normal-case text-muted"
+                    >· {{ g.rows.length }} entries</span
                   >
                 </td>
               </tr>
-              <tr v-for="e in g.entries" :key="e.id">
+              <tr v-for="e in g.rows" :key="e.id">
                 <td class="mono whitespace-nowrap">{{ e.work_date }}</td>
                 <td v-if="auth.isAdmin">{{ e.employee_name }}</td>
                 <td class="num">{{ e.time_start }}</td>

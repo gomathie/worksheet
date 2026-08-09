@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
+import { formatDayHeading, groupByDay } from '../dates'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
 import DailyBarChart from '../components/DailyBarChart.vue'
@@ -51,6 +52,16 @@ watch(month, load)
 
 const money = (n: number) =>
   `${report.value?.settings.currency ?? '$'}${n.toFixed(2)}`
+
+// Same grouping as the Recent entries table: a day worked (or logged) more
+// than once is one day, not several unrelated rows sharing a date.
+const dailyGroups = computed(() =>
+  groupByDay(
+    report.value?.daily_detail ?? [],
+    (row) => row.date,
+    (row) => row.hours,
+  ),
+)
 </script>
 
 <template>
@@ -225,15 +236,26 @@ const money = (n: number) =>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(row, i) in report.daily_detail" :key="i">
-                <td class="mono whitespace-nowrap">{{ row.date }}</td>
-                <td>{{ row.employee_name }}</td>
-                <td class="num">{{ row.hours.toFixed(2) }}</td>
-                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
-                  {{ row.units[wt.id] ?? 0 }}
-                </td>
-              </tr>
-              <tr v-if="report.daily_detail.length === 0">
+              <template v-for="g in dailyGroups" :key="g.date">
+                <tr class="group-head">
+                  <td :colspan="3 + visibleTypes.length">
+                    {{ formatDayHeading(g.date) }}
+                    <span class="mono ml-2 text-teal">{{ g.totalHours.toFixed(2) }}h</span>
+                    <span v-if="g.rows.length > 1" class="ml-2 normal-case text-muted"
+                      >· {{ g.rows.length }} entries</span
+                    >
+                  </td>
+                </tr>
+                <tr v-for="(row, i) in g.rows" :key="i">
+                  <td class="mono whitespace-nowrap">{{ row.date }}</td>
+                  <td>{{ row.employee_name }}</td>
+                  <td class="num">{{ row.hours.toFixed(2) }}</td>
+                  <td v-for="wt in visibleTypes" :key="wt.id" class="num">
+                    {{ row.units[wt.id] ?? 0 }}
+                  </td>
+                </tr>
+              </template>
+              <tr v-if="dailyGroups.length === 0">
                 <td :colspan="3 + visibleTypes.length" class="py-6 text-center text-muted">
                   No entries this month.
                 </td>

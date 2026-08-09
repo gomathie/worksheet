@@ -39,6 +39,14 @@ export interface DepartmentRow {
   created_at: string
 }
 
+export interface DeviceTypeRow {
+  id: string
+  name: string
+  active: number
+  position: number
+  created_at: string
+}
+
 export interface ExpenseCategoryRow {
   id: string
   name: string
@@ -176,6 +184,9 @@ export interface EntryCardRow {
   installation_type: string | null
   device_type: string | null
   installation_action: string | null
+  /** The faulty unit that came out — only set when installation_action is
+   * 'replacement'; NULL for a new install (nothing was removed). */
+  replaced_device_type: string | null
   created_at: string
 }
 

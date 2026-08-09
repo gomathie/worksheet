@@ -8,8 +8,6 @@ import {
   type SameDayCard,
 } from '../../shared/logic'
 import {
-  DEVICE_TYPES,
-  DEVICE_TYPE_LABELS,
   INSTALLATION_ACTIONS,
   INSTALLATION_ACTION_LABELS,
   INSTALLATION_TYPES,
@@ -20,12 +18,13 @@ import {
 } from '../../shared/installations'
 import { downloadCsv } from '../csv'
 import { useAuthStore } from '../stores/auth'
-import type { Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
+import type { DeviceTypeInfo, Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
 
 const auth = useAuthStore()
 
 const employees = ref<Employee[]>([])
 const workTypes = ref<WorkTypeInfo[]>([])
+const deviceTypes = ref<DeviceTypeInfo[]>([])
 const entries = ref<Entry[]>([])
 const month = ref('')
 const filterEmployee = ref('')
@@ -76,6 +75,10 @@ const deviceTypeRequired = (c: EntryCard) =>
   needsDeviceType((c.installation_type ?? '') as InstallationType)
 const actionRequired = (c: EntryCard) =>
   needsAction((c.installation_type ?? '') as InstallationType)
+// Which make came out — only asked on a replacement, and only once a device
+// type is part of this installation type at all.
+const replacedDeviceRequired = (c: EntryCard) =>
+  deviceTypeRequired(c) && c.installation_action === 'replacement'
 
 // Card-based types are logged as cards unless the user may enter counts
 // directly — except installation types, which are always cards: a plain
@@ -120,6 +123,7 @@ function addCard(wt: WorkTypeInfo) {
       installation_type: INSTALLATION_TYPES[0],
       device_type: '',
       installation_action: '',
+      replaced_device_type: '',
     })
     return
   }
@@ -171,9 +175,10 @@ onMounted(async () => {
   month.value = today.slice(0, 7)
   form.value.work_date = today
   form.value.employee_id = auth.user!.id
-  ;[employees.value, workTypes.value] = await Promise.all([
+  ;[employees.value, workTypes.value, deviceTypes.value] = await Promise.all([
     api<Employee[]>('/api/employees'),
     api<WorkTypeInfo[]>('/api/work-types'),
+    api<DeviceTypeInfo[]>('/api/device-types'),
   ])
   await Promise.all([loadEntries(), loadCardNames()])
 })
@@ -281,6 +286,7 @@ async function submit() {
               installation_type: c.installation_type,
               device_type: c.device_type || undefined,
               installation_action: c.installation_action || undefined,
+              replaced_device_type: c.replaced_device_type || undefined,
             }
           : {
               work_type_id: c.work_type_id,
@@ -493,17 +499,18 @@ const tableColspan = computed(
           <template v-if="isInstallationType(wt)">
             <div
               v-if="cardsFor(wt.id).length > 0"
-              class="mb-1 hidden gap-2 md:grid md:grid-cols-[1fr_1fr_1fr_auto]"
+              class="mb-1 hidden gap-2 md:grid md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
             >
               <span class="field-label">Installation type</span>
               <span class="field-label">New or replacement</span>
+              <span class="field-label">Replaced device</span>
               <span class="field-label">Device type</span>
               <span aria-hidden="true" />
             </div>
             <div
               v-for="(c, i) in cardsFor(wt.id)"
               :key="i"
-              class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_auto]"
+              class="mb-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
             >
               <div>
                 <div class="md:hidden">
@@ -548,6 +555,33 @@ const tableColspan = computed(
               </div>
               <div>
                 <div class="md:hidden">
+                  <label class="field-label" :for="`card-${wt.id}-${i}-replaced`">
+                    Replaced device
+                  </label>
+                </div>
+                <!-- Which make came out — a replacement only, so reporting can
+                     answer "which devices are mostly faulty". -->
+                <select
+                  v-if="replacedDeviceRequired(c)"
+                  :id="`card-${wt.id}-${i}-replaced`"
+                  v-model="c.replaced_device_type"
+                  class="field-input"
+                >
+                  <option value="" disabled>Select…</option>
+                  <option v-for="d in deviceTypes" :key="d.id" :value="d.id">
+                    {{ d.name }}
+                  </option>
+                </select>
+                <input
+                  v-else
+                  :id="`card-${wt.id}-${i}-replaced`"
+                  value="Not applicable"
+                  readonly
+                  class="field-input text-muted"
+                />
+              </div>
+              <div>
+                <div class="md:hidden">
                   <label class="field-label" :for="`card-${wt.id}-${i}-device`">
                     Device type
                   </label>
@@ -559,8 +593,8 @@ const tableColspan = computed(
                   class="field-input"
                 >
                   <option value="" disabled>Select…</option>
-                  <option v-for="d in DEVICE_TYPES" :key="d" :value="d">
-                    {{ DEVICE_TYPE_LABELS[d] }}
+                  <option v-for="d in deviceTypes" :key="d.id" :value="d.id">
+                    {{ d.name }}
                   </option>
                 </select>
                 <input

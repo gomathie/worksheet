@@ -9,7 +9,7 @@ import {
   isOverdue,
   type TaskStatus,
 } from '../../shared/tasks'
-import type { Task } from '../types'
+import type { Employee, Task } from '../types'
 
 // A single task, Jira-issue-style: the code, its state, and everything
 // about it in one place — deliberately simple, no comment thread or activity
@@ -20,10 +20,15 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const task = ref<Task | null>(null)
+const employees = ref<Employee[]>([])
 const error = ref('')
 const busy = ref(false)
 
 const id = computed(() => route.params.id as string)
+
+// Assigning work to someone else is what the right is for; matches the same
+// gate TasksView uses for its own assignee picker.
+const canManage = computed(() => auth.isAdmin || auth.rights.manage_tasks)
 
 async function load() {
   error.value = ''
@@ -33,7 +38,12 @@ async function load() {
     error.value = e instanceof Error ? e.message : 'Failed to load task'
   }
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  if (canManage.value) {
+    employees.value = (await api<Employee[]>('/api/employees')).filter((e) => e.active)
+  }
+})
 
 const can = (a: 'edit' | 'delete' | 'set_status') => task.value?.actions.includes(a) ?? false
 
@@ -42,6 +52,22 @@ const statusTone: Record<TaskStatus, string> = {
   in_progress: 'border-amber text-amber',
   done: 'border-teal bg-teal-soft text-teal',
   cancelled: 'border-line text-muted',
+}
+
+async function reassign(assigneeId: string) {
+  if (!task.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    task.value = await api<Task>(`/api/tasks/${id.value}`, {
+      method: 'PATCH',
+      json: { assignee_id: assigneeId || null },
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to reassign the task'
+  } finally {
+    busy.value = false
+  }
 }
 
 async function setStatus(status: TaskStatus) {
@@ -114,7 +140,18 @@ async function remove() {
       <div class="mb-5 grid grid-cols-2 gap-4 border-t border-line pt-4 text-sm sm:grid-cols-3">
         <div>
           <p class="field-label">Assigned to</p>
-          <p>{{ task.assignee_name ?? 'Unassigned' }}</p>
+          <select
+            v-if="canManage"
+            :value="task.assignee_id ?? ''"
+            class="field-input !w-auto"
+            :disabled="busy"
+            aria-label="Reassign task"
+            @change="reassign(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">Nobody yet</option>
+            <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </select>
+          <p v-else>{{ task.assignee_name ?? 'Unassigned' }}</p>
         </div>
         <div>
           <p class="field-label">Raised by</p>

@@ -90,6 +90,7 @@ export interface EntryCard {
   installation_type?: string | null
   device_type?: string | null
   installation_action?: string | null
+  replaced_device_type?: string | null
 }
 
 export interface Me {
@@ -240,8 +241,18 @@ export interface InstallationsReport {
   year: string
   months: string[]
   total: number[]
+  /** Keyed by device name, not id — resolved server-side. */
   by_device: Record<string, number[]>
   by_action: Record<string, number[]>
+  /** Which makes came out on a replacement — answers "what's mostly faulty". */
+  by_replaced_device: Record<string, number[]>
+}
+
+export interface DeviceTypeInfo {
+  id: string
+  name: string
+  active?: number
+  position?: number
 }
 
 export interface TrendData {

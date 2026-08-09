@@ -1,6 +1,7 @@
 import type {
   AbsenceRow,
   AdjustmentRow,
+  DeviceTypeRow,
   Employee,
   EntryCardRow,
   EntryItemRow,
@@ -56,7 +57,6 @@ import {
   installationCardLabel,
   needsAction,
   needsDeviceType,
-  parseDeviceType,
   parseInstallationAction,
   parseInstallationType,
 } from '../../shared/installations'
@@ -289,37 +289,65 @@ async function installationsReport(request: Request, env: Env): Promise<Response
     : todayInTz(env.TEAM_TZ ?? 'Africa/Accra').slice(0, 4)
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
 
+  // Device names are resolved here (LEFT JOIN, twice — once for what went
+  // in, once for what came out on a replacement) so the response is keyed by
+  // name directly: nothing downstream needs a separate device-types lookup,
+  // and a device type renamed or deactivated later doesn't orphan old rows.
   const { results } = await env.DB.prepare(
-    `SELECT substr(e.work_date, 1, 7) AS month, c.device_type, c.installation_action, COUNT(*) AS n
+    `SELECT substr(e.work_date, 1, 7) AS month,
+            dt.name AS device_name, rdt.name AS replaced_device_name,
+            c.installation_action, COUNT(*) AS n
        FROM entry_cards c
        JOIN entries e ON e.id = c.entry_id
        JOIN work_types wt ON wt.id = c.work_type_id
+       LEFT JOIN device_types dt ON dt.id = c.device_type
+       LEFT JOIN device_types rdt ON rdt.id = c.replaced_device_type
       WHERE wt.card_style = 'installation' AND substr(e.work_date, 1, 4) = ?
-      GROUP BY month, c.device_type, c.installation_action`,
+      GROUP BY month, dt.name, rdt.name, c.installation_action`,
   )
     .bind(year)
-    .all<{ month: string; device_type: string | null; installation_action: string | null; n: number }>()
+    .all<{
+      month: string
+      device_name: string | null
+      replaced_device_name: string | null
+      installation_action: string | null
+      n: number
+    }>()
 
   const idx = new Map(months.map((m, i) => [m, i]))
   const zeros = () => Array(12).fill(0)
   const total = zeros()
   const byDevice: Record<string, number[]> = {}
   const byAction: Record<string, number[]> = {}
+  // Which makes get replaced, and how often — the answer to "which devices
+  // are mostly faulty and likely to be replaced".
+  const byReplacedDevice: Record<string, number[]> = {}
   for (const r of results) {
     const i = idx.get(r.month)
     if (i === undefined) continue
     total[i] += r.n
-    if (r.device_type) {
-      byDevice[r.device_type] ??= zeros()
-      byDevice[r.device_type][i] += r.n
+    if (r.device_name) {
+      byDevice[r.device_name] ??= zeros()
+      byDevice[r.device_name][i] += r.n
     }
     if (r.installation_action) {
       byAction[r.installation_action] ??= zeros()
       byAction[r.installation_action][i] += r.n
     }
+    if (r.replaced_device_name) {
+      byReplacedDevice[r.replaced_device_name] ??= zeros()
+      byReplacedDevice[r.replaced_device_name][i] += r.n
+    }
   }
 
-  return json({ year, months, total, by_device: byDevice, by_action: byAction })
+  return json({
+    year,
+    months,
+    total,
+    by_device: byDevice,
+    by_action: byAction,
+    by_replaced_device: byReplacedDevice,
+  })
 }
 
 /**
@@ -455,6 +483,73 @@ async function patchWorkType(
     .bind(id)
     .first<WorkTypeRow>()
   return json(updated)
+}
+
+// ------------------------------------------------------------- device types
+//
+// The device makes offered on an installation card (Teltonika, Concox, ...).
+// Admin-managed like work types and departments, rather than a fixed list in
+// code, so a newly-carried brand doesn't need a deploy. See
+// shared/installations.ts for how a card's device_type/replaced_device_type
+// use these ids.
+
+async function listDeviceTypes(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const { results } = await env.DB.prepare(
+    'SELECT * FROM device_types ORDER BY position, created_at',
+  ).all<DeviceTypeRow>()
+  if (user.role === 'admin') return json(results)
+  return json(results.filter((d) => d.active).map((d) => ({ id: d.id, name: d.name })))
+}
+
+async function createDeviceType(request: Request, env: Env): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const body = await readJson<{ name?: string }>(request)
+  const name = (body.name ?? '').trim().slice(0, 60)
+  if (!name) throw new ApiError(400, 'name is required')
+  const id = crypto.randomUUID()
+  try {
+    await env.DB.prepare(
+      'INSERT INTO device_types (id, name, position) VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM device_types))',
+    )
+      .bind(id, name)
+      .run()
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) throw new ApiError(409, 'That device type already exists')
+    throw e
+  }
+  await audit(env, admin.id, 'create_device_type', id, { name })
+  return json(await env.DB.prepare('SELECT * FROM device_types WHERE id = ?').bind(id).first(), 201)
+}
+
+async function patchDeviceType(request: Request, env: Env, id: string): Promise<Response> {
+  const admin = await requireAdmin(request, env)
+  const existing = await env.DB.prepare('SELECT * FROM device_types WHERE id = ?')
+    .bind(id)
+    .first<DeviceTypeRow>()
+  if (!existing) throw new ApiError(404, 'Device type not found')
+  const body = await readJson<{ name?: string; active?: number | boolean }>(request)
+  const name = body.name !== undefined ? String(body.name).trim().slice(0, 60) : existing.name
+  if (!name) throw new ApiError(400, 'name cannot be empty')
+  const active = body.active !== undefined ? (body.active ? 1 : 0) : existing.active
+  try {
+    await env.DB.prepare('UPDATE device_types SET name = ?, active = ? WHERE id = ?')
+      .bind(name, active, id)
+      .run()
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) throw new ApiError(409, 'That device type already exists')
+    throw e
+  }
+  await audit(env, admin.id, 'update_device_type', id, { name, active })
+  return json(await env.DB.prepare('SELECT * FROM device_types WHERE id = ?').bind(id).first())
+}
+
+/** Active device types, id -> name — for validating/labelling installation cards. */
+async function activeDeviceTypes(env: Env): Promise<Map<string, string>> {
+  const { results } = await env.DB.prepare(
+    'SELECT id, name FROM device_types WHERE active = 1',
+  ).all<{ id: string; name: string }>()
+  return new Map(results.map((r) => [r.id, r.name]))
 }
 
 // --------------------------------------------- per-employee work assignments
@@ -1078,6 +1173,9 @@ interface CardInput {
   installation_type?: string
   device_type?: string
   installation_action?: string
+  /** The faulty unit that came out — only meaningful (and required) when
+   * installation_action is 'replacement'. */
+  replaced_device_type?: string
 }
 
 interface EntryBody {
@@ -1157,6 +1255,9 @@ async function normalizeCards(
   if (!raw) return cards
   const assigned = new Set(await assignedTypeIds(env, employeeId))
   const styles = await cardStylesByTypeId(env)
+  // Only fetched if actually needed — most saves are ordinary audit cards.
+  let deviceTypes: Map<string, string> | null = null
+
   for (const c of raw) {
     const typeId = c.work_type_id ?? ''
     if (!cardTypes.has(typeId)) {
@@ -1169,24 +1270,43 @@ async function normalizeCards(
     if (styles.get(typeId) === 'installation') {
       const installationType = parseInstallationType(c.installation_type)
       if (!installationType) throw new ApiError(400, 'Unknown installation type')
-      let deviceType: ReturnType<typeof parseDeviceType> = null
-      if (needsDeviceType(installationType)) {
-        deviceType = parseDeviceType(c.device_type)
-        if (!deviceType) throw new ApiError(400, 'Device type is required for this installation')
-      }
+
       let action: ReturnType<typeof parseInstallationAction> = null
       if (needsAction(installationType)) {
         action = parseInstallationAction(c.installation_action)
         if (!action) throw new ApiError(400, 'Say whether this was a new installation or a replacement')
       }
+
+      let deviceTypeId: string | null = null
+      let deviceName: string | null = null
+      let replacedDeviceTypeId: string | null = null
+      let replacedDeviceName: string | null = null
+      if (needsDeviceType(installationType)) {
+        deviceTypes ??= await activeDeviceTypes(env)
+        deviceName = c.device_type ? (deviceTypes.get(c.device_type) ?? null) : null
+        if (!deviceName) throw new ApiError(400, 'Device type is required for this installation')
+        deviceTypeId = c.device_type!
+
+        if (action === 'replacement') {
+          replacedDeviceName = c.replaced_device_type
+            ? (deviceTypes.get(c.replaced_device_type) ?? null)
+            : null
+          if (!replacedDeviceName) {
+            throw new ApiError(400, 'Say which device type was replaced')
+          }
+          replacedDeviceTypeId = c.replaced_device_type!
+        }
+      }
+
       cards.push({
         work_type_id: typeId,
-        card_name: installationCardLabel(installationType, deviceType, action),
+        card_name: installationCardLabel(installationType, deviceName, action, replacedDeviceName),
         total_audits: 1,
         time_completed: null,
         installation_type: installationType,
-        device_type: deviceType,
+        device_type: deviceTypeId,
         installation_action: action,
+        replaced_device_type: replacedDeviceTypeId,
       })
       continue
     }
@@ -1206,6 +1326,7 @@ async function normalizeCards(
       installation_type: null,
       device_type: null,
       installation_action: null,
+      replaced_device_type: null,
     })
   }
   return cards
@@ -1275,8 +1396,8 @@ async function writeEntryCards(
     ...cards.map((c) =>
       env.DB.prepare(
         `INSERT INTO entry_cards
-           (id, entry_id, work_type_id, card_name, total_audits, time_completed, installation_type, device_type, installation_action)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, entry_id, work_type_id, card_name, total_audits, time_completed, installation_type, device_type, installation_action, replaced_device_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).bind(
         crypto.randomUUID(),
         entryId,
@@ -1287,6 +1408,7 @@ async function writeEntryCards(
         c.installation_type,
         c.device_type,
         c.installation_action,
+        c.replaced_device_type,
       ),
     ),
   ]
@@ -2628,6 +2750,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/work-types' && method === 'POST') return createWorkType(request, env)
   const wtMatch = /^\/api\/work-types\/([\w-]+)$/.exec(path)
   if (wtMatch && method === 'PATCH') return patchWorkType(request, env, wtMatch[1])
+
+  if (path === '/api/device-types' && method === 'GET') return listDeviceTypes(request, env)
+  if (path === '/api/device-types' && method === 'POST') return createDeviceType(request, env)
+  const dtMatch = /^\/api\/device-types\/([\w-]+)$/.exec(path)
+  if (dtMatch && method === 'PATCH') return patchDeviceType(request, env, dtMatch[1])
 
   if (path === '/api/employees' && method === 'GET') return listEmployees(request, env)
   if (path === '/api/employees' && method === 'POST') return createEmployee(request, env)

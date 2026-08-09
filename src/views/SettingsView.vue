@@ -5,6 +5,7 @@ import { downloadJson } from '../csv'
 import PasswordField from '../components/PasswordField.vue'
 import type {
   Department,
+  DeviceTypeInfo,
   ExpenseCategory,
   RateSettings,
   WorkflowConfig,
@@ -36,6 +37,39 @@ async function loadTypes() {
   workTypes.value = await api<WorkTypeInfo[]>('/api/work-types')
 }
 
+// ------------------------------------------------------------ device types
+const deviceTypes = ref<DeviceTypeInfo[]>([])
+const newDeviceType = ref('')
+
+async function loadDeviceTypes() {
+  deviceTypes.value = await api<DeviceTypeInfo[]>('/api/device-types')
+}
+
+function addDeviceType() {
+  return run(async () => {
+    await api('/api/device-types', { method: 'POST', json: { name: newDeviceType.value } })
+    newDeviceType.value = ''
+    await loadDeviceTypes()
+  })
+}
+
+function saveDeviceType(d: DeviceTypeInfo) {
+  return run(async () => {
+    await api(`/api/device-types/${d.id}`, { method: 'PATCH', json: { name: d.name } })
+    await loadDeviceTypes()
+  })
+}
+
+function toggleDeviceType(d: DeviceTypeInfo) {
+  return run(async () => {
+    await api(`/api/device-types/${d.id}`, {
+      method: 'PATCH',
+      json: { active: d.active ? 0 : 1 },
+    })
+    await loadDeviceTypes()
+  })
+}
+
 async function loadExpenseConfig() {
   ;[departments.value, categories.value, workflow.value] = await Promise.all([
     api<Department[]>('/api/departments'),
@@ -48,6 +82,7 @@ onMounted(async () => {
   const [settings] = await Promise.all([
     api<RateSettings & { employee_code_prefix?: string }>('/api/settings'),
     loadTypes(),
+    loadDeviceTypes(),
     loadSmtp(),
     loadSms(),
     loadExpenseConfig(),
@@ -443,6 +478,63 @@ async function sendSmsTest() {
         (name, total audits, time completed); the count is the number of cards.
         Grant "Direct counts" to an employee to let them type the number instead.
       </p>
+    </div>
+
+    <div class="panel">
+      <h2 class="display mb-1 text-2xl">Device types</h2>
+      <p class="mb-5 text-sm text-muted">
+        The device makes offered on an installation card (Telematics
+        Installation → device type, and the make replaced on a replacement
+        job). Deactivating one keeps it on past entries but hides it from new
+        ones.
+      </p>
+      <div class="table-wrap mb-5">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="d in deviceTypes" :key="d.id" :class="{ 'opacity-50': !d.active }">
+              <td><input v-model="d.name" class="field-input !w-56" /></td>
+              <td>{{ d.active ? 'Active' : 'Inactive' }}</td>
+              <td class="whitespace-nowrap">
+                <button class="btn btn-sm mr-1" :disabled="busy" @click="saveDeviceType(d)">
+                  Save
+                </button>
+                <button
+                  class="btn btn-sm"
+                  :class="d.active ? 'btn-danger' : ''"
+                  :disabled="busy"
+                  @click="toggleDeviceType(d)"
+                >
+                  {{ d.active ? 'Deactivate' : 'Reactivate' }}
+                </button>
+              </td>
+            </tr>
+            <tr v-if="deviceTypes.length === 0">
+              <td colspan="3" class="py-4 text-center text-muted">No device types yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <form class="flex flex-wrap items-end gap-3" @submit.prevent="addDeviceType">
+        <div>
+          <label class="field-label" for="ndt-name">New device type</label>
+          <input
+            id="ndt-name"
+            v-model="newDeviceType"
+            required
+            maxlength="60"
+            class="field-input"
+            placeholder="e.g. Ruptela"
+          />
+        </div>
+        <button class="btn btn-solid" :disabled="busy">Add device type</button>
+      </form>
     </div>
 
     <div class="panel">

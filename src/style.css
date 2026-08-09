@@ -154,6 +154,19 @@ table.data tr.totals td {
   border-bottom: none;
   font-weight: 600;
 }
+/* Day-grouping heading (Recent entries) — same small-caps display type as
+   .field-label, so a group of rows reads as a heading, not another entry. */
+table.data tr.group-head td {
+  background: var(--color-cream);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-ink);
+  padding: 6px 10px;
+  white-space: nowrap;
+}
 
 /* ---------- print (monthly report) ---------- */
 

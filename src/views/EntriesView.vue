@@ -417,6 +417,53 @@ const tableColspan = computed(
     (approvalOn.value ? 1 : 0) +
     (showActions.value ? 1 : 0),
 )
+
+// ------------------------------------------------------- day-grouped listing
+//
+// The same day can carry more than one entry (up to the daily cap), and
+// those still belong together — a day worked twice is one day's work, not
+// two unrelated rows that happen to share a date. Grouping here is purely a
+// display concern: `entries` itself, and everything keyed off it (CSV
+// export, the daily-limit check), stays a flat list.
+interface DayGroup {
+  date: string
+  entries: Entry[]
+  totalHours: number
+}
+
+const dayGroups = computed<DayGroup[]>(() => {
+  const order: string[] = []
+  const byDate = new Map<string, Entry[]>()
+  // entries is already ORDER BY work_date DESC, time_start DESC from the
+  // server, so first-seen order here is already the right day order.
+  for (const e of entries.value) {
+    if (!byDate.has(e.work_date)) {
+      byDate.set(e.work_date, [])
+      order.push(e.work_date)
+    }
+    byDate.get(e.work_date)!.push(e)
+  }
+  return order.map((date) => {
+    const dayEntries = byDate.get(date)!
+    return {
+      date,
+      entries: dayEntries,
+      totalHours: Math.round(dayEntries.reduce((sum, e) => sum + e.hours, 0) * 100) / 100,
+    }
+  })
+})
+
+/** "Fri, 7 Aug 2026" — parsed as UTC so the weekday matches the stored date
+ * regardless of the viewer's own time zone. */
+function formatDayHeading(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
 </script>
 
 <template>
@@ -866,68 +913,81 @@ const tableColspan = computed(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="e in entries" :key="e.id">
-              <td class="mono whitespace-nowrap">{{ e.work_date }}</td>
-              <td v-if="auth.isAdmin">{{ e.employee_name }}</td>
-              <td class="num">{{ e.time_start }}</td>
-              <td class="num">{{ e.time_end }}</td>
-              <td class="num">{{ e.hours.toFixed(2) }}</td>
-              <!-- The count alone does not say *which* cards were done, which
-                   is the question asked when something needs checking. The
-                   names already come down with the entry, so list them under
-                   the figure rather than making someone open the entry. -->
-              <td v-for="wt in activeTypes" :key="wt.id" class="num">
-                {{ e.units[wt.id] ?? 0 }}
-                <span
-                  v-if="cardNamesFor(e, wt.id)"
-                  class="mt-0.5 block text-[11px] leading-snug font-normal text-muted"
-                  :title="cardNamesFor(e, wt.id)"
-                  >{{ cardNamesFor(e, wt.id) }}</span
-                >
-              </td>
-              <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
-                {{ e.notes }}
-              </td>
-              <td v-if="approvalOn" class="whitespace-nowrap">
-                <span
-                  class="display rounded-full border px-2 py-0.5 text-xs tracking-wider"
-                  :class="
-                    e.status === 'approved'
-                      ? 'border-teal text-teal'
-                      : e.status === 'rejected'
-                        ? 'border-red text-red'
-                        : 'border-amber text-amber'
-                  "
-                  >{{ statusLabel(e.status) }}</span
-                >
-                <template v-if="auth.isAdmin && e.status !== 'approved'">
-                  <button class="btn btn-sm ml-1" @click="setStatus(e, 'approved')">
-                    Approve
+            <template v-for="g in dayGroups" :key="g.date">
+              <!-- One heading per calendar day, however many entries it
+                   holds — a day logged twice is still one day's work. -->
+              <tr class="group-head">
+                <td :colspan="tableColspan">
+                  {{ formatDayHeading(g.date) }}
+                  <span class="mono ml-2 text-teal">{{ g.totalHours.toFixed(2) }}h</span>
+                  <span v-if="g.entries.length > 1" class="ml-2 normal-case text-muted"
+                    >· {{ g.entries.length }} entries</span
+                  >
+                </td>
+              </tr>
+              <tr v-for="e in g.entries" :key="e.id">
+                <td class="mono whitespace-nowrap">{{ e.work_date }}</td>
+                <td v-if="auth.isAdmin">{{ e.employee_name }}</td>
+                <td class="num">{{ e.time_start }}</td>
+                <td class="num">{{ e.time_end }}</td>
+                <td class="num">{{ e.hours.toFixed(2) }}</td>
+                <!-- The count alone does not say *which* cards were done, which
+                     is the question asked when something needs checking. The
+                     names already come down with the entry, so list them under
+                     the figure rather than making someone open the entry. -->
+                <td v-for="wt in activeTypes" :key="wt.id" class="num">
+                  {{ e.units[wt.id] ?? 0 }}
+                  <span
+                    v-if="cardNamesFor(e, wt.id)"
+                    class="mt-0.5 block text-[11px] leading-snug font-normal text-muted"
+                    :title="cardNamesFor(e, wt.id)"
+                    >{{ cardNamesFor(e, wt.id) }}</span
+                  >
+                </td>
+                <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
+                  {{ e.notes }}
+                </td>
+                <td v-if="approvalOn" class="whitespace-nowrap">
+                  <span
+                    class="display rounded-full border px-2 py-0.5 text-xs tracking-wider"
+                    :class="
+                      e.status === 'approved'
+                        ? 'border-teal text-teal'
+                        : e.status === 'rejected'
+                          ? 'border-red text-red'
+                          : 'border-amber text-amber'
+                    "
+                    >{{ statusLabel(e.status) }}</span
+                  >
+                  <template v-if="auth.isAdmin && e.status !== 'approved'">
+                    <button class="btn btn-sm ml-1" @click="setStatus(e, 'approved')">
+                      Approve
+                    </button>
+                  </template>
+                  <template v-if="auth.isAdmin && e.status === 'pending'">
+                    <button class="btn btn-sm btn-danger ml-1" @click="setStatus(e, 'rejected')">
+                      Reject
+                    </button>
+                  </template>
+                </td>
+                <td v-if="showActions" class="whitespace-nowrap">
+                  <button
+                    v-if="auth.rights.edit_entries"
+                    class="btn btn-sm mr-1"
+                    @click="startEdit(e)"
+                  >
+                    Edit
                   </button>
-                </template>
-                <template v-if="auth.isAdmin && e.status === 'pending'">
-                  <button class="btn btn-sm btn-danger ml-1" @click="setStatus(e, 'rejected')">
-                    Reject
+                  <button
+                    v-if="auth.rights.delete_entries"
+                    class="btn btn-sm btn-danger"
+                    @click="remove(e)"
+                  >
+                    Del
                   </button>
-                </template>
-              </td>
-              <td v-if="showActions" class="whitespace-nowrap">
-                <button
-                  v-if="auth.rights.edit_entries"
-                  class="btn btn-sm mr-1"
-                  @click="startEdit(e)"
-                >
-                  Edit
-                </button>
-                <button
-                  v-if="auth.rights.delete_entries"
-                  class="btn btn-sm btn-danger"
-                  @click="remove(e)"
-                >
-                  Del
-                </button>
-              </td>
-            </tr>
+                </td>
+              </tr>
+            </template>
             <tr v-if="entries.length === 0">
               <td :colspan="tableColspan" class="py-6 text-center text-muted">
                 No entries for this month yet.

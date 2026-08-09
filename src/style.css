@@ -62,26 +62,18 @@ html {
 .btn-solid:hover { background: var(--color-teal); border-color: var(--color-teal); }
 .btn-danger { border-color: var(--color-red); color: var(--color-red); }
 .btn-danger:hover { background: var(--color-red-soft); }
+/* Same shape and weight as every other button (.btn-danger's approach) —
+   only the colour marks it as the safe, non-mutating action. The eye icon
+   is the one deliberate addition, giving "view" its own recognisable mark
+   in a row of otherwise text-only buttons. */
 .btn-view {
   border-color: var(--color-teal);
   color: var(--color-teal);
-  background: var(--color-teal-soft);
-  border-radius: 999px;
-  padding: 2px 12px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
-.btn-view:hover {
-  background: var(--color-teal);
-  color: #fff;
-  border-color: var(--color-teal);
-  transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(15, 92, 76, 0.18);
-}
+.btn-view:hover { background: var(--color-teal-soft); }
 .btn-view svg { width: 13px; height: 13px; flex-shrink: 0; }
 .btn-sm { font-size: 13px; padding: 3px 10px; border-width: 1.5px; }
 

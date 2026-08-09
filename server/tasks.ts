@@ -7,7 +7,7 @@
 import type { Employee, Env } from './env'
 import { ApiError, json, readJson, todayInTz } from './http'
 import { audit, parseRights, requireUser } from './auth'
-import { notifyUser } from './notify'
+import { notifyUser, notifyUsers } from './notify'
 import {
   allowedTaskActions,
   canTask,
@@ -17,6 +17,7 @@ import {
   parseTaskPriority,
   parseTaskStatus,
   type TaskActor,
+  type TaskLike,
   type TaskPriority,
   type TaskStatus,
 } from '../shared/tasks'
@@ -34,6 +35,17 @@ export interface TaskRow {
   completed_at: string | null
   created_at: string
   updated_at: string
+  broadcast: number
+}
+
+/** The shape shared/tasks.ts's pure rules actually need, out of a DB row. */
+function taskLike(t: TaskRow): TaskLike {
+  return {
+    assignee_id: t.assignee_id,
+    created_by: t.created_by,
+    status: t.status,
+    broadcast: Boolean(t.broadcast),
+  }
 }
 
 const SELECT_TASK = `
@@ -60,12 +72,13 @@ function today(env: Env): string {
 
 /** Attach what the caller may do, so the UI never offers a refused action. */
 function withActions(rows: TaskRow[], actor: TaskActor) {
-  return rows.map((t) => ({ ...t, actions: allowedTaskActions(t, actor) }))
+  return rows.map((t) => ({ ...t, actions: allowedTaskActions(taskLike(t), actor) }))
 }
 
 /**
  * Tasks the caller may see: everything for a manager of tasks, otherwise the
- * ones assigned to them plus the ones they raised. Scoped in SQL rather than
+ * ones assigned to them, the ones they raised, plus anything open to
+ * everyone (claimed or not — the shared board). Scoped in SQL rather than
  * filtered afterwards, so a large board cannot leak through pagination later.
  */
 export async function listTasks(request: Request, env: Env): Promise<Response> {
@@ -79,7 +92,7 @@ export async function listTasks(request: Request, env: Env): Promise<Response> {
   const binds: unknown[] = []
 
   if (!actor.is_admin && !actor.can_manage) {
-    sql += ' AND (t.assignee_id = ? OR t.created_by = ?)'
+    sql += ' AND (t.assignee_id = ? OR t.created_by = ? OR t.broadcast = 1)'
     binds.push(user.id, user.id)
   } else if (mineOnly) {
     sql += ' AND t.assignee_id = ?'
@@ -109,6 +122,10 @@ interface TaskBody {
   status?: string
   priority?: string
   due_date?: string | null
+  /** Raise for "Everyone" instead of one person. Create only. */
+  broadcast?: boolean
+  /** Claim an unclaimed broadcast task as your own. Patch only. */
+  accept?: boolean
 }
 
 async function loadTask(env: Env, id: string): Promise<TaskRow> {
@@ -146,8 +163,8 @@ export async function getTask(request: Request, env: Env, id: string): Promise<R
   const actor = actorFor(user)
   const task = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
   if (!task) throw new ApiError(404, 'Task not found')
-  if (!canViewTask(task, actor)) throw new ApiError(403, 'You cannot see this task')
-  return json({ ...task, actions: allowedTaskActions(task, actor) })
+  if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')
+  return json({ ...task, actions: allowedTaskActions(taskLike(task), actor) })
 }
 
 export async function createTask(request: Request, env: Env): Promise<Response> {
@@ -158,11 +175,15 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   const title = (body.title ?? '').trim().slice(0, 200)
   if (!title) throw new ApiError(400, 'A title is required')
 
-  // Anyone may raise a task for themselves; giving work to someone else is
-  // what the right is for.
+  // Anyone may raise a task for themselves; giving work to someone else —
+  // one named person, or opening it to everyone — is what the right is for.
   const manages = actor.is_admin || actor.can_manage
-  const assignee = body.assignee_id ?? user.id
-  if (assignee !== user.id && !manages) {
+  const broadcast = body.broadcast === true
+  if (broadcast && !manages) {
+    throw new ApiError(403, 'You can only create tasks for yourself')
+  }
+  const assignee = broadcast ? null : (body.assignee_id ?? user.id)
+  if (!broadcast && assignee !== user.id && !manages) {
     throw new ApiError(403, 'You can only create tasks for yourself')
   }
   if (assignee) await assertAssignee(env, assignee)
@@ -175,8 +196,8 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   const id = crypto.randomUUID()
   const code = await nextTaskCode(env)
   await env.DB.prepare(
-    `INSERT INTO tasks (id, task_code, title, details, assignee_id, created_by, priority, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, task_code, title, details, assignee_id, created_by, priority, due_date, broadcast)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -187,9 +208,10 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       user.id,
       priority,
       due,
+      broadcast ? 1 : 0,
     )
     .run()
-  await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee })
+  await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee, broadcast })
 
   if (assignee && assignee !== user.id) {
     await notifyUser(env, {
@@ -198,12 +220,27 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       title: `${user.name} assigned you a task`,
       body: due ? `${code}: ${title}\n\nWanted by ${due}.` : `${code}: ${title}`,
     })
+  } else if (broadcast) {
+    const { results } = await env.DB.prepare(
+      'SELECT id FROM employees WHERE active = 1 AND id != ?',
+    )
+      .bind(user.id)
+      .all<{ id: string }>()
+    await notifyUsers(
+      env,
+      results.map((e) => e.id),
+      {
+        kind: 'task_broadcast',
+        title: `${user.name} opened a task to everyone`,
+        body: due ? `${code}: ${title}\n\nWanted by ${due}.` : `${code}: ${title}`,
+      },
+    )
   }
 
   const created = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`)
     .bind(id)
     .first<TaskRow>()
-  return json({ ...created, actions: allowedTaskActions(created!, actor) }, 201)
+  return json({ ...created, actions: allowedTaskActions(taskLike(created!), actor) }, 201)
 }
 
 export async function patchTask(
@@ -214,10 +251,13 @@ export async function patchTask(
   const user = await requireUser(request, env)
   const actor = actorFor(user)
   const task = await loadTask(env, id)
-  if (!canViewTask(task, actor)) throw new ApiError(403, 'You cannot see this task')
+  if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')
 
   const body = await readJson<TaskBody>(request)
   const wantsStatus = body.status !== undefined
+  // Claiming an open task is its own action, not an edit — anyone the task
+  // is open to may do it, whether or not they could otherwise touch it.
+  const wantsAccept = body.accept === true
   const wantsEdit =
     body.title !== undefined ||
     body.details !== undefined ||
@@ -225,11 +265,14 @@ export async function patchTask(
     body.priority !== undefined ||
     body.due_date !== undefined
 
-  if (wantsEdit && !canTask('edit', task, actor)) {
+  if (wantsEdit && !canTask('edit', taskLike(task), actor)) {
     throw new ApiError(403, 'You can only change the status of this task')
   }
-  if (wantsStatus && !canTask('set_status', task, actor)) {
+  if (wantsStatus && !canTask('set_status', taskLike(task), actor)) {
     throw new ApiError(403, 'You cannot change this task')
+  }
+  if (wantsAccept && !canTask('accept', taskLike(task), actor)) {
+    throw new ApiError(400, 'This task is not open to accept')
   }
 
   const title =
@@ -249,6 +292,8 @@ export async function patchTask(
   if (body.assignee_id !== undefined) {
     assignee = body.assignee_id || null
     if (assignee) await assertAssignee(env, assignee)
+  } else if (wantsAccept) {
+    assignee = user.id
   }
 
   const now = new Date().toISOString()
@@ -272,15 +317,24 @@ export async function patchTask(
       id,
     )
     .run()
-  await audit(env, user.id, 'update_task', id, { status, assignee_id: assignee })
+  await audit(env, user.id, 'update_task', id, { status, assignee_id: assignee, accepted: wantsAccept })
 
-  // Tell someone when work newly lands on them, and tell whoever asked for it
-  // when it is finished — the two moments that need a person to know.
+  // Tell someone when work newly lands on them, whoever opened it to
+  // everyone when it is claimed, and whoever asked for it when it is
+  // finished — the moments that need a person to know.
   if (assignee && assignee !== task.assignee_id && assignee !== user.id) {
     await notifyUser(env, {
       employeeId: assignee,
       kind: 'task_assigned',
       title: `${user.name} assigned you a task`,
+      body: `${task.task_code}: ${title}`,
+    })
+  }
+  if (wantsAccept && task.created_by && task.created_by !== user.id) {
+    await notifyUser(env, {
+      employeeId: task.created_by,
+      kind: 'task_accepted',
+      title: `${user.name} accepted a task you opened to everyone`,
       body: `${task.task_code}: ${title}`,
     })
   }
@@ -301,7 +355,7 @@ export async function patchTask(
   const updated = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`)
     .bind(id)
     .first<TaskRow>()
-  return json({ ...updated, actions: allowedTaskActions(updated!, actor) })
+  return json({ ...updated, actions: allowedTaskActions(taskLike(updated!), actor) })
 }
 
 export async function deleteTask(
@@ -312,7 +366,7 @@ export async function deleteTask(
   const user = await requireUser(request, env)
   const actor = actorFor(user)
   const task = await loadTask(env, id)
-  if (!canTask('delete', task, actor)) {
+  if (!canTask('delete', taskLike(task), actor)) {
     throw new ApiError(403, 'You cannot delete this task')
   }
   await env.DB.prepare('DELETE FROM tasks WHERE id = ?').bind(id).run()

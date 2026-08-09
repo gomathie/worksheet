@@ -60,9 +60,17 @@ export interface TaskLike {
   assignee_id: string | null
   created_by: string | null
   status: TaskStatus
+  /**
+   * Raised for "Everyone" rather than one person. Sticks even after someone
+   * claims it, so a claimed task can still say it came from the open pool —
+   * only whether `assignee_id` is still null decides whether it is up for
+   * grabs. Optional so existing call sites/tests that predate broadcast
+   * tasks don't have to name a value they mean as "no".
+   */
+  broadcast?: boolean
 }
 
-export type TaskAction = 'edit' | 'delete' | 'set_status'
+export type TaskAction = 'edit' | 'delete' | 'set_status' | 'accept'
 
 /**
  * Everything the user may do to this task.
@@ -98,6 +106,12 @@ export function allowedTaskActions(task: TaskLike, actor: TaskActor): TaskAction
   if (actor.is_admin || actor.can_delete || isOwnPrivateTask(task, actor)) {
     actions.add('delete')
   }
+  // Open to whoever gets there first — including the person who raised it or
+  // a task manager, same as anyone else. Only unclaimed pool tasks qualify;
+  // once someone accepts, this closes for everybody but them.
+  if (task.broadcast && task.assignee_id === null && isOpen(task.status)) {
+    actions.add('accept')
+  }
   return [...actions]
 }
 
@@ -118,6 +132,10 @@ export function canTask(action: TaskAction, task: TaskLike, actor: TaskActor): b
 /** May this user see the task at all? */
 export function canViewTask(task: TaskLike, actor: TaskActor): boolean {
   if (actor.is_admin || actor.can_manage) return true
+  // A broadcast task is a shared board, not a private one — visible to
+  // everyone whether or not it has been claimed yet, so the team can see
+  // both what's on offer and who ended up doing it.
+  if (task.broadcast) return true
   return task.assignee_id === actor.id || task.created_by === actor.id
 }
 

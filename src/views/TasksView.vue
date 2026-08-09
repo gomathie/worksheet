@@ -33,6 +33,11 @@ const showDone = ref(false)
 // person can still keep their own list.
 const canManage = computed(() => auth.isAdmin || auth.rights.manage_tasks)
 
+// Sentinel for the assignee select's "Everyone" option — not a real
+// employee id, translated to `broadcast: true` in save(). Kept out of
+// Employee's id-space (uuids) so it can never collide with a real one.
+const EVERYONE = '__everyone__'
+
 const blank = () => ({
   title: '',
   details: '',
@@ -103,12 +108,14 @@ async function save() {
   }
   busy.value = 'form'
   try {
+    const broadcast = !editingId.value && form.value.assignee_id === EVERYONE
     const payload = {
       title: form.value.title.trim(),
       details: form.value.details.trim() || null,
-      assignee_id: form.value.assignee_id || null,
+      assignee_id: broadcast ? null : form.value.assignee_id || null,
       priority: form.value.priority,
       due_date: form.value.due_date || null,
+      ...(broadcast ? { broadcast: true } : {}),
     }
     if (editingId.value) {
       await api(`/api/tasks/${editingId.value}`, { method: 'PATCH', json: payload })
@@ -121,6 +128,19 @@ async function save() {
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to save the task'
+  } finally {
+    busy.value = ''
+  }
+}
+
+async function accept(t: Task) {
+  error.value = ''
+  busy.value = t.id
+  try {
+    await api(`/api/tasks/${t.id}`, { method: 'PATCH', json: { accept: true } })
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to accept the task'
   } finally {
     busy.value = ''
   }
@@ -154,7 +174,7 @@ async function remove(t: Task) {
   }
 }
 
-const can = (t: Task, action: 'edit' | 'delete' | 'set_status') =>
+const can = (t: Task, action: 'edit' | 'delete' | 'set_status' | 'accept') =>
   t.actions.includes(action)
 
 const statusTone: Record<TaskStatus, string> = {
@@ -221,6 +241,7 @@ const statusTone: Record<TaskStatus, string> = {
             class="field-input"
           >
             <option value="">Nobody yet</option>
+            <option v-if="!editingId" :value="EVERYONE">Everyone — first to accept it</option>
             <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
           </select>
           <!-- Without the right there is nobody else to pick, so say so
@@ -288,10 +309,15 @@ const statusTone: Record<TaskStatus, string> = {
               class="display rounded-full border border-red bg-red-soft px-2 py-0.5 text-xs tracking-wider text-red"
               >Overdue</span
             >
+            <span
+              v-if="t.broadcast"
+              class="display rounded-full border border-teal px-2 py-0.5 text-xs tracking-wider text-teal"
+              >{{ t.assignee_id ? 'From the open pool' : 'Everyone' }}</span
+            >
           </div>
           <p v-if="t.details" class="mt-1 text-sm">{{ t.details }}</p>
           <p class="mt-1 text-xs text-muted">
-            {{ t.assignee_name ?? 'Unassigned' }}
+            {{ t.assignee_name ?? (t.broadcast ? 'Nobody yet — first to accept it' : 'Unassigned') }}
             <template v-if="t.due_date">
               · wanted by <span class="mono">{{ t.due_date }}</span>
             </template>
@@ -303,6 +329,14 @@ const statusTone: Record<TaskStatus, string> = {
           <RouterLink :to="{ name: 'task-detail', params: { id: t.id } }" class="btn btn-sm">
             View
           </RouterLink>
+          <button
+            v-if="can(t, 'accept')"
+            class="btn btn-sm btn-solid"
+            :disabled="busy === t.id"
+            @click="accept(t)"
+          >
+            Accept
+          </button>
           <select
             v-if="can(t, 'set_status')"
             :value="t.status"

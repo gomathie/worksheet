@@ -7,6 +7,7 @@ import type {
   Department,
   DeviceTypeInfo,
   ExpenseCategory,
+  PendingDeviceType,
   RateSettings,
   WorkflowConfig,
   WorkTypeInfo,
@@ -40,9 +41,39 @@ async function loadTypes() {
 // ------------------------------------------------------------ device types
 const deviceTypes = ref<DeviceTypeInfo[]>([])
 const newDeviceType = ref('')
+// Proposed by installers out in the field (see EntriesView's "Suggest a
+// device type"); inactive and invisible everywhere else until decided here.
+const pendingDeviceTypes = ref<PendingDeviceType[]>([])
+const deviceTypeNotes = ref<Record<string, string>>({})
 
 async function loadDeviceTypes() {
   deviceTypes.value = await api<DeviceTypeInfo[]>('/api/device-types')
+}
+
+async function loadPendingDeviceTypes() {
+  pendingDeviceTypes.value = await api<PendingDeviceType[]>('/api/device-types/pending')
+}
+
+async function decideDeviceType(d: PendingDeviceType, decision: 'approved' | 'rejected') {
+  const note = (deviceTypeNotes.value[d.id] ?? '').trim()
+  if (decision === 'rejected' && !note) {
+    error.value = 'A note is required when rejecting a device type.'
+    return
+  }
+  error.value = ''
+  busy.value = true
+  try {
+    await api(`/api/device-types/${d.id}/decide`, {
+      method: 'POST',
+      json: { decision, note: note || undefined },
+    })
+    delete deviceTypeNotes.value[d.id]
+    await Promise.all([loadPendingDeviceTypes(), loadDeviceTypes()])
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    busy.value = false
+  }
 }
 
 function addDeviceType() {
@@ -83,6 +114,7 @@ onMounted(async () => {
     api<RateSettings & { employee_code_prefix?: string }>('/api/settings'),
     loadTypes(),
     loadDeviceTypes(),
+    loadPendingDeviceTypes(),
     loadSmtp(),
     loadSms(),
     loadExpenseConfig(),
@@ -488,6 +520,58 @@ async function sendSmsTest() {
         job). Deactivating one keeps it on past entries but hides it from new
         ones.
       </p>
+
+      <template v-if="pendingDeviceTypes.length">
+        <h3 class="display mb-1 text-lg">Suggested by installers</h3>
+        <p class="mb-3 text-sm text-muted">
+          Anyone assigned installation work can suggest a device that's
+          missing. Not selectable on any card until approved here.
+        </p>
+        <div class="table-wrap mb-5">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Suggested by</th>
+                <th>Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="d in pendingDeviceTypes" :key="d.id">
+                <td>{{ d.name }}</td>
+                <td class="text-xs">{{ d.created_by_name ?? '—' }}</td>
+                <td>
+                  <input
+                    v-model="deviceTypeNotes[d.id]"
+                    class="field-input !w-48"
+                    maxlength="500"
+                    placeholder="Required to reject"
+                    :aria-label="`Note for ${d.name}`"
+                  />
+                </td>
+                <td class="whitespace-nowrap">
+                  <button
+                    class="btn btn-sm btn-solid mr-1"
+                    :disabled="busy"
+                    @click="decideDeviceType(d, 'approved')"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    class="btn btn-sm btn-danger"
+                    :disabled="busy"
+                    @click="decideDeviceType(d, 'rejected')"
+                  >
+                    Reject
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
+
       <div class="table-wrap mb-5">
         <table class="data">
           <thead>

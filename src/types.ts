@@ -255,6 +255,16 @@ export interface DeviceTypeInfo {
   position?: number
 }
 
+export interface PendingDeviceType {
+  id: string
+  name: string
+  approval_status: 'pending' | 'approved' | 'rejected'
+  created_by: string | null
+  created_by_name: string | null
+  approval_note: string | null
+  created_at: string
+}
+
 export interface TrendData {
   employee_id: string
   employee_name: string
@@ -490,6 +500,8 @@ export interface Task {
   completed_at: string | null
   created_at: string
   updated_at?: string
+  /** Raised for "Everyone" rather than one person; see TaskDetailView. */
+  broadcast: number
   /** What the signed-in user may do to this task; computed server-side. */
   actions: TaskAction[]
 }

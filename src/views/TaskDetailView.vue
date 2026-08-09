@@ -27,8 +27,12 @@ const busy = ref(false)
 const id = computed(() => route.params.id as string)
 
 // Assigning work to someone else is what the right is for; matches the same
-// gate TasksView uses for its own assignee picker.
+// gate TasksView uses for its own assignee picker. Claiming an open
+// "Everyone" task is separate — see the Accept button below — and needs no
+// right at all, since nobody is being volun-told.
 const canManage = computed(() => auth.isAdmin || auth.rights.manage_tasks)
+const can = (a: 'edit' | 'delete' | 'set_status' | 'accept') =>
+  task.value?.actions.includes(a) ?? false
 
 async function load() {
   error.value = ''
@@ -44,8 +48,6 @@ onMounted(async () => {
     employees.value = (await api<Employee[]>('/api/employees')).filter((e) => e.active)
   }
 })
-
-const can = (a: 'edit' | 'delete' | 'set_status') => task.value?.actions.includes(a) ?? false
 
 const statusTone: Record<TaskStatus, string> = {
   todo: 'border-line text-muted',
@@ -65,6 +67,22 @@ async function reassign(assigneeId: string) {
     })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to reassign the task'
+  } finally {
+    busy.value = false
+  }
+}
+
+async function accept() {
+  if (!task.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    task.value = await api<Task>(`/api/tasks/${id.value}`, {
+      method: 'PATCH',
+      json: { accept: true },
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to accept the task'
   } finally {
     busy.value = false
   }
@@ -126,6 +144,11 @@ async function remove() {
           class="display rounded-full border border-red bg-red-soft px-2 py-0.5 text-xs tracking-wider text-red"
           >Overdue</span
         >
+        <span
+          v-if="task.broadcast"
+          class="display rounded-full border border-teal px-2 py-0.5 text-xs tracking-wider text-teal"
+          >{{ task.assignee_id ? 'From the open pool' : 'Open to everyone' }}</span
+        >
       </div>
       <h2
         class="display mb-4 text-2xl"
@@ -151,7 +174,9 @@ async function remove() {
             <option value="">Nobody yet</option>
             <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
           </select>
-          <p v-else>{{ task.assignee_name ?? 'Unassigned' }}</p>
+          <p v-else-if="task.assignee_name">{{ task.assignee_name }}</p>
+          <p v-else-if="task.broadcast" class="text-teal">Nobody yet — first to accept it</p>
+          <p v-else>Unassigned</p>
         </div>
         <div>
           <p class="field-label">Raised by</p>
@@ -176,6 +201,14 @@ async function remove() {
       </div>
 
       <div class="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+        <button
+          v-if="can('accept')"
+          class="btn btn-sm btn-solid"
+          :disabled="busy"
+          @click="accept"
+        >
+          {{ busy ? 'Accepting…' : 'Accept this task' }}
+        </button>
         <select
           v-if="can('set_status')"
           :value="task.status"

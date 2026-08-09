@@ -237,3 +237,46 @@ describe('deleting your own to-do', () => {
     expect(canTask('delete', someoneElses, plain)).toBe(false)
   })
 })
+
+describe('broadcast ("Everyone") tasks', () => {
+  const open: TaskLike = {
+    assignee_id: null,
+    created_by: 'raiser',
+    status: 'todo',
+    broadcast: true,
+  }
+
+  it('lets any unrelated person accept an unclaimed pool task', () => {
+    expect(canTask('accept', open, stranger)).toBe(true)
+  })
+
+  it('lets the person who raised it accept their own pool task too', () => {
+    expect(canTask('accept', open, raiser)).toBe(true)
+  })
+
+  it('closes once someone has claimed it', () => {
+    const claimed: TaskLike = { ...open, assignee_id: 'doer' }
+    expect(canTask('accept', claimed, stranger)).toBe(false)
+    // Claiming hands them the normal assignee power to move it along.
+    expect(canTask('set_status', claimed, doer)).toBe(true)
+  })
+
+  it('is never offered on a task nobody opened to everyone', () => {
+    const normal: TaskLike = { assignee_id: null, created_by: 'raiser', status: 'todo' }
+    expect(canTask('accept', normal, stranger)).toBe(false)
+  })
+
+  it('is never offered once the task is finished or cancelled', () => {
+    expect(canTask('accept', { ...open, status: 'done' }, stranger)).toBe(false)
+    expect(canTask('accept', { ...open, status: 'cancelled' }, stranger)).toBe(false)
+  })
+
+  it('is visible to anyone while unclaimed, unlike a private task', () => {
+    expect(canViewTask(open, stranger)).toBe(true)
+  })
+
+  it('stays visible to everyone once claimed, so the board shows who has it', () => {
+    const claimed: TaskLike = { ...open, assignee_id: 'doer' }
+    expect(canViewTask(claimed, stranger)).toBe(true)
+  })
+})

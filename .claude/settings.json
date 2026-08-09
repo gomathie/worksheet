@@ -38,7 +38,12 @@
       "PowerShell(Get-NetTCPConnection -LocalPort 8788 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue; \"stopped $_\" })",
       "PowerShell(npx wrangler d1 execute ledger-db --remote --command \"SELECT key, CASE WHEN key='sms_api_key' THEN '\\(set, ' || length\\(value\\) || ' chars\\)' ELSE value END as value FROM settings WHERE key LIKE 'sms_%'\" 2>&1)",
       "PowerShell(npx wrangler pages deploy dist --project-name ledger --branch main --commit-dirty=true 2>&1)",
-      "PowerShell(npx wrangler d1 execute ledger-db --remote --command \"SELECT employee_code, name FROM employees ORDER BY created_at, id LIMIT 20\" 2>&1)"
+      "PowerShell(npx wrangler d1 execute ledger-db --remote --command \"SELECT employee_code, name FROM employees ORDER BY created_at, id LIMIT 20\" 2>&1)",
+      "Bash(cp \"C:/Users/gomat/AppData/Local/Temp/claude/c--Users-gomat-Downloads-worksheet/255500bb-5ca5-4f80-a1d3-3399909063f9/scratchpad/verify.js\" ./.scratch-verify.js)",
+      "Bash(node ./.scratch-verify.js)",
+      "Bash(mv .scratch-verify.js .scratch-verify.cjs)",
+      "Bash(node .scratch-verify.cjs)",
+      "Bash(cp \"C:/Users/gomat/AppData/Local/Temp/claude/c--Users-gomat-Downloads-worksheet/255500bb-5ca5-4f80-a1d3-3399909063f9/scratchpad/verify.js\" ./.scratch-verify.cjs)"
     ]
   }
 }

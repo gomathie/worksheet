@@ -1,0 +1,22 @@
+const { chromium } = require('playwright');
+const BASE = 'http://127.0.0.1:8788';
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  page.on('console', (m) => console.log('[console]', m.type(), m.text()));
+  page.on('pageerror', (e) => console.log('[pageerror]', e.message));
+  await page.goto(BASE + '/login');
+  await page.fill('#username', 'testinstaller');
+  await page.fill('#password', 'test12345');
+  await page.click('button:has-text("Sign in")');
+  await page.waitForURL((u) => !u.toString().includes('/login'), { timeout: 15000 });
+  console.log('landed at', page.url());
+  await page.goto(BASE + '/entries');
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1000);
+  const html = await page.locator('body').innerText();
+  console.log('---BODY---');
+  console.log(html.slice(0, 4000));
+  await page.screenshot({ path: 'C:/Users/gomat/AppData/Local/Temp/claude/c--Users-gomat-Downloads-worksheet/255500bb-5ca5-4f80-a1d3-3399909063f9/scratchpad/debug-entries.png', fullPage: true });
+  await browser.close();
+})().catch((e) => { console.error('ERR', e); process.exit(1); });

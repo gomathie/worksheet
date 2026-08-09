@@ -148,6 +148,12 @@ const router = createRouter({
       meta: { auth: true, right: 'view_reports' },
     },
     {
+      path: '/installations-report',
+      name: 'installations-report',
+      component: () => import('../views/InstallationsReportView.vue'),
+      meta: { auth: true, right: 'view_reports' },
+    },
+    {
       path: '/activity',
       name: 'activity',
       component: () => import('../views/AuditView.vue'),

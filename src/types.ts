@@ -236,6 +236,14 @@ export interface Adjustment {
   voucher_id?: string | null
 }
 
+export interface InstallationsReport {
+  year: string
+  months: string[]
+  total: number[]
+  by_device: Record<string, number[]>
+  by_action: Record<string, number[]>
+}
+
 export interface TrendData {
   employee_id: string
   employee_name: string

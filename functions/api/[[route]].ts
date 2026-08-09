@@ -271,6 +271,58 @@ async function cardAudit(request: Request, env: Env): Promise<Response> {
 }
 
 /**
+ * Installation counts by month across one year — total, by device type, and
+ * by new-install-vs-replacement. Same gate as the card audit: an admin, or
+ * anyone holding view_reports, since it is the same right that already
+ * exposes everyone's output.
+ */
+async function installationsReport(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (user.role !== 'admin' && !parseRights(user).view_reports) {
+    throw new ApiError(403, 'You do not have permission to view this report')
+  }
+
+  const url = new URL(request.url)
+  const yearParam = url.searchParams.get('year') ?? ''
+  const year = /^\d{4}$/.test(yearParam)
+    ? yearParam
+    : todayInTz(env.TEAM_TZ ?? 'Africa/Accra').slice(0, 4)
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`)
+
+  const { results } = await env.DB.prepare(
+    `SELECT substr(e.work_date, 1, 7) AS month, c.device_type, c.installation_action, COUNT(*) AS n
+       FROM entry_cards c
+       JOIN entries e ON e.id = c.entry_id
+       JOIN work_types wt ON wt.id = c.work_type_id
+      WHERE wt.card_style = 'installation' AND substr(e.work_date, 1, 4) = ?
+      GROUP BY month, c.device_type, c.installation_action`,
+  )
+    .bind(year)
+    .all<{ month: string; device_type: string | null; installation_action: string | null; n: number }>()
+
+  const idx = new Map(months.map((m, i) => [m, i]))
+  const zeros = () => Array(12).fill(0)
+  const total = zeros()
+  const byDevice: Record<string, number[]> = {}
+  const byAction: Record<string, number[]> = {}
+  for (const r of results) {
+    const i = idx.get(r.month)
+    if (i === undefined) continue
+    total[i] += r.n
+    if (r.device_type) {
+      byDevice[r.device_type] ??= zeros()
+      byDevice[r.device_type][i] += r.n
+    }
+    if (r.installation_action) {
+      byAction[r.installation_action] ??= zeros()
+      byAction[r.installation_action][i] += r.n
+    }
+  }
+
+  return json({ year, months, total, by_device: byDevice, by_action: byAction })
+}
+
+/**
  * Cards already logged on one date, so the entry form can warn before saving.
  *
  * Open to anyone who logs work: the whole point is that someone about to start
@@ -2568,6 +2620,9 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'DELETE') return deleteTask(request, env, taskMatch[1])
   }
   if (path === '/api/card-audit' && method === 'GET') return cardAudit(request, env)
+  if (path === '/api/installations-report' && method === 'GET') {
+    return installationsReport(request, env)
+  }
   if (path === '/api/cards-on-date' && method === 'GET') return cardsOnDate(request, env)
   if (path === '/api/work-types' && method === 'GET') return listWorkTypes(request, env)
   if (path === '/api/work-types' && method === 'POST') return createWorkType(request, env)

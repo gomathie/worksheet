@@ -62,6 +62,8 @@ html {
 .btn-solid:hover { background: var(--color-teal); border-color: var(--color-teal); }
 .btn-danger { border-color: var(--color-red); color: var(--color-red); }
 .btn-danger:hover { background: var(--color-red-soft); }
+.btn-view { border-color: var(--color-teal); color: var(--color-teal); }
+.btn-view:hover { background: var(--color-teal-soft); }
 .btn-sm { font-size: 13px; padding: 3px 10px; border-width: 1.5px; }
 
 .field-label {

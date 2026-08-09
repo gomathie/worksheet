@@ -62,6 +62,7 @@ import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
  import {
   createTask,
   deleteTask,
+  getTask,
   listTasks,
   patchTask,
   taskSummary,
@@ -2470,6 +2471,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/tasks/summary' && method === 'GET') return taskSummary(request, env)
   const taskMatch = /^\/api\/tasks\/([\w-]+)$/.exec(path)
   if (taskMatch) {
+    if (method === 'GET') return getTask(request, env, taskMatch[1])
     if (method === 'PATCH') return patchTask(request, env, taskMatch[1])
     if (method === 'DELETE') return deleteTask(request, env, taskMatch[1])
   }

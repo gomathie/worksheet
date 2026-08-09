@@ -23,6 +23,7 @@ import {
 
 export interface TaskRow {
   id: string
+  task_code: string | null
   title: string
   details: string | null
   assignee_id: string | null
@@ -127,6 +128,28 @@ async function assertAssignee(env: Env, id: string): Promise<void> {
   if (!row) throw new ApiError(400, 'Unknown employee')
 }
 
+/** Next TASK-NNN code. Increment-then-read in one batch, same pattern as
+ * expense voucher numbers, so two concurrent creates cannot collide. */
+async function nextTaskCode(env: Env): Promise<string> {
+  const batch = await env.DB.batch<{ next: number }>([
+    env.DB.prepare(
+      'INSERT INTO task_seq (id, next) VALUES (1, 1) ON CONFLICT(id) DO UPDATE SET next = next + 1',
+    ),
+    env.DB.prepare('SELECT next FROM task_seq WHERE id = 1'),
+  ])
+  const seq = batch[1].results?.[0]?.next ?? 1
+  return `TASK-${String(seq).padStart(3, '0')}`
+}
+
+export async function getTask(request: Request, env: Env, id: string): Promise<Response> {
+  const user = await requireUser(request, env)
+  const actor = actorFor(user)
+  const task = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+  if (!task) throw new ApiError(404, 'Task not found')
+  if (!canViewTask(task, actor)) throw new ApiError(403, 'You cannot see this task')
+  return json({ ...task, actions: allowedTaskActions(task, actor) })
+}
+
 export async function createTask(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const actor = actorFor(user)
@@ -150,12 +173,14 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   if (!priority) throw new ApiError(400, 'Unknown priority')
 
   const id = crypto.randomUUID()
+  const code = await nextTaskCode(env)
   await env.DB.prepare(
-    `INSERT INTO tasks (id, title, details, assignee_id, created_by, priority, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, task_code, title, details, assignee_id, created_by, priority, due_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
+      code,
       title,
       (body.details ?? '')?.toString().trim().slice(0, 2000) || null,
       assignee,
@@ -164,14 +189,14 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       due,
     )
     .run()
-  await audit(env, user.id, 'create_task', id, { title, assignee_id: assignee })
+  await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee })
 
   if (assignee && assignee !== user.id) {
     await notifyUser(env, {
       employeeId: assignee,
       kind: 'task_assigned',
       title: `${user.name} assigned you a task`,
-      body: due ? `${title}\n\nWanted by ${due}.` : title,
+      body: due ? `${code}: ${title}\n\nWanted by ${due}.` : `${code}: ${title}`,
     })
   }
 
@@ -256,7 +281,7 @@ export async function patchTask(
       employeeId: assignee,
       kind: 'task_assigned',
       title: `${user.name} assigned you a task`,
-      body: title,
+      body: `${task.task_code}: ${title}`,
     })
   }
   if (
@@ -269,7 +294,7 @@ export async function patchTask(
       employeeId: task.created_by,
       kind: 'task_done',
       title: `${user.name} completed a task you raised`,
-      body: title,
+      body: `${task.task_code}: ${title}`,
     })
   }
 

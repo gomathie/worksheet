@@ -451,6 +451,7 @@ export interface MyRemuneration {
 
 export interface Task {
   id: string
+  task_code: string | null
   title: string
   details: string | null
   assignee_id: string | null
@@ -462,6 +463,7 @@ export interface Task {
   due_date: string | null
   completed_at: string | null
   created_at: string
+  updated_at?: string
   /** What the signed-in user may do to this task; computed server-side. */
   actions: TaskAction[]
 }

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from './api'
 import { useAuthStore } from './stores/auth'
 import NotificationBell from './components/NotificationBell.vue'
+import TaskDeadlineAlert from './components/TaskDeadlineAlert.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -386,5 +387,6 @@ async function changePassword() {
     </div>
 
     <RouterView />
+    <TaskDeadlineAlert v-if="auth.user" />
   </div>
 </template>

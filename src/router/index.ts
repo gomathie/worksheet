@@ -136,6 +136,12 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/tasks/:id',
+      name: 'task-detail',
+      component: () => import('../views/TaskDetailView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/card-audit',
       name: 'card-audit',
       component: () => import('../views/CardAuditView.vue'),

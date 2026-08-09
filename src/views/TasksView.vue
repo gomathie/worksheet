@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import {
@@ -18,6 +19,8 @@ import type { Employee, Task } from '../types'
 // a task records intent, and nothing here feeds a points or money figure.
 
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const tasks = ref<Task[]>([])
 const employees = ref<Employee[]>([])
@@ -53,6 +56,14 @@ onMounted(async () => {
   await load()
   if (canManage.value) {
     employees.value = (await api<Employee[]>('/api/employees')).filter((e) => e.active)
+  }
+  // Deep link from the task detail page's Edit button (?edit=<id>) — open
+  // the form pre-filled, then drop the param so a refresh doesn't reopen it.
+  const editId = route.query.edit
+  if (typeof editId === 'string') {
+    const target = tasks.value.find((t) => t.id === editId)
+    if (target && can(target, 'edit')) startEdit(target)
+    router.replace({ query: {} })
   }
 })
 
@@ -258,6 +269,7 @@ const statusTone: Record<TaskStatus, string> = {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
+            <span v-if="t.task_code" class="mono text-xs text-muted">{{ t.task_code }}</span>
             <h3 class="text-lg font-medium" :class="{ 'line-through text-muted': t.status === 'done' || t.status === 'cancelled' }">
               {{ t.title }}
             </h3>
@@ -288,6 +300,9 @@ const statusTone: Record<TaskStatus, string> = {
         </div>
 
         <div class="flex flex-wrap gap-2">
+          <RouterLink :to="{ name: 'task-detail', params: { id: t.id } }" class="btn btn-sm">
+            View
+          </RouterLink>
           <select
             v-if="can(t, 'set_status')"
             :value="t.status"

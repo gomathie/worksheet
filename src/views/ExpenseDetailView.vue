@@ -6,9 +6,11 @@ import { useAuthStore } from '../stores/auth'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
 import ExpenseVoucherDocument from '../components/ExpenseVoucherDocument.vue'
 import {
+  FUNDING_SOURCE_LABELS,
   PAYMENT_METHOD_LABELS,
   STATUS_LABELS,
   type ExpenseAction,
+  type FundingSource,
   type PaymentMethod,
 } from '../../shared/expenses'
 import { usePortraitPrint } from '../usePortraitPrint'
@@ -54,6 +56,20 @@ const methodLabel = computed(() =>
     ? (PAYMENT_METHOD_LABELS[voucher.value.payment_method as PaymentMethod] ??
       voucher.value.payment_method)
     : '',
+)
+
+// `funding_source` is authoritative and covers all four sources; the older
+// `paid_from_petty_cash` boolean only distinguishes petty cash from
+// everything else, so it's a fallback for pre-funding_source rows, not the
+// primary signal — using it alone here previously showed "Own pocket" for
+// office cash and company account too.
+const fundingSource = computed(
+  () =>
+    (voucher.value?.funding_source ??
+      (voucher.value?.paid_from_petty_cash ? 'petty_cash' : 'own_pocket')) as FundingSource,
+)
+const fundingSourceLabel = computed(
+  () => FUNDING_SOURCE_LABELS[fundingSource.value] ?? fundingSource.value,
 )
 
 async function run(fn: () => Promise<unknown>, successMessage = '') {
@@ -362,8 +378,8 @@ const downloadPdf = () => window.print()
         </div>
         <div>
           <p class="field-label">Funded from</p>
-          <p :class="voucher.paid_from_petty_cash ? 'text-teal' : ''">
-            {{ voucher.paid_from_petty_cash ? 'Petty cash float' : 'Own pocket' }}
+          <p :class="fundingSource !== 'own_pocket' ? 'text-teal' : ''">
+            {{ fundingSourceLabel }}
           </p>
         </div>
       </div>

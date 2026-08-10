@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from './api'
 import { useAuthStore } from './stores/auth'
@@ -55,8 +55,30 @@ const canApproveExpenses = computed(
 )
 
 const menuOpen = ref(false)
-// Mobile nav disclosure; irrelevant at md and above, where the row is shown.
-const navOpen = ref(false)
+
+// The primary nav row and each mini-tab strip scroll horizontally on mobile,
+// so the active pill can land off-screen with nothing on screen to say which
+// section you're in (worst case: "Admin", last in a six-item row). Scroll it
+// into view — horizontally only — whenever the route changes, on every strip
+// at once; a strip that isn't rendered for this route is just `null`.
+const primaryNavEl = ref<HTMLElement | null>(null)
+const reportsNavEl = ref<HTMLElement | null>(null)
+const financeNavEl = ref<HTMLElement | null>(null)
+const adminNavEl = ref<HTMLElement | null>(null)
+
+function scrollActivePillsIntoView() {
+  for (const el of [primaryNavEl.value, reportsNavEl.value, financeNavEl.value, adminNavEl.value]) {
+    el?.querySelector<HTMLElement>('a.btn-solid')?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  }
+}
+onMounted(scrollActivePillsIntoView)
+watch(
+  () => route.name,
+  async () => {
+    await nextTick()
+    scrollActivePillsIntoView()
+  },
+)
 
 async function signOut() {
   menuOpen.value = false
@@ -211,72 +233,44 @@ async function changePassword() {
       </form>
     </div>
 
-    <nav v-if="auth.user" class="no-print my-5">
-      <!-- Fifteen possible destinations. This row is just the five sections
-           (Time Entry, Dashboard, Reports, Finance, Admin) \u2014 collapsible on
-           mobile. Whichever section the current page belongs to gets its own
-           horizontally-scrolling strip of "mini tabs" below (outside this
-           collapsible block, so it's visible without opening Menu, and a
-           7-item section like Finance doesn't turn into a long vertical
-           dropdown on a phone \u2014 see the tab strips right after </nav>. -->
-      <button
-        class="btn flex w-full items-center justify-between md:hidden"
-        :aria-expanded="navOpen"
-        @click="navOpen = !navOpen"
+    <nav
+      v-if="auth.user"
+      ref="primaryNavEl"
+      class="no-print -mx-5 my-5 flex gap-1.5 overflow-x-auto px-5 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+    >
+      <!-- Six possible sections, always visible and one tap away \u2014 same
+           horizontally-scrolling-on-mobile treatment as the mini-tab strips
+           below, rather than gating them behind a "Menu" disclosure. Whichever
+           section the current page belongs to gets its own strip of mini tabs
+           underneath (outside this row) so a 7-item section like Finance
+           doesn't have to fit here too. -->
+      <RouterLink :to="{ name: 'entries' }" class="btn" active-class="btn-solid"
+        >Time Entry</RouterLink
       >
-        <span>Menu</span>
-        <span class="text-muted">{{ navOpen ? '\u25b4' : '\u25be' }}</span>
-      </button>
-
-      <div
-        class="flex-col gap-1.5 md:flex md:flex-row md:flex-wrap md:items-center [&>a]:w-full md:[&>a]:w-auto"
-        :class="navOpen ? 'mt-2 flex' : 'hidden md:flex'"
+      <RouterLink :to="{ name: 'tasks' }" class="btn" active-class="btn-solid">Tasks</RouterLink>
+      <RouterLink
+        v-if="auth.rights.view_dashboard"
+        :to="{ name: 'dashboard' }"
+        class="btn"
+        active-class="btn-solid"
+        >Dashboard</RouterLink
       >
-        <RouterLink
-          :to="{ name: 'entries' }"
-          class="btn"
-          active-class="btn-solid"
-          @click="navOpen = false"
-          >Time Entry</RouterLink
-        >
-        <RouterLink
-          :to="{ name: 'tasks' }"
-          class="btn"
-          active-class="btn-solid"
-          @click="navOpen = false"
-          >Tasks</RouterLink
-        >
-        <RouterLink
-          v-if="auth.rights.view_dashboard"
-          :to="{ name: 'dashboard' }"
-          class="btn"
-          active-class="btn-solid"
-          @click="navOpen = false"
-          >Dashboard</RouterLink
-        >
-        <RouterLink
-          :to="{ name: reportsHome }"
-          class="btn"
-          :class="{ 'btn-solid': reportsActive }"
-          @click="navOpen = false"
-          >Reports</RouterLink
-        >
-        <RouterLink
-          :to="{ name: 'payments' }"
-          class="btn"
-          :class="{ 'btn-solid': financeActive }"
-          @click="navOpen = false"
-          >Finance</RouterLink
-        >
-        <RouterLink
-          v-if="auth.isAdmin"
-          :to="{ name: 'employees' }"
-          class="btn"
-          :class="{ 'btn-solid': adminActive }"
-          @click="navOpen = false"
-          >Admin</RouterLink
-        >
-      </div>
+      <RouterLink
+        :to="{ name: reportsHome }"
+        class="btn"
+        :class="{ 'btn-solid': reportsActive }"
+        >Reports</RouterLink
+      >
+      <RouterLink :to="{ name: 'payments' }" class="btn" :class="{ 'btn-solid': financeActive }"
+        >Finance</RouterLink
+      >
+      <RouterLink
+        v-if="auth.isAdmin"
+        :to="{ name: 'employees' }"
+        class="btn"
+        :class="{ 'btn-solid': adminActive }"
+        >Admin</RouterLink
+      >
     </nav>
 
     <!-- Section mini-tabs: a single horizontally-scrolling row rather than a
@@ -286,6 +280,7 @@ async function changePassword() {
          screen edge on mobile, matching the page's own gutter. -->
     <div
       v-if="auth.user && reportsActive"
+      ref="reportsNavEl"
       class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
       <RouterLink
@@ -326,6 +321,7 @@ async function changePassword() {
 
     <div
       v-if="auth.user && financeActive"
+      ref="financeNavEl"
       class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
       <RouterLink :to="{ name: 'payments' }" class="btn btn-sm" active-class="btn-solid"
@@ -385,6 +381,7 @@ async function changePassword() {
 
     <div
       v-if="auth.user && adminActive && auth.isAdmin"
+      ref="adminNavEl"
       class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
       <RouterLink :to="{ name: 'employees' }" class="btn btn-sm" active-class="btn-solid"

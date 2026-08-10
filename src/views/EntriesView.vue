@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import {
   computeHours,
@@ -28,12 +28,39 @@ const workTypes = ref<WorkTypeInfo[]>([])
 const deviceTypes = ref<DeviceTypeInfo[]>([])
 // "Suggest a device type" — for anyone assigned installation work; the
 // suggestion is pending until an admin approves it (see Settings), so it
-// isn't added to deviceTypes or made pickable here right away.
-const showProposeDevice = ref(false)
+// isn't added to deviceTypes or made pickable here right away. Offered as a
+// "+ Add new device" option at the top of the device-type lists themselves
+// (see ADD_NEW_DEVICE below) rather than a standalone block that would sit
+// above every installation card whether or not anyone needs it.
+const ADD_NEW_DEVICE = '__add_new_device__'
+type DeviceField = 'device_type' | 'replaced_device_type'
+const addDeviceOpen = ref(false)
 const proposeDeviceName = ref('')
 const proposeMsg = ref('')
 const proposeFailed = ref(false)
 const proposeBusy = ref(false)
+
+/** Selecting the sentinel option opens the modal instead of "choosing" it —
+ * the select reverts to blank so a half-finished proposal never leaves a
+ * fake device recorded on the card. The proposal itself isn't tied to which
+ * card/select opened it — it's a standalone request an admin decides on.
+ * The reset happens on nextTick, after v-model's own change handler has
+ * settled the field at the sentinel — resetting it inline here would race
+ * with that handler and could be clobbered back to the sentinel value. */
+function onDeviceSelect(card: EntryCard, field: DeviceField) {
+  if (card[field] !== ADD_NEW_DEVICE) return
+  addDeviceOpen.value = true
+  proposeDeviceName.value = ''
+  proposeMsg.value = ''
+  proposeFailed.value = false
+  nextTick(() => {
+    card[field] = ''
+  })
+}
+
+function closeAddDevice() {
+  addDeviceOpen.value = false
+}
 const entries = ref<Entry[]>([])
 const month = ref('')
 const filterEmployee = ref('')
@@ -539,57 +566,10 @@ const dayGroups = computed(() =>
           </div>
           <!-- Installation-style cards: a type, and for some types a device
                make — no free-text name, no duplicate check (see
-               shared/installations.ts). -->
+               shared/installations.ts). "Can't find your device?" lives as a
+               "+ Add new device" option inside the device-type selects
+               themselves (see ADD_NEW_DEVICE), not a standing block here. -->
           <template v-if="isInstallationType(wt)">
-            <div class="mb-3">
-              <button
-                v-if="!showProposeDevice"
-                type="button"
-                class="text-xs text-teal underline"
-                @click="showProposeDevice = true"
-              >
-                Can't find your device? Suggest a device type
-              </button>
-              <form
-                v-else
-                class="flex flex-wrap items-end gap-2"
-                @submit.prevent="proposeDeviceType"
-              >
-                <div>
-                  <label class="field-label" for="propose-device-name">
-                    New device type name
-                  </label>
-                  <input
-                    id="propose-device-name"
-                    v-model="proposeDeviceName"
-                    maxlength="60"
-                    class="field-input"
-                    placeholder="e.g. Ruptela"
-                  />
-                </div>
-                <button class="btn btn-sm" :disabled="proposeBusy">
-                  {{ proposeBusy ? 'Sending…' : 'Send for approval' }}
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-sm"
-                  @click="showProposeDevice = false"
-                >
-                  Cancel
-                </button>
-              </form>
-              <p
-                v-if="proposeMsg"
-                class="mt-1 text-xs"
-                :class="proposeFailed ? 'text-red' : 'text-teal'"
-              >
-                {{ proposeMsg }}
-              </p>
-              <p class="mt-1 text-xs text-muted">
-                Suggestions need an admin's approval before they're selectable —
-                yours won't show in the list below right away.
-              </p>
-            </div>
             <div
               v-if="cardsFor(wt.id).length > 0"
               class="mb-1 hidden gap-2 md:grid md:grid-cols-[1fr_1fr_1fr_1fr_auto]"
@@ -659,8 +639,10 @@ const dayGroups = computed(() =>
                   :id="`card-${wt.id}-${i}-replaced`"
                   v-model="c.replaced_device_type"
                   class="field-input"
+                  @change="onDeviceSelect(c, 'replaced_device_type')"
                 >
                   <option value="" disabled>Select…</option>
+                  <option :value="ADD_NEW_DEVICE" class="text-teal">+ Add new device</option>
                   <option v-for="d in deviceTypes" :key="d.id" :value="d.id">
                     {{ d.name }}
                   </option>
@@ -684,8 +666,10 @@ const dayGroups = computed(() =>
                   :id="`card-${wt.id}-${i}-device`"
                   v-model="c.device_type"
                   class="field-input"
+                  @change="onDeviceSelect(c, 'device_type')"
                 >
                   <option value="" disabled>Select…</option>
+                  <option :value="ADD_NEW_DEVICE" class="text-teal">+ Add new device</option>
                   <option v-for="d in deviceTypes" :key="d.id" :value="d.id">
                     {{ d.name }}
                   </option>
@@ -1013,6 +997,53 @@ const dayGroups = computed(() =>
             {{ busy ? 'Saving…' : 'Continue and notify admins' }}
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== add new device -->
+    <!-- Opened by "+ Add new device" at the top of a device-type select
+         (installation cards) rather than a block that would sit above the
+         card list whether or not anyone needed it. -->
+    <div
+      v-if="addDeviceOpen"
+      class="fixed inset-0 z-30 flex items-center justify-center bg-ink/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-device-title"
+    >
+      <div class="panel w-full max-w-sm">
+        <h3 id="add-device-title" class="display mb-2 text-xl">Suggest a device type</h3>
+        <p class="mb-3 text-sm text-muted">
+          Sent for an administrator to approve — it won't be selectable on any
+          card until then.
+        </p>
+        <form @submit.prevent="proposeDeviceType">
+          <label class="field-label" for="propose-device-name">New device type name</label>
+          <input
+            id="propose-device-name"
+            v-model="proposeDeviceName"
+            maxlength="60"
+            required
+            autofocus
+            class="field-input mb-3"
+            placeholder="e.g. Ruptela"
+          />
+          <p
+            v-if="proposeMsg"
+            class="mb-3 text-xs"
+            :class="proposeFailed ? 'text-red' : 'text-teal'"
+          >
+            {{ proposeMsg }}
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button class="btn btn-solid btn-sm" :disabled="proposeBusy">
+              {{ proposeBusy ? 'Sending…' : 'Send for approval' }}
+            </button>
+            <button type="button" class="btn btn-sm" @click="closeAddDevice">
+              {{ proposeMsg && !proposeFailed ? 'Done' : 'Cancel' }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

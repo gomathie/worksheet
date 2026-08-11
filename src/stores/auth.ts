@@ -30,12 +30,6 @@ export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null as Me | null,
     loaded: false,
-    // Set for the duration of one fresh sign-in, then consumed by
-    // NewsPopup.vue — in-memory only (not persisted), so a page refresh
-    // (session restored via fetchMe alone, never calling login()) never
-    // re-triggers it. That is the difference between "each time you log
-    // in" and "every time the app loads".
-    justLoggedIn: false,
   }),
   getters: {
     isAdmin: (s) => s.user?.role === 'admin',
@@ -55,10 +49,6 @@ export const useAuthStore = defineStore('auth', {
     },
     async login(username: string, password: string) {
       await api('/api/auth/login', { method: 'POST', json: { username, password } })
-      // Set before fetchMe() populates `user` — App.vue mounts NewsPopup on
-      // `v-if="auth.user"`, and this needs to already be true at that exact
-      // moment, not merely "soon after" it.
-      this.justLoggedIn = true
       await this.fetchMe()
     },
     async logout() {

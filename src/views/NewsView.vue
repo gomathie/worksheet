@@ -6,9 +6,11 @@ import { NEWS_STYLE_LABELS, maxDaysFor } from '../../shared/news'
 import type { NewsItem, NewsStyle } from '../types'
 
 // A read-everyone, write-some feed: anyone can read it, only a
-// send_announcements holder (or an admin) can post to it. A 'popup' item
-// also interrupts the next sign-in for everyone — see NewsPopup.vue — but
-// still lives here too, for whoever missed or dismissed it.
+// send_announcements holder (or an admin) can post to it. This page only
+// ever lists 'feed' announcements for a non-admin — a 'popup' item is
+// admin-only, both to send and to browse/retract here; everyone still gets
+// interrupted by a live one regardless (see NewsPopup.vue, and the
+// `?style=popup` fetch it uses instead of this page's plain one).
 
 const auth = useAuthStore()
 
@@ -19,6 +21,14 @@ const busy = ref('')
 
 const canSend = computed(() => auth.isAdmin || auth.rights.send_announcements)
 const maxDays = computed(() => maxDaysFor(auth.isAdmin))
+// Only an admin may choose 'popup' — everyone else only ever posts to the
+// feed (enforced again server-side; this just keeps the form from offering
+// something the API would reject).
+const styleOptions = computed(() =>
+  auth.isAdmin
+    ? NEWS_STYLE_LABELS
+    : ({ feed: NEWS_STYLE_LABELS.feed } as typeof NEWS_STYLE_LABELS),
+)
 
 const blank = () => ({
   title: '',
@@ -116,7 +126,7 @@ async function retract(n: NewsItem) {
         <div>
           <label class="field-label" for="n-style">Style</label>
           <select id="n-style" v-model="form.style" class="field-input">
-            <option v-for="(label, s) in NEWS_STYLE_LABELS" :key="s" :value="s">
+            <option v-for="(label, s) in styleOptions" :key="s" :value="s">
               {{ label }}
             </option>
           </select>
@@ -148,9 +158,11 @@ async function retract(n: NewsItem) {
           />
         </div>
       </div>
-      <p class="mt-3 text-xs text-muted">
-        <strong>{{ NEWS_STYLE_LABELS.popup }}</strong> also interrupts everyone's next sign-in
-        with a pop-up, in addition to appearing here.
+      <p v-if="auth.isAdmin" class="mt-3 text-xs text-muted">
+        <strong>{{ NEWS_STYLE_LABELS.popup }}</strong> interrupts everyone every few hours for as
+        long as it's live, instead of sitting in the feed for people to find. Only admins can send
+        one, and only admins see it listed here (to retract it early) — everyone else just gets
+        the pop-up itself.
       </p>
       <div class="mt-4 flex flex-wrap gap-2">
         <button class="btn btn-solid" :disabled="busy === 'form'">

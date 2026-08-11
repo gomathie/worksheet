@@ -38,11 +38,20 @@ const SELECT_NEWS = `
  * ones, so a holder of the right can see what they've sent and retract
  * something early. Without it, this is the feed everyone reads: only what's
  * still live.
+ *
+ * `?style=popup` is the login-interrupt fetch (see NewsPopup.vue) — every
+ * live pop-up, for anyone, regardless of role. It exists because pop-ups are
+ * otherwise admin-only to browse: the News page itself only ever lists
+ * 'feed' announcements for a non-admin, so without this separate path
+ * regular employees would stop receiving the interrupt entirely once they
+ * can no longer see pop-ups listed. Admins still see both styles through the
+ * plain fetch, since they're the ones who can retract a pop-up early.
  */
 export async function listNews(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const url = new URL(request.url)
   const manage = url.searchParams.get('manage') === '1'
+  const wantPopups = url.searchParams.get('style') === 'popup'
   if (manage && !canSend(user)) throw new ApiError(403, 'You do not have permission for this')
 
   let sql = `${SELECT_NEWS} WHERE 1 = 1`
@@ -50,6 +59,11 @@ export async function listNews(request: Request, env: Env): Promise<Response> {
   if (!manage) {
     sql += ' AND n.expires_at >= ?'
     binds.push(today(env))
+  }
+  if (wantPopups) {
+    sql += " AND n.style = 'popup'"
+  } else if (user.role !== 'admin') {
+    sql += " AND n.style = 'feed'"
   }
   sql += ' ORDER BY n.created_at DESC'
 
@@ -94,8 +108,14 @@ export async function createNews(request: Request, env: Env): Promise<Response> 
 
   const style = parseNewsStyle(body.style ?? 'feed')
   if (!style) throw new ApiError(400, "style must be 'feed' or 'popup'")
-
   const isAdmin = user.role === 'admin'
+  // A pop-up interrupts everyone's next sign-in — reserved for admins, not
+  // every send_announcements holder. Anyone with the right can still post a
+  // plain feed announcement.
+  if (style === 'popup' && !isAdmin) {
+    throw new ApiError(403, 'Only admins can send a pop-up announcement')
+  }
+
   const days = parseExpiryDays(body.days, isAdmin)
   if (days === null) {
     throw new ApiError(

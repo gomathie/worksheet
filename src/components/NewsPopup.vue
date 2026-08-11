@@ -1,32 +1,60 @@
 <script setup lang="ts">
-// Pop-up announcements — shown once per fresh sign-in (not on every page
-// load; see auth.justLoggedIn), for whatever 'popup'-style news is still
-// live. Distinct from the News feed page: this interrupts, the feed waits
-// to be read.
-import { onMounted, ref } from 'vue'
+// Pop-up announcements — reappear every REMIND_MS while still live, not just
+// once per fresh sign-in, so a notice actually gets seen even by someone who
+// keeps a tab open all day or only ever refreshes rather than re-logging in.
+// "Seen" is tracked per announcement id in localStorage (not a store field),
+// since it has to survive both a full page reload and, for the setInterval
+// case below, an open tab that's never reloaded at all.
+//
+// Distinct from the News feed page: this interrupts, the feed waits to be
+// read — and pop-ups are admin-only to browse there at all (see NewsView.vue
+// and server/news.ts), so this dedicated `?style=popup` fetch is the only
+// way a non-admin ever sees one.
+import { onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '../api'
-import { useAuthStore } from '../stores/auth'
 import type { NewsItem } from '../types'
 
-const auth = useAuthStore()
 const items = ref<NewsItem[]>([])
 const open = ref(false)
 
-onMounted(async () => {
-  if (!auth.justLoggedIn) return
-  // Consume immediately — a failed fetch below must not leave this set,
-  // which would otherwise retry on every subsequent mount of this
-  // component (e.g. after an unrelated Pinia state reset) rather than only
-  // once per actual login.
-  auth.justLoggedIn = false
+const SEEN_KEY_PREFIX = 'news-popup-seen:'
+const REMIND_MS = 3 * 60 * 60 * 1000 // 3 hours
+const RECHECK_MS = 15 * 60 * 1000 // how often an open tab re-checks
+
+function lastSeen(id: string): number {
+  const raw = localStorage.getItem(SEEN_KEY_PREFIX + id)
+  const n = raw ? Number(raw) : NaN
+  return Number.isFinite(n) ? n : 0
+}
+
+function markSeen(ids: string[]) {
+  const now = String(Date.now())
+  for (const id of ids) localStorage.setItem(SEEN_KEY_PREFIX + id, now)
+}
+
+async function checkForDue() {
+  if (open.value) return // don't interrupt a reminder already on screen
   try {
-    const news = await api<NewsItem[]>('/api/news')
-    items.value = news.filter((n) => n.style === 'popup')
-    open.value = items.value.length > 0
+    const news = await api<NewsItem[]>('/api/news?style=popup')
+    const due = news.filter((n) => Date.now() - lastSeen(n.id) >= REMIND_MS)
+    if (due.length === 0) return
+    items.value = due
+    open.value = true
+    markSeen(due.map((n) => n.id))
   } catch {
-    // A pop-up is a courtesy, not core functionality — never block sign-in.
+    // A pop-up is a courtesy, not core functionality — never block on it.
   }
+}
+
+let timer: ReturnType<typeof setInterval> | undefined
+
+onMounted(() => {
+  checkForDue()
+  timer = setInterval(checkForDue, RECHECK_MS)
+})
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
 })
 
 function close() {

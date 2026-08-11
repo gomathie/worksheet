@@ -130,6 +130,12 @@ const router = createRouter({
       meta: { auth: true, admin: true },
     },
     {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('../views/NotificationsView.vue'),
+      meta: { auth: true, admin: true },
+    },
+    {
       path: '/tasks',
       name: 'tasks',
       component: () => import('../views/TasksView.vue'),

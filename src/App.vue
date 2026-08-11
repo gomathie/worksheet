@@ -38,7 +38,7 @@ const financeActive = computed(() =>
   ].includes(String(route.name)),
 )
 const adminActive = computed(() =>
-  ['employees', 'settings'].includes(String(route.name)),
+  ['employees', 'settings', 'notifications'].includes(String(route.name)),
 )
 // Where the "Reports" pill itself points — Trends and Absences are always
 // visible so they're a safe fallback for anyone without the Reports right.
@@ -391,6 +391,9 @@ async function changePassword() {
       >
       <RouterLink :to="{ name: 'settings' }" class="btn btn-sm" active-class="btn-solid"
         >Settings</RouterLink
+      >
+      <RouterLink :to="{ name: 'notifications' }" class="btn btn-sm" active-class="btn-solid"
+        >Notifications</RouterLink
       >
     </div>
 

@@ -6,8 +6,8 @@ tracking. Admins add employees, assign what each can do, and get dashboards, rep
 printable monthly report. Installable as a PWA.
 
 **Stack:** Vue 3 (`<script setup>`) + Vite + TypeScript · Tailwind CSS 4 · Pinia · Vue Router ·
-Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 (SQLite) · Workers KV
-(sessions). No paid third-party services — Cloudflare tier only.
+Chart.js (`vue-chartjs`) · `marked` (renders the in-app guides) · Cloudflare Pages + Pages Functions ·
+Cloudflare D1 (SQLite) · Workers KV (sessions). No paid third-party services — Cloudflare tier only.
 
 ---
 
@@ -16,7 +16,12 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
 ### Accounts, roles & rights
 - **Login** is username + password (PBKDF2 hashing); sessions live in Workers KV. The header
   **Account menu** holds the name/role, self-service **Edit profile** (own name, email and
-  phone — role/rights/username still need an admin), **Change password**, and **Sign out**.
+  phone — role/rights/username still need an admin), **Change password**, **User Guide** (everyone)
+  and **Admin Guide** (admins only, in addition to the User Guide), and **Sign out**.
+- **In-app guides** (`/help/user`, `/help/admin`) render `guideline-user.md` and `guideline-admin.md`
+  (repo root — edit those files, not the app) through `marked` at build time (`?raw` import, no
+  network fetch) into `GuideView.vue`. `v-html` there is safe specifically because the content is
+  static and developer-authored, never derived from a database row or a request body.
 - Three roles: **admin**, **manager**, and **employee**.
   - **Admin** can do everything *except* approve expense vouchers and approve new user accounts —
     those two authorities must be granted explicitly.
@@ -411,7 +416,7 @@ src/                         Vue 3 app
   types.ts                   TypeScript type definitions
   stores/auth.ts             Pinia auth store (session, rights, role, justLoggedIn)
   router/index.ts            Vue Router with auth/right/role guards
-  views/                     27 page-level components (see below)
+  views/                     28 page-level components (see below)
   components/                Reusable components (charts, notification bell, deadline/news pop-ups, etc.)
 public/                      PWA assets (manifest, service worker, icons)
 migrations/                  D1 SQL migrations (30 files, 0001–0028 — see note on duplicate numbers)
@@ -444,6 +449,7 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `TasksView` | `/tasks` | Authenticated |
 | `TaskDetailView` | `/tasks/:id` | Authenticated (visibility scoped per task) |
 | `NewsView` | `/news` | Authenticated (reads; `send_announcements` or admin to post) |
+| `GuideView` | `/help/user`, `/help/admin` | Authenticated (`/help/admin` is Admin) |
 | `CardAuditView` | `/card-audit` | `view_reports` |
 | `InstallationsReportView` | `/installations-report` | `view_reports` |
 | `EmployeesView` | `/employees` | Admin |

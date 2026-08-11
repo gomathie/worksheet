@@ -243,6 +243,23 @@ async function saveProfile() {
           >
             Change password
           </button>
+          <div class="my-1 border-t border-line" />
+          <RouterLink
+            :to="{ name: 'help-user' }"
+            class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
+            @click="menuOpen = false"
+          >
+            User Guide
+          </RouterLink>
+          <RouterLink
+            v-if="auth.isAdmin"
+            :to="{ name: 'help-admin' }"
+            class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
+            @click="menuOpen = false"
+          >
+            Admin Guide
+          </RouterLink>
+          <div class="my-1 border-t border-line" />
           <button
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="signOut"

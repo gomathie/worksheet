@@ -160,6 +160,18 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/help/user',
+      name: 'help-user',
+      component: () => import('../views/GuideView.vue'),
+      meta: { auth: true, doc: 'user' },
+    },
+    {
+      path: '/help/admin',
+      name: 'help-admin',
+      component: () => import('../views/GuideView.vue'),
+      meta: { auth: true, admin: true, doc: 'admin' },
+    },
+    {
       path: '/card-audit',
       name: 'card-audit',
       component: () => import('../views/CardAuditView.vue'),

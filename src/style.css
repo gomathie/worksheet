@@ -217,3 +217,103 @@ table.data tr.group-head td {
   .pack-page { break-after: page; margin-top: 0 !important; }
   .pack-page:last-child { break-after: auto; }
 }
+
+/* ---------- rendered markdown (Help / guide pages) ---------- */
+
+/* GuideView.vue renders the User/Admin guide (static, developer-authored
+   markdown bundled at build time — never user input) through `marked`, then
+   applies this to the resulting HTML. Mirrors the editorial type already
+   used everywhere else (.display for headings, mono for code) rather than a
+   generic "prose" look bolted on top. */
+.markdown-body h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 28px;
+  margin: 0 0 14px;
+}
+.markdown-body h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 21px;
+  margin: 32px 0 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-line);
+}
+.markdown-body h1 + h2, .markdown-body > h2:first-child { margin-top: 10px; padding-top: 0; border-top: none; }
+.markdown-body h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  margin: 20px 0 8px;
+}
+.markdown-body h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+  margin: 16px 0 6px;
+}
+.markdown-body p { margin: 0 0 12px; line-height: 1.6; }
+.markdown-body ul, .markdown-body ol { margin: 0 0 12px; padding-left: 22px; line-height: 1.6; }
+.markdown-body li { margin: 3px 0; }
+.markdown-body li > p { margin-bottom: 4px; }
+.markdown-body strong { font-weight: 600; }
+.markdown-body a { color: var(--color-teal); text-decoration: underline; text-underline-offset: 2px; }
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-cream);
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.markdown-body pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--color-cream);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 14px;
+}
+.markdown-body pre code { background: none; border: none; padding: 0; }
+.markdown-body blockquote {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-teal);
+  background: var(--color-teal-soft);
+  border-radius: 0 8px 8px 0;
+  color: var(--color-ink);
+}
+.markdown-body blockquote p:last-child { margin-bottom: 0; }
+.markdown-body hr { border: none; border-top: 1px solid var(--color-line); margin: 24px 0; }
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+.markdown-body th {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 2px solid var(--color-ink);
+}
+.markdown-body td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+}

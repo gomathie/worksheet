@@ -46,9 +46,10 @@ function close() {
         >
           <h3 class="display text-lg">{{ n.title }}</h3>
           <p v-if="n.body" class="mt-1 text-sm whitespace-pre-wrap">{{ n.body }}</p>
-          <p class="mt-1 text-xs text-muted">
-            {{ n.created_by_name ?? 'Admin' }} · live through {{ n.expires_at }}
-          </p>
+          <!-- No "posted by" here — a pop-up reads as coming from the
+               organisation, not a person, and the server withholds the name
+               from anyone but an admin or the sender anyway (see news.ts). -->
+          <p class="mt-1 text-xs text-muted">live through {{ n.expires_at }}</p>
         </div>
       </div>
       <div class="flex gap-2">

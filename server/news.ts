@@ -59,10 +59,19 @@ export async function listNews(request: Request, env: Env): Promise<Response> {
 
   const mayDeleteAny = canSend(user)
   return json(
-    results.map((n) => ({
-      ...n,
-      can_delete: mayDeleteAny && (user.role === 'admin' || n.created_by === user.id),
-    })),
+    results.map((n) => {
+      // A pop-up reads as an announcement from the organisation, not from a
+      // person — hide who sent it from everyone except an admin (who needs
+      // it to moderate) or the sender themself. Masked server-side, not just
+      // in the UI, so it can't be read off the network response either.
+      const hideAuthor = n.style === 'popup' && user.role !== 'admin' && n.created_by !== user.id
+      return {
+        ...n,
+        created_by: hideAuthor ? null : n.created_by,
+        created_by_name: hideAuthor ? null : n.created_by_name,
+        can_delete: mayDeleteAny && (user.role === 'admin' || n.created_by === user.id),
+      }
+    }),
   )
 }
 

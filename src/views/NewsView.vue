@@ -174,9 +174,13 @@ async function retract(n: NewsItem) {
             >
           </div>
           <p v-if="n.body" class="mt-1 text-sm whitespace-pre-wrap">{{ n.body }}</p>
+          <!-- Pop-ups read as coming from the organisation, not a person —
+               the server withholds created_by_name from anyone but an admin
+               or the sender for a popup (see news.ts), so this only names
+               someone when the API actually sent a name to show. -->
           <p class="mt-1 text-xs text-muted">
-            {{ n.created_by_name ?? 'Admin' }} · posted {{ n.created_at.slice(0, 10) }} · live
-            through {{ n.expires_at }}
+            <template v-if="n.created_by_name">{{ n.created_by_name }} · </template
+            >posted {{ n.created_at.slice(0, 10) }} · live through {{ n.expires_at }}
           </p>
         </div>
         <button

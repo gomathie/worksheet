@@ -2139,18 +2139,22 @@ async function confirmReceipt(request: Request, env: Env): Promise<Response> {
   return json({ ok: true })
 }
 
-/** Self-service contact-details edit — deliberately narrow (email + phone
- * only). Name, role, rights, username and password all have their own,
- * more guarded paths (admin-only patchEmployee, or changeOwnPassword). */
+/** Self-service profile edit — deliberately narrow (name, email, phone only).
+ * Role, rights, username and password all have their own, more guarded
+ * paths (admin-only patchEmployee, or changeOwnPassword). */
 async function updateOwnProfile(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  const body = await readJson<{ email?: string | null; phone?: string | null }>(request)
+  const body = await readJson<{ name?: string; email?: string | null; phone?: string | null }>(
+    request,
+  )
+  const name = body.name !== undefined ? String(body.name).trim() : user.name
+  if (!name) throw new ApiError(400, 'name cannot be empty')
   const email =
     body.email !== undefined ? String(body.email ?? '').trim().toLowerCase() || null : user.email
   const phone = body.phone !== undefined ? String(body.phone ?? '').trim() || null : user.phone
   try {
-    await env.DB.prepare('UPDATE employees SET email = ?, phone = ? WHERE id = ?')
-      .bind(email, phone, user.id)
+    await env.DB.prepare('UPDATE employees SET name = ?, email = ?, phone = ? WHERE id = ?')
+      .bind(name, email, phone, user.id)
       .run()
   } catch (e) {
     if (String(e).includes('UNIQUE')) {
@@ -2158,8 +2162,8 @@ async function updateOwnProfile(request: Request, env: Env): Promise<Response> {
     }
     throw e
   }
-  await audit(env, user.id, 'update_profile', user.id, { email, phone })
-  return json({ email, phone })
+  await audit(env, user.id, 'update_profile', user.id, { name, email, phone })
+  return json({ name, email, phone })
 }
 
 async function changeOwnPassword(request: Request, env: Env): Promise<Response> {

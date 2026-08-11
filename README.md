@@ -15,9 +15,8 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
 
 ### Accounts, roles & rights
 - **Login** is username + password (PBKDF2 hashing); sessions live in Workers KV. The header
-  **Account menu** holds the name/role, self-service **Edit profile** (own email + phone —
-  what notifications reach, not who you are: name/role/rights still need an admin), **Change
-  password**, and **Sign out**.
+  **Account menu** holds the name/role, self-service **Edit profile** (own name, email and
+  phone — role/rights/username still need an admin), **Change password**, and **Sign out**.
 - Three roles: **admin**, **manager**, and **employee**.
   - **Admin** can do everything *except* approve expense vouchers and approve new user accounts —
     those two authorities must be granted explicitly.

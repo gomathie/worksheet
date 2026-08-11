@@ -131,8 +131,9 @@ async function changePassword() {
   }
 }
 
-// ---- self-service contact details (email + phone only — see updateOwnProfile)
+// ---- self-service profile (name, email, phone — see updateOwnProfile)
 const showProfile = ref(false)
+const profileName = ref('')
 const profileEmail = ref('')
 const profilePhone = ref('')
 const profileBusy = ref(false)
@@ -145,6 +146,7 @@ function openProfile() {
   showProfile.value = true
   profileError.value = ''
   profileDone.value = false
+  profileName.value = auth.user?.name ?? ''
   profileEmail.value = auth.user?.email ?? ''
   profilePhone.value = auth.user?.phone ?? ''
 }
@@ -162,7 +164,11 @@ async function saveProfile() {
   try {
     await api('/api/me', {
       method: 'PATCH',
-      json: { email: profileEmail.value || null, phone: profilePhone.value || null },
+      json: {
+        name: profileName.value,
+        email: profileEmail.value || null,
+        phone: profilePhone.value || null,
+      },
     })
     // Refetch rather than patch auth.user locally — keeps it as the single
     // source of truth and picks up the server's own normalization (email
@@ -253,9 +259,16 @@ async function saveProfile() {
         <h2 class="display mb-3 text-xl">Edit your profile</h2>
         <p class="mb-3 text-sm text-muted">
           Email and phone are how the app reaches you — a payslip notice by
-          email, an SMS if your admin has that turned on. Ask your admin to
-          change your name.
+          email, an SMS if your admin has that turned on. Your role and
+          rights are still set by an administrator.
         </p>
+        <label class="field-label" for="profile-name">Name</label>
+        <input
+          id="profile-name"
+          v-model="profileName"
+          required
+          class="field-input mb-3"
+        />
         <label class="field-label" for="profile-email">Email</label>
         <input
           id="profile-email"

@@ -23,9 +23,10 @@ Log in with the **username and password** an administrator set for you. Once in,
 the **Account** menu at the top right holds your name and role, **Edit
 profile**, **Change password**, and **Sign out**.
 
-**Edit profile** is where you keep your own **email** and **phone** number
-current — that's what notifications go to (email, and SMS if an admin has
-that turned on). Your name, role and rights are still set by an administrator.
+**Edit profile** is where you keep your own **name**, **email** and **phone**
+number current — email and phone are what notifications go to (email, and SMS
+if an admin has that turned on). Your role and rights are still set by an
+administrator.
 
 Tap the **OpenSignal Ledger** masthead at any time to get back to Time Entry.
 

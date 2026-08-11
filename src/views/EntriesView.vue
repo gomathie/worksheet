@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import {
   computeHours,
@@ -22,6 +23,8 @@ import { useAuthStore } from '../stores/auth'
 import type { DeviceTypeInfo, Employee, Entry, EntryCard, WorkTypeInfo } from '../types'
 
 const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const employees = ref<Employee[]>([])
 const workTypes = ref<WorkTypeInfo[]>([])
@@ -66,6 +69,11 @@ const month = ref('')
 const filterEmployee = ref('')
 const error = ref('')
 const busy = ref(false)
+// Deep link from Card Audit's "Open" button (?month=&employee_id=&entry=) —
+// lands here with the right month/employee already filtered, then scrolls
+// to and briefly marks the specific entry so there is no hunting for it in
+// a list that could otherwise hold dozens of rows.
+const highlightEntryId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
 
 const form = ref({

@@ -316,14 +316,17 @@ onMounted(async () => {
   month.value = typeof qMonth === 'string' ? qMonth : today.slice(0, 7)
   form.value.work_date = today
   form.value.employee_id = auth.user!.id
+  // Set alongside month, both before the first await below — the
+  // month/filterEmployee watch flushes as soon as this function yields, so
+  // setting filterEmployee only after that point would let an unfiltered
+  // loadEntries() fire first and then race the filtered one, sometimes
+  // winning and silently dropping the employee filter.
+  if (auth.isAdmin && typeof qEmployee === 'string') filterEmployee.value = qEmployee
   ;[employees.value, workTypes.value, deviceTypes.value] = await Promise.all([
     api<Employee[]>('/api/employees'),
     api<WorkTypeInfo[]>('/api/work-types'),
     api<DeviceTypeInfo[]>('/api/device-types'),
   ])
-  // Only meaningful for an admin — everyone else's Recent entries is already
-  // scoped to themselves, so there is nothing to pick.
-  if (auth.isAdmin && typeof qEmployee === 'string') filterEmployee.value = qEmployee
   await Promise.all([loadEntries(), loadCardNames()])
   if (typeof qEntry === 'string' && entries.value.some((e) => e.id === qEntry)) {
     highlightEntryId.value = qEntry

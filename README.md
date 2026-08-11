@@ -109,11 +109,16 @@ intent, not a record that feeds a points or money calculation.
 A `send_announcements` holder (admins get it implicitly, like almost every right) can broadcast a
 message to the whole team, in either of two styles:
 
-- **Announcement** — posted to the News page for anyone to read.
-- **Pop-up on login** — posted to the News page *and* shown as a modal that interrupts the next
-  sign-in, for every employee, while it's still live. Triggered specifically by the login action
-  (client-side, in-memory only) — a page refresh restores the existing session without logging in
-  again, so it never re-shows the pop-up on every reload, only once per fresh sign-in.
+- **Announcement** — posted to the News page for anyone to read. Anyone with the right can send one.
+- **Pop-up on login** — **admin-only** to send. Interrupts every employee with a modal, repeating
+  every ~3 hours (not just once per sign-in) for as long as it's still live, so it actually gets
+  seen even by someone who keeps a tab open all day or only ever refreshes. "Already shown" is
+  tracked client-side per announcement id (`localStorage`, not the session), which is what makes
+  the repeat work across page loads without a fresh login. **The identity of who sent a pop-up is
+  hidden** from everyone except an admin or the sender themself — masked server-side (not just in
+  the UI), and a pop-up never appears in the News page's list for a non-admin at all (only the
+  interrupt itself reaches them, via a separate `?style=popup` fetch); admins still see it listed
+  there, to retract it early.
 - **Every announcement expires on its own** — the poster sets a lifetime in whole days at creation;
   there is no "leave it up forever" option. An ordinary holder is capped at **1–7 days**; an
   **administrator** may go further, up to **90 days**. Both bounds are enforced server-side, not

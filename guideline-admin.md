@@ -11,8 +11,9 @@ you log time, tasks and expenses the same way everyone else does.
 **Employees** — add someone, or edit anyone.
 
 Each person has a **name**, optional **email** and **phone**, a **username and
-password** for signing in, an auto-generated **staff code** (`EMP-001`), a
-**department**, and a **Reports to** manager — set that last one to make
+password** for signing in, an auto-generated **staff code** (e.g. `ID-2023001`
+— the prefix is whatever's set in Settings, see below), a **department**, and
+a **Reports to** manager — set that last one to make
 somebody a manager for expense review. Phone is only used for SMS
 notifications (see **Admin → Notifications** below) — it's not needed to sign
 in, and the employee can set it themselves too (Account menu → Edit profile).
@@ -185,7 +186,8 @@ Unlock if corrections are needed.
 
 ## Other settings
 
-- **Employee code prefix** — the `EMP-` in `EMP-001`.
+- **Employee code prefix** — the `ID-2023` in `ID-2023001`. Changing it only affects codes
+  assigned from then on; existing staff codes don't get rewritten.
 - **Departments** and **expense categories** — add, rename, deactivate.
 - **Device types** — the telematics device make list, including the queue of
   suggestions from installers. See *Installations & device types* above.

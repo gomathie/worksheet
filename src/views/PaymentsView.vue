@@ -408,6 +408,12 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
                   <span v-if="p.confirmed" class="text-teal"> · Confirmed</span>
                 </td>
                 <td class="whitespace-nowrap">
+                  <RouterLink
+                    class="btn btn-sm btn-view"
+                    :to="{ name: 'finance-trail', query: { employee_id: p.employee_id, month } }"
+                  >
+                    Trail
+                  </RouterLink>
                   <button
                     class="btn btn-sm"
                     :class="p.paid ? '' : 'btn-solid'"
@@ -438,6 +444,7 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
                 <th>Type</th>
                 <th class="num">Amount</th>
                 <th>Description</th>
+                <th>Added by</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -448,6 +455,10 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
                 <td>{{ a.type === 'bonus' ? 'Bonus' : 'Reimbursement' }}</td>
                 <td class="num">{{ money(a.amount) }}</td>
                 <td class="text-muted">{{ a.description }}</td>
+                <td class="text-xs text-muted whitespace-nowrap">
+                  {{ a.created_by_name ?? '—' }}<br />
+                  {{ new Date(a.created_at).toLocaleDateString() }}
+                </td>
                 <td
                   class="text-xs"
                   :class="a.status === 'approved' ? 'text-teal' : a.status === 'rejected' ? 'text-red' : 'text-muted'"

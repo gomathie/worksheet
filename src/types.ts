@@ -250,9 +250,61 @@ export interface Adjustment {
   description: string | null
   // 'pending' is raised but unscreened; 'awaiting_approval' is with the approver.
   status: 'pending' | 'awaiting_approval' | 'approved' | 'rejected'
+  created_by?: string | null
+  /** Who raised it — resolved server-side; null if that account was removed. */
+  created_by_name?: string | null
   created_at: string
+  decided_by?: string | null
+  decided_at?: string | null
   /** Set when an own-pocket expense voucher raised this claim. */
   voucher_id?: string | null
+}
+
+export interface FinanceTrailEntryLine {
+  kind: 'entry'
+  date: string
+  entry_id: string
+  work_date: string
+  hours: number
+  status: 'approved' | 'pending' | 'rejected'
+  items: { work_type_id: string; name: string; units: number }[]
+  points: number
+  value: number
+  counted: boolean
+  running_total: number
+}
+
+export interface FinanceTrailAdjustmentLine {
+  kind: 'adjustment'
+  date: string
+  id: string
+  adj_type: 'bonus' | 'reimbursement'
+  amount: number
+  description: string | null
+  status: 'pending' | 'awaiting_approval' | 'approved' | 'rejected'
+  created_by_name: string | null
+  created_at: string
+  decided_by_name: string | null
+  decided_at: string | null
+  counted: boolean
+  running_total: number
+}
+
+export interface FinanceTrail {
+  employee_id: string
+  employee_name: string
+  employee_code: string | null
+  month: string
+  currency: string
+  locked: boolean
+  point_value: number
+  base: number
+  bonus: number
+  reimbursements: number
+  total_due: number
+  paid_at: string | null
+  confirmed_at: string | null
+  trail: (FinanceTrailEntryLine | FinanceTrailAdjustmentLine)[]
 }
 
 export interface InstallationsReport {

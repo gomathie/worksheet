@@ -124,6 +124,12 @@ const router = createRouter({
       meta: { auth: true, admin: true },
     },
     {
+      path: '/finance-trail',
+      name: 'finance-trail',
+      component: () => import('../views/FinanceTrailView.vue'),
+      meta: { auth: true, admin: true },
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),

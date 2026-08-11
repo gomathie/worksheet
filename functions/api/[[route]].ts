@@ -1869,7 +1869,11 @@ async function listAdjustments(request: Request, env: Env): Promise<Response> {
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
 
   let sql =
-    'SELECT a.*, emp.name AS employee_name FROM adjustments a JOIN employees emp ON emp.id = a.employee_id WHERE a.month = ?'
+    `SELECT a.*, emp.name AS employee_name, cb.name AS created_by_name
+     FROM adjustments a
+     JOIN employees emp ON emp.id = a.employee_id
+     LEFT JOIN employees cb ON cb.id = a.created_by
+     WHERE a.month = ?`
   const binds: unknown[] = [month]
   if (user.role !== 'admin') {
     sql += ' AND a.employee_id = ?'
@@ -1878,7 +1882,7 @@ async function listAdjustments(request: Request, env: Env): Promise<Response> {
   sql += ' ORDER BY a.created_at DESC'
   const { results } = await env.DB.prepare(sql)
     .bind(...binds)
-    .all<AdjustmentRow & { employee_name: string }>()
+    .all<AdjustmentRow & { employee_name: string; created_by_name: string | null }>()
   return json(results)
 }
 
@@ -2332,6 +2336,152 @@ async function employeeRemuneration(
   const url = new URL(request.url)
   const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
   return json(await remunerationFor(env, employee, month, true))
+}
+
+/**
+ * Admin-only: the step-by-step accumulation behind one employee's total for a
+ * month — every entry and every bonus/reimbursement, in date order, each with
+ * a running total, so "why did this number move" has a direct answer instead
+ * of requiring a trip through Entries, Payments and the Activity log
+ * separately. The totals are computed by the same `remunerationFor` the
+ * Payments/Payslip pages use, so this can never disagree with what an
+ * employee is actually shown as owed — only the per-line breakdown is new.
+ */
+async function financeTrail(request: Request, env: Env, id: string): Promise<Response> {
+  await requireAdmin(request, env)
+  const employee = await env.DB.prepare('SELECT * FROM employees WHERE id = ?')
+    .bind(id)
+    .first<Employee>()
+  if (!employee) throw new ApiError(404, 'Employee not found')
+  const url = new URL(request.url)
+  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+
+  const rates = await ratesForMonth(env, month)
+  const overrides = rates.overridesByEmployee.get(employee.id) ?? {}
+  const workTypeName = new Map(rates.workTypes.map((w) => [w.id, w.name]))
+
+  const [entriesRes, itemsRes, adjRes, payment, summary] = await Promise.all([
+    env.DB.prepare(
+      'SELECT id, work_date, time_start, hours, status FROM entries WHERE employee_id = ? AND work_date LIKE ? ORDER BY work_date, time_start',
+    )
+      .bind(employee.id, `${month}-%`)
+      .all<{ id: string; work_date: string; time_start: string; hours: number; status: string }>(),
+    env.DB.prepare(
+      'SELECT ei.entry_id, ei.work_type_id, ei.units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.employee_id = ? AND e.work_date LIKE ?',
+    )
+      .bind(employee.id, `${month}-%`)
+      .all<{ entry_id: string; work_type_id: string; units: number }>(),
+    env.DB.prepare(
+      `SELECT a.*, cb.name AS created_by_name, db.name AS decided_by_name
+       FROM adjustments a
+       LEFT JOIN employees cb ON cb.id = a.created_by
+       LEFT JOIN employees db ON db.id = a.decided_by
+       WHERE a.employee_id = ? AND a.month = ?
+       ORDER BY a.created_at`,
+    )
+      .bind(employee.id, month)
+      .all<AdjustmentRow & { created_by_name: string | null; decided_by_name: string | null }>(),
+    env.DB.prepare('SELECT * FROM payments WHERE employee_id = ? AND month = ?')
+      .bind(employee.id, month)
+      .first<PaymentRow>(),
+    remunerationFor(env, employee, month, true),
+  ])
+
+  const itemsByEntry = new Map<string, Record<string, number>>()
+  for (const r of itemsRes.results) {
+    const rec = itemsByEntry.get(r.entry_id) ?? {}
+    rec[r.work_type_id] = r.units
+    itemsByEntry.set(r.entry_id, rec)
+  }
+
+  interface EntryLine {
+    kind: 'entry'
+    date: string
+    entry_id: string
+    work_date: string
+    hours: number
+    status: string
+    items: { work_type_id: string; name: string; units: number }[]
+    points: number
+    value: number
+  }
+  interface AdjustmentLine {
+    kind: 'adjustment'
+    date: string
+    id: string
+    adj_type: 'bonus' | 'reimbursement'
+    amount: number
+    description: string | null
+    status: string
+    created_by_name: string | null
+    created_at: string
+    decided_by_name: string | null
+    decided_at: string | null
+  }
+  const lines: (EntryLine | AdjustmentLine)[] = []
+
+  for (const e of entriesRes.results) {
+    const items = itemsByEntry.get(e.id) ?? {}
+    const points = computePoints(items, rates.workTypes, overrides)
+    lines.push({
+      kind: 'entry',
+      date: `${e.work_date}T${e.time_start ?? '00:00'}`,
+      entry_id: e.id,
+      work_date: e.work_date,
+      hours: e.hours,
+      status: e.status,
+      items: Object.entries(items)
+        .filter(([, u]) => u)
+        .map(([wt, u]) => ({ work_type_id: wt, name: workTypeName.get(wt) ?? wt, units: u })),
+      points,
+      value: Math.round(points * rates.point_value * 100) / 100,
+    })
+  }
+  for (const a of adjRes.results) {
+    lines.push({
+      kind: 'adjustment',
+      // Ordered by when it actually landed on the total, not when it was
+      // first raised — a reimbursement can sit pending for days before an
+      // admin approves it.
+      date: a.decided_at ?? a.created_at,
+      id: a.id,
+      adj_type: a.type,
+      amount: a.amount,
+      description: a.description,
+      status: a.status,
+      created_by_name: a.created_by_name,
+      created_at: a.created_at,
+      decided_by_name: a.decided_by_name,
+      decided_at: a.decided_at,
+    })
+  }
+  lines.sort((x, y) => x.date.localeCompare(y.date))
+
+  let running = 0
+  const trail = lines.map((l) => {
+    const counted =
+      (l.kind === 'entry' && l.status === 'approved') ||
+      (l.kind === 'adjustment' && l.status === 'approved')
+    if (counted) running += l.kind === 'entry' ? l.value : l.amount
+    return { ...l, counted, running_total: Math.round(running * 100) / 100 }
+  })
+
+  return json({
+    employee_id: employee.id,
+    employee_name: employee.name,
+    employee_code: employee.employee_code,
+    month,
+    currency: rates.currency,
+    locked: rates.locked,
+    point_value: rates.point_value,
+    base: summary.base,
+    bonus: summary.bonus,
+    reimbursements: summary.reimbursements,
+    total_due: summary.total_due,
+    paid_at: payment?.paid_at ?? null,
+    confirmed_at: payment?.confirmed_at ?? null,
+    trail,
+  })
 }
 
 // --------------------------------------------------------- performance trends
@@ -2969,6 +3119,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   const empRemMatch = /^\/api\/employees\/([\w-]+)\/remuneration$/.exec(path)
   if (empRemMatch && method === 'GET') {
     return employeeRemuneration(request, env, empRemMatch[1])
+  }
+  const empTrailMatch = /^\/api\/employees\/([\w-]+)\/finance-trail$/.exec(path)
+  if (empTrailMatch && method === 'GET') {
+    return financeTrail(request, env, empTrailMatch[1])
   }
   const empMatch = /^\/api\/employees\/([\w-]+)$/.exec(path)
   if (empMatch) {

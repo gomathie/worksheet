@@ -310,7 +310,10 @@ async function loadEntries() {
 
 onMounted(async () => {
   const today = auth.user!.today
-  month.value = today.slice(0, 7)
+  const qMonth = route.query.month
+  const qEmployee = route.query.employee_id
+  const qEntry = route.query.entry
+  month.value = typeof qMonth === 'string' ? qMonth : today.slice(0, 7)
   form.value.work_date = today
   form.value.employee_id = auth.user!.id
   ;[employees.value, workTypes.value, deviceTypes.value] = await Promise.all([
@@ -318,7 +321,23 @@ onMounted(async () => {
     api<WorkTypeInfo[]>('/api/work-types'),
     api<DeviceTypeInfo[]>('/api/device-types'),
   ])
+  // Only meaningful for an admin — everyone else's Recent entries is already
+  // scoped to themselves, so there is nothing to pick.
+  if (auth.isAdmin && typeof qEmployee === 'string') filterEmployee.value = qEmployee
   await Promise.all([loadEntries(), loadCardNames()])
+  if (typeof qEntry === 'string' && entries.value.some((e) => e.id === qEntry)) {
+    highlightEntryId.value = qEntry
+    await nextTick()
+    document
+      .getElementById(`entry-${qEntry}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setTimeout(() => {
+      highlightEntryId.value = null
+    }, 3000)
+  }
+  // Drop the deep-link params so a refresh or reusing this tab later starts
+  // from a plain, un-filtered Recent entries rather than replaying them.
+  if (qMonth || qEmployee || qEntry) router.replace({ query: {} })
 })
 
 watch([month, filterEmployee], loadEntries)

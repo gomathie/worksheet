@@ -20,8 +20,12 @@ broken.
 ## Signing in
 
 Log in with the **username and password** an administrator set for you. Once in,
-the **Account** menu at the top right holds your name and role, **Change
-password**, and **Sign out**.
+the **Account** menu at the top right holds your name and role, **Edit
+profile**, **Change password**, and **Sign out**.
+
+**Edit profile** is where you keep your own **email** and **phone** number
+current — that's what notifications go to (email, and SMS if an admin has
+that turned on). Your name, role and rights are still set by an administrator.
 
 Tap the **OpenSignal Ledger** masthead at any time to get back to Time Entry.
 
@@ -279,7 +283,8 @@ Each person has a **name**, optional **email** and **phone**, a **username and
 password** for signing in, an auto-generated **staff code** (`EMP-001`), a
 **department**, and a **Reports to** manager — set that last one to make
 somebody a manager for expense review. Phone is only used for SMS
-notifications (see **Other settings** below) — it's not needed to sign in.
+notifications (see **Admin → Notifications** below) — it's not needed to sign
+in, and the employee can set it themselves too (Account menu → Edit profile).
 
 ### Data scope
 
@@ -447,13 +452,22 @@ Unlock if corrections are needed.
 - **Departments** and **expense categories** — add, rename, deactivate.
 - **Device types** — the telematics device make list, including the queue of
   suggestions from installers. See *Installations & device types* above.
+- **Download backup** — a full JSON export.
+
+## Admin → Notifications
+
+A third tab next to Employees and Settings, for everything about reaching
+people rather than configuring data:
+
 - **Email (SMTP)** — point the app at any SMTP server (port 587 STARTTLS or 465
   TLS). The password is write-only; **Send test email** verifies it.
 - **SMS (mnotify)** — same idea, over SMS: enter your mnotify API key and a
   sender ID (max 11 characters), then **Send test** to check it. Only reaches
-  employees who have a **phone** number set (Employees tab); the API key is
-  write-only, same as the SMTP password.
-- **Download backup** — a full JSON export.
+  employees who have a **phone** number set — an admin sets it in the
+  Employees tab, or an employee sets their own under Account menu → Edit
+  profile. The API key is write-only, same as the SMTP password.
+- **News** — a shortcut to the News page (below); posting still needs the
+  Send announcements right.
 
 ## Activity log
 

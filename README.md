@@ -15,7 +15,9 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
 
 ### Accounts, roles & rights
 - **Login** is username + password (PBKDF2 hashing); sessions live in Workers KV. The header
-  **Account menu** holds the name/role, self-service **Change password**, and **Sign out**.
+  **Account menu** holds the name/role, self-service **Edit profile** (own email + phone —
+  what notifications reach, not who you are: name/role/rights still need an admin), **Change
+  password**, and **Sign out**.
 - Three roles: **admin**, **manager**, and **employee**.
   - **Admin** can do everything *except* approve expense vouchers and approve new user accounts —
     those two authorities must be granted explicitly.
@@ -297,16 +299,17 @@ against it.
   with no third-party service. The service worker wakes, fetches `/api/notifications`, and shows
   the newest unread. Nothing sensitive passes through the push service. VAPID keys are generated on
   first use and stored in the database. iOS requires installing the PWA to the home screen.
-- **Email (SMTP):** point the app at any SMTP server (port 587 STARTTLS or 465 TLS) in Settings.
-  Password is stored write-only; a **Send test email** button verifies the config. The client is a
-  minimal hand-rolled implementation (`server/email.ts`, over `cloudflare:sockets`) — every value
-  that becomes part of a header (subject, addresses, hostname) is passed through `headerSafe`
-  (`server/header-safe.ts`) first, since free text elsewhere in the app is only trimmed and length
-  capped, not stripped of embedded CR/LF.
+- **Email (SMTP):** point the app at any SMTP server (port 587 STARTTLS or 465 TLS) in **Admin →
+  Notifications**. Password is stored write-only; a **Send test email** button verifies the config.
+  The client is a minimal hand-rolled implementation (`server/email.ts`, over `cloudflare:sockets`)
+  — every value that becomes part of a header (subject, addresses, hostname) is passed through
+  `headerSafe` (`server/header-safe.ts`) first, since free text elsewhere in the app is only trimmed
+  and length capped, not stripped of embedded CR/LF.
 - **SMS (mnotify):** the same events, over SMS, via [mnotify](https://mnotify.com)'s Quick SMS
-  endpoint — enter an API key and a sender ID (Settings). Only reaches employees with a phone number
-  set. The API key is stored write-only, same as the SMTP password; a **Send test** button verifies
-  it.
+  endpoint — enter an API key and a sender ID (**Admin → Notifications**). Only reaches employees
+  with a phone number set — either by an admin (Employees tab) or by the employee themself (Account
+  menu → Edit profile). The API key is stored write-only, same as the SMTP password; a **Send test**
+  button verifies it.
 
 ### Receipt attachments (R2) — currently off
 Receipt **file uploads are disabled**: no R2 bucket is bound in `wrangler.toml`. Everything else
@@ -326,9 +329,11 @@ No code changes are needed — the API detects the binding at runtime (`/api/me`
 `attachments_enabled`), and `wrangler pages dev` creates a local stand-in automatically.
 
 ### Admin extras
-**Settings** (work types, value per point, currency, employee code prefix, per-day limit, approval
-toggle, SMTP, and a full-database **JSON backup** with passwords excluded) and an **Activity log**
-— every change with actor and timestamp.
+Three mini-tabs under **Admin**: **Employees**, **Settings** (work types, value per point, currency,
+employee code prefix, per-day limit, approval toggle, expense workflow/departments/categories, and
+a full-database **JSON backup** with passwords excluded), and **Notifications** (SMTP, SMS/mnotify,
+and a shortcut to News — see above). Plus an **Activity log** — every change with actor and
+timestamp.
 
 ### Points & remuneration formula
 ```
@@ -396,7 +401,7 @@ src/                         Vue 3 app
   types.ts                   TypeScript type definitions
   stores/auth.ts             Pinia auth store (session, rights, role, justLoggedIn)
   router/index.ts            Vue Router with auth/right/role guards
-  views/                     25 page-level components (see below)
+  views/                     26 page-level components (see below)
   components/                Reusable components (charts, notification bell, deadline/news pop-ups, etc.)
 public/                      PWA assets (manifest, service worker, icons)
 migrations/                  D1 SQL migrations (30 files, 0001–0028 — see note on duplicate numbers)
@@ -432,6 +437,7 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `InstallationsReportView` | `/installations-report` | `view_reports` |
 | `EmployeesView` | `/employees` | Admin |
 | `SettingsView` | `/settings` | Admin |
+| `NotificationsView` | `/notifications` | Admin |
 | `AuditView` | `/activity` | Admin |
 
 ## Local development

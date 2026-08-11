@@ -2139,6 +2139,29 @@ async function confirmReceipt(request: Request, env: Env): Promise<Response> {
   return json({ ok: true })
 }
 
+/** Self-service contact-details edit — deliberately narrow (email + phone
+ * only). Name, role, rights, username and password all have their own,
+ * more guarded paths (admin-only patchEmployee, or changeOwnPassword). */
+async function updateOwnProfile(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  const body = await readJson<{ email?: string | null; phone?: string | null }>(request)
+  const email =
+    body.email !== undefined ? String(body.email ?? '').trim().toLowerCase() || null : user.email
+  const phone = body.phone !== undefined ? String(body.phone ?? '').trim() || null : user.phone
+  try {
+    await env.DB.prepare('UPDATE employees SET email = ?, phone = ? WHERE id = ?')
+      .bind(email, phone, user.id)
+      .run()
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) {
+      throw new ApiError(409, 'That email is already in use by another account')
+    }
+    throw e
+  }
+  await audit(env, user.id, 'update_profile', user.id, { email, phone })
+  return json({ email, phone })
+}
+
 async function changeOwnPassword(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
   const { current_password, new_password } = await readJson<{
@@ -2870,6 +2893,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       id: user.id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
       username: user.username,
       role: user.role,
       rights: parseRights(user),
@@ -2978,6 +3002,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/me/remuneration' && method === 'GET') {
     return myRemuneration(request, env)
   }
+  if (path === '/api/me' && method === 'PATCH') return updateOwnProfile(request, env)
   if (path === '/api/me/password' && method === 'POST') {
     return changeOwnPassword(request, env)
   }

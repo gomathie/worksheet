@@ -114,6 +114,7 @@ export interface Me {
   id: string
   name: string
   email: string | null
+  phone: string | null
   username: string | null
   role: Role
   rights: Rights

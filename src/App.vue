@@ -91,6 +91,7 @@ const showPw = ref(false)
 
 function openPassword() {
   menuOpen.value = false
+  showProfile.value = false
   showPw.value = true
   pwError.value = ''
   pwDone.value = false
@@ -127,6 +128,51 @@ async function changePassword() {
     pwError.value = e instanceof Error ? e.message : 'Something went wrong'
   } finally {
     pwBusy.value = false
+  }
+}
+
+// ---- self-service contact details (email + phone only — see updateOwnProfile)
+const showProfile = ref(false)
+const profileEmail = ref('')
+const profilePhone = ref('')
+const profileBusy = ref(false)
+const profileError = ref('')
+const profileDone = ref(false)
+
+function openProfile() {
+  menuOpen.value = false
+  showPw.value = false
+  showProfile.value = true
+  profileError.value = ''
+  profileDone.value = false
+  profileEmail.value = auth.user?.email ?? ''
+  profilePhone.value = auth.user?.phone ?? ''
+}
+
+function toggleProfile() {
+  showProfile.value = !showProfile.value
+  profileError.value = ''
+  profileDone.value = false
+}
+
+async function saveProfile() {
+  profileError.value = ''
+  profileDone.value = false
+  profileBusy.value = true
+  try {
+    await api('/api/me', {
+      method: 'PATCH',
+      json: { email: profileEmail.value || null, phone: profilePhone.value || null },
+    })
+    // Refetch rather than patch auth.user locally — keeps it as the single
+    // source of truth and picks up the server's own normalization (email
+    // lower-cased, blanks turned to null).
+    await auth.fetchMe()
+    profileDone.value = true
+  } catch (e) {
+    profileError.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    profileBusy.value = false
   }
 }
 </script>
@@ -181,6 +227,12 @@ async function changePassword() {
           </div>
           <button
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
+            @click="openProfile"
+          >
+            Edit profile
+          </button>
+          <button
+            class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="openPassword"
           >
             Change password
@@ -195,6 +247,47 @@ async function changePassword() {
         </div>
       </div>
     </header>
+
+    <div v-if="auth.user && showProfile" class="no-print mt-4 max-w-md">
+      <form class="panel" @submit.prevent="saveProfile">
+        <h2 class="display mb-3 text-xl">Edit your profile</h2>
+        <p class="mb-3 text-sm text-muted">
+          Email and phone are how the app reaches you — a payslip notice by
+          email, an SMS if your admin has that turned on. Ask your admin to
+          change your name.
+        </p>
+        <label class="field-label" for="profile-email">Email</label>
+        <input
+          id="profile-email"
+          v-model="profileEmail"
+          type="email"
+          autocomplete="email"
+          class="field-input mb-3"
+        />
+        <label class="field-label" for="profile-phone">Phone</label>
+        <input
+          id="profile-phone"
+          v-model="profilePhone"
+          type="tel"
+          autocomplete="tel"
+          class="field-input mono mb-4"
+          placeholder="e.g. 0241234567"
+        />
+        <div class="flex items-center gap-2">
+          <button class="btn btn-solid btn-sm" :disabled="profileBusy">
+            {{ profileBusy ? 'Saving…' : 'Save profile' }}
+          </button>
+          <button type="button" class="btn btn-sm" @click="toggleProfile">Close</button>
+          <span v-if="profileDone" class="text-sm text-teal">Saved.</span>
+        </div>
+        <p
+          v-if="profileError"
+          class="mt-3 rounded-lg border border-red bg-red-soft p-3 text-sm text-red"
+        >
+          {{ profileError }}
+        </p>
+      </form>
+    </div>
 
     <div v-if="auth.user && showPw" class="no-print mt-4 max-w-md">
       <form class="panel" @submit.prevent="changePassword">

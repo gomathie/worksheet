@@ -979,7 +979,13 @@ const dayGroups = computed(() =>
                   >
                 </td>
               </tr>
-              <tr v-for="e in g.rows" :key="e.id">
+              <tr
+                v-for="e in g.rows"
+                :id="`entry-${e.id}`"
+                :key="e.id"
+                class="transition-colors duration-700"
+                :class="highlightEntryId === e.id ? 'bg-amber-soft' : ''"
+              >
                 <td class="mono whitespace-nowrap">{{ e.work_date }}</td>
                 <td v-if="auth.isAdmin">{{ e.employee_name }}</td>
                 <td class="num">{{ e.time_start }}</td>

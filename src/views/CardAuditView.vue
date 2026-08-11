@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { downloadCsv } from '../csv'
+import { formatDayHeading, groupByDay } from '../dates'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
 import {
@@ -53,6 +54,26 @@ function isSameDayRow(g: CardAuditGroup, r: CardAuditRow): boolean {
   return g.repeats.some(
     (x) => x.work_type_name === r.work_type_name && x.same_day_dates.includes(r.work_date),
   )
+}
+
+// Grouped by day within each card, same treatment as Recent entries — a
+// same-day duplicate (the red flag above) is now something you can *see* as
+// two rows sharing one heading, not just infer from a colour.
+const dayGroupsFor = (g: CardAuditGroup) =>
+  groupByDay(g.rows, (r) => r.work_date, (r) => r.total_audits)
+
+/** Where "Open" sends you: Recent entries, pre-filtered to this row's month
+ * and employee, scrolled to and briefly marked — so acting on a flagged
+ * card (removing a duplicate line) never means hunting for it by hand. */
+function openTarget(r: CardAuditRow) {
+  return {
+    name: 'entries',
+    query: {
+      month: r.work_date.slice(0, 7),
+      employee_id: r.employee_id,
+      entry: r.entry_id,
+    },
+  }
 }
 
 function exportCsv() {
@@ -197,20 +218,40 @@ function exportCsv() {
               <th>Date</th>
               <th class="num">Total audits</th>
               <th>Time completed</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="(r, i) in g.rows"
-              :key="`${r.entry_id}-${i}`"
-              :class="isSameDayRow(g, r) ? 'bg-red-soft text-red' : ''"
-            >
-              <td>{{ r.work_type_name }}</td>
-              <td>{{ r.employee_name }}</td>
-              <td class="mono whitespace-nowrap">{{ r.work_date }}</td>
-              <td class="num">{{ r.total_audits }}</td>
-              <td class="mono text-xs">{{ r.time_completed ?? '—' }}</td>
-            </tr>
+            <template v-for="dg in dayGroupsFor(g)" :key="dg.date">
+              <tr class="group-head">
+                <td colspan="6">
+                  {{ formatDayHeading(dg.date) }}
+                  <span v-if="dg.rows.length > 1" class="ml-2 normal-case text-red"
+                    >· logged {{ dg.rows.length }} times this day</span
+                  >
+                </td>
+              </tr>
+              <tr
+                v-for="(r, i) in dg.rows"
+                :key="`${r.entry_id}-${i}`"
+                :class="isSameDayRow(g, r) ? 'bg-red-soft text-red' : ''"
+              >
+                <td>{{ r.work_type_name }}</td>
+                <td>{{ r.employee_name }}</td>
+                <td class="mono whitespace-nowrap">{{ r.work_date }}</td>
+                <td class="num">{{ r.total_audits }}</td>
+                <td class="mono text-xs">{{ r.time_completed ?? '—' }}</td>
+                <td class="whitespace-nowrap">
+                  <!-- Lands on Recent entries pre-filtered and scrolled to
+                       this exact row, ready for the inline remove control
+                       there — acting on a flagged duplicate shouldn't mean
+                       hunting for it by hand in a different page. -->
+                  <RouterLink :to="openTarget(r)" class="btn btn-sm btn-view">
+                    Open
+                  </RouterLink>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>

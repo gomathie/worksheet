@@ -129,6 +129,17 @@ const installationTypeIds = computed(
   () => new Set(cardTypes.value.filter(isInstallationType).map((w) => w.id)),
 )
 
+// Same classification as cardTypes/installationTypeIds above, but not scoped
+// to whichever employee is loaded into the form — a row in Recent Entries
+// can belong to any employee, and removing one card from it (below) needs to
+// classify that entry's own work types regardless of who the form is
+// currently set to. Built from every work type ever seen (not just active
+// ones), since a type deactivated after use must still classify correctly.
+const allCardTypeIds = computed(() => new Set(workTypes.value.filter(isCardMode).map((w) => w.id)))
+const allInstallationTypeIds = computed(
+  () => new Set(workTypes.value.filter((w) => isCardMode(w) && isInstallationType(w)).map((w) => w.id)),
+)
+
 /**
  * Card types grouped by their module, e.g. "Data Analytics".
  *
@@ -217,6 +228,69 @@ const cardNamesFor = (entry: Entry, typeId: string) =>
     .filter((c) => c.work_type_id === typeId)
     .map((c) => c.card_name)
     .join(', ')
+
+const cardsForType = (entry: Entry, typeId: string) =>
+  (entry.cards ?? []).filter((c) => c.work_type_id === typeId)
+
+/**
+ * Remove one card from an already-saved entry, leaving the rest of it
+ * untouched — a duplicate line is normally a single card among several
+ * correct ones, so fixing it should not mean opening the full entry, hunting
+ * the right line down in a long form, and resaving everything else along
+ * with it. Goes through the same PATCH the full edit form uses (there is no
+ * separate "delete one card" endpoint — the API always takes a complete
+ * items/cards replacement), just built from this row instead of the form.
+ */
+async function removeCardFromEntry(entry: Entry, card: EntryCard) {
+  if (!confirm(`Remove "${card.card_name}" from this entry? This cannot be undone.`)) return
+  error.value = ''
+  busy.value = true
+  try {
+    // Non-card unit counts carry over as-is — they are unaffected by which
+    // cards remain. Card-derived counts are never sent; the server derives
+    // them itself from however many cards are left (see unitsWithCards),
+    // so sending them here would double them up.
+    const items: Record<string, number> = {}
+    for (const [typeId, n] of Object.entries(entry.units)) {
+      if (!allCardTypeIds.value.has(typeId) && n > 0) items[typeId] = n
+    }
+    const cards = (entry.cards ?? [])
+      .filter((c) => c !== card)
+      .map((c) =>
+        allInstallationTypeIds.value.has(c.work_type_id)
+          ? {
+              work_type_id: c.work_type_id,
+              installation_type: c.installation_type,
+              device_type: c.device_type || undefined,
+              installation_action: c.installation_action || undefined,
+              replaced_device_type: c.replaced_device_type || undefined,
+            }
+          : {
+              work_type_id: c.work_type_id,
+              card_name: c.card_name,
+              total_audits: c.total_audits,
+              time_completed: c.time_completed,
+            },
+      )
+    await api(`/api/entries/${entry.id}`, {
+      method: 'PATCH',
+      json: {
+        employee_id: entry.employee_id,
+        work_date: entry.work_date,
+        time_start: entry.time_start,
+        time_end: entry.time_end,
+        items,
+        cards,
+        notes: entry.notes,
+      },
+    })
+    await loadEntries()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to remove the card'
+  } finally {
+    busy.value = false
+  }
+}
 
 async function loadEntries() {
   const params = new URLSearchParams({ month: month.value })
@@ -887,11 +961,35 @@ const dayGroups = computed(() =>
                 <!-- The count alone does not say *which* cards were done, which
                      is the question asked when something needs checking. The
                      names already come down with the entry, so list them under
-                     the figure rather than making someone open the entry. -->
+                     the figure rather than making someone open the entry. With
+                     edit rights, each line gets its own remove control — a
+                     duplicate is normally one card among several correct ones,
+                     so fixing it should not mean opening the full entry to find
+                     and resave everything else along with it. -->
                 <td v-for="wt in activeTypes" :key="wt.id" class="num">
                   {{ e.units[wt.id] ?? 0 }}
+                  <template v-if="auth.rights.edit_entries && cardsForType(e, wt.id).length">
+                    <div
+                      v-for="c in cardsForType(e, wt.id)"
+                      :key="c.id"
+                      class="mt-0.5 flex items-center justify-end gap-1"
+                    >
+                      <span class="text-[11px] leading-snug font-normal text-muted">{{
+                        c.card_name
+                      }}</span>
+                      <button
+                        type="button"
+                        class="shrink-0 text-[11px] leading-none text-red hover:underline"
+                        :disabled="busy"
+                        :aria-label="`Remove ${c.card_name} from this entry`"
+                        @click="removeCardFromEntry(e, c)"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </template>
                   <span
-                    v-if="cardNamesFor(e, wt.id)"
+                    v-else-if="cardNamesFor(e, wt.id)"
                     class="mt-0.5 block text-[11px] leading-snug font-normal text-muted"
                     :title="cardNamesFor(e, wt.id)"
                     >{{ cardNamesFor(e, wt.id) }}</span

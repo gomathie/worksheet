@@ -175,13 +175,13 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   const title = (body.title ?? '').trim().slice(0, 200)
   if (!title) throw new ApiError(400, 'A title is required')
 
-  // Anyone may raise a task for themselves; giving work to someone else —
-  // one named person, or opening it to everyone — is what the right is for.
+  // Anyone may raise a task for themselves. Naming one specific other person
+  // is what the right is for — that is volunteering someone else's time.
+  // Opening it to Everyone needs no right at all: it is a ticket for the
+  // pool, not an instruction to anybody in particular, and whoever takes it
+  // does so by choice (see the 'accept' action in shared/tasks.ts).
   const manages = actor.is_admin || actor.can_manage
   const broadcast = body.broadcast === true
-  if (broadcast && !manages) {
-    throw new ApiError(403, 'You can only create tasks for yourself')
-  }
   const assignee = broadcast ? null : (body.assignee_id ?? user.id)
   if (!broadcast && assignee !== user.id && !manages) {
     throw new ApiError(403, 'You can only create tasks for yourself')

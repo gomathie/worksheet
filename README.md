@@ -83,18 +83,19 @@ generated sequentially and are unique.
 A standalone to-do list, deliberately unconnected to entries, cards or pay — a task is a note about
 intent, not a record that feeds a points or money calculation.
 
-- Anyone may raise a task for themselves (title, optional details, priority, due date). Assigning a
-  task **to someone else**, or opening one to **Everyone**, requires the `manage_tasks` right.
+- Anyone may raise a task for themselves (title, optional details, priority, due date), or open one
+  to **Everyone** (see below) — neither needs a right. Assigning a task **to someone else by name**
+  is what requires the `manage_tasks` right, since that is volunteering their time.
 - Each task gets a short code (`TASK-001`) and its own detail/view page, reachable via the **View**
   button — the same page a reassignment or an Accept happens on, with no detour through Edit.
 - States: **To do → In progress → Done**, or **Cancelled**. The assignee moves it along; only a
   task manager or whoever raised it may reword it — otherwise "do X" could quietly become "do Y"
   and then be marked done.
-- **Everyone tasks:** instead of naming one person, a task manager can open a task to **Everyone**.
-  It sits unclaimed — visible to the whole team, not just managers — until somebody **accepts** it,
-  at which point it behaves exactly like a normally-assigned task. Accepting needs no right at all,
-  since nobody is being volun-told; it's a single button on the task's own page or its row in the
-  list.
+- **Everyone tasks:** instead of naming one person, anyone can open a task to **Everyone** — a ticket
+  for the pool rather than an instruction to somebody in particular. It sits unclaimed — visible to
+  the whole team, not just managers — until somebody **accepts** it, at which point it behaves
+  exactly like a normally-assigned task. Accepting needs no right at all either; it's a single
+  button on the task's own page or its row in the list.
 - **Deadline nudge:** anyone with an open task due today or tomorrow gets a pop-up reminder — up to
   twice a day (once in the morning, once in the afternoon, tracked client-side) — warning that a
   missed deadline attracts a point reduction. It is a nudge, not an enforcement; nothing server-side

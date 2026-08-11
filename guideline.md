@@ -106,8 +106,10 @@ for a copy.
 **Tasks** is a shared to-do list for work that isn't a time entry or an expense.
 
 - **Anyone can add a task for themselves** — a title, and optionally details, a
-  priority and a date you want it done by. Assigning a task to **someone else**,
-  or opening one to **Everyone** (see below), needs the **Manage tasks** right.
+  priority and a date you want it done by — or **raise it as a ticket open to
+  Everyone** (see below); neither needs a right. Assigning a task to **one
+  named person** needs the **Manage tasks** right, since that's putting it on
+  someone else's plate specifically.
 - Each task gets a short code (**TASK-001**) and a **View** button that opens its
   own page — where status changes, reassignment, and accepting an Everyone task
   all happen directly, with no detour through Edit.
@@ -121,9 +123,10 @@ is told when you finish. You can move it along but **not change its wording** �
 otherwise "do X" could quietly become "do Y" and then be marked done. If a task
 is wrong, ask the person who raised it to change it.
 
-**Everyone tasks.** Instead of naming one person, whoever has **Manage tasks**
-can open a task to **Everyone**. It shows an *Everyone* badge and sits unclaimed
-— visible to the whole team, not just managers — until somebody taps **Accept**,
+**Everyone tasks.** Instead of naming one person, anyone can open a task to
+**Everyone** — a ticket for the team to pick up rather than an instruction to
+somebody in particular. It shows an *Everyone* badge and sits unclaimed —
+visible to the whole team, not just managers — until somebody taps **Accept**,
 either from the list or the task's own page. Accepting needs no special right;
 after that it behaves exactly like any other task assigned to you, and whoever
 raised it is told you took it.

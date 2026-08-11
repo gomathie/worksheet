@@ -29,8 +29,9 @@ const notice = ref('')
 const busy = ref('')
 const showDone = ref(false)
 
-// Assigning work to someone else is what the right is for; without it a
-// person can still keep their own list.
+// Naming one specific other person is what the right is for; without it a
+// person can still keep their own list, and raise a ticket open to the
+// whole team (see the assignee select below) — that needs no right at all.
 const canManage = computed(() => auth.isAdmin || auth.rights.manage_tasks)
 
 // Sentinel for the assignee select's "Everyone" option — not a real
@@ -47,6 +48,11 @@ const blank = () => ({
 })
 const form = ref(blank())
 const editingId = ref<string | null>(null)
+// Frozen display of who a task is assigned to, for someone editing a task
+// they raised but can't reassign (see the readonly fallback in the
+// template) — captured from the task itself rather than looked up, since a
+// non-manager has no employee list to look a name up in.
+const editingAssigneeLabel = ref('')
 
 async function load() {
   error.value = ''
@@ -84,6 +90,8 @@ const overdue = computed(
 
 function startEdit(t: Task) {
   editingId.value = t.id
+  editingAssigneeLabel.value =
+    t.assignee_name ?? (t.broadcast ? 'Everyone — unclaimed' : 'Unassigned')
   form.value = {
     title: t.title,
     details: t.details ?? '',
@@ -244,9 +252,28 @@ const statusTone: Record<TaskStatus, string> = {
             <option v-if="!editingId" :value="EVERYONE">Everyone — first to accept it</option>
             <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
           </select>
-          <!-- Without the right there is nobody else to pick, so say so
-               rather than offering a select with one option. -->
-          <input v-else id="t-assignee" :value="auth.user!.name" readonly class="field-input" />
+          <!-- Naming one specific other person needs the right — that is
+               volunteering their time. Opening a ticket to the whole team
+               needs no right at all, since nobody is being volun-told; only
+               offered when creating, to keep an existing assignment's fate
+               out of an edit that isn't about reassigning it (see the
+               readonly fallback below). -->
+          <select
+            v-else-if="!editingId"
+            id="t-assignee"
+            v-model="form.assignee_id"
+            class="field-input"
+          >
+            <option :value="auth.user!.id">{{ auth.user!.name }} (you)</option>
+            <option :value="EVERYONE">Everyone — first to accept it</option>
+          </select>
+          <input
+            v-else
+            id="t-assignee"
+            :value="editingAssigneeLabel"
+            readonly
+            class="field-input"
+          />
         </div>
         <div>
           <label class="field-label" for="t-due">Wanted by (optional)</label>

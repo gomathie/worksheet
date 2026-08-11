@@ -425,6 +425,11 @@ nothing is usable on a card without your say-so.
   ones count. A claim goes `pending → awaiting approval → approved`, with
   screening in between, so what you decide on has already been checked.
 - **Mark paid** when money goes out; the employee then **confirms receipt**.
+- **Trail** — click it next to anyone in the payouts table when a total looks
+  off. It lays out every entry and every bonus/reimbursement behind that
+  person's figure for the month, in the order it actually counted, each with
+  a running total and (for bonuses/reimbursements) who added it and when —
+  so "why did this number move" has a direct answer.
 
 ## Petty cash administration
 

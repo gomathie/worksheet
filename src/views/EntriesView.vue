@@ -99,14 +99,20 @@ const activeTypes = computed(() =>
   workTypes.value.filter((w) => w.active === undefined || w.active),
 )
 
+// The employee whose work is being logged in the form right now — for an
+// admin, whichever the employee-select is set to; everyone else can only
+// ever log their own.
+const targetEmployee = computed(() =>
+  auth.isAdmin ? employees.value.find((e) => e.id === form.value.employee_id) : undefined,
+)
+
 // Only the work types assigned to the employee being logged for.
 const formTypes = computed(() => {
   if (!auth.isAdmin) {
     const mine = new Set(auth.user!.work_types.map((w) => w.id))
     return activeTypes.value.filter((w) => mine.has(w.id))
   }
-  const target = employees.value.find((e) => e.id === form.value.employee_id)
-  const assigned = new Set(target?.work_type_ids ?? [])
+  const assigned = new Set(targetEmployee.value?.work_type_ids ?? [])
   return activeTypes.value.filter((w) => assigned.has(w.id))
 })
 
@@ -124,10 +130,25 @@ const actionRequired = (c: EntryCard) =>
 const replacedDeviceRequired = (c: EntryCard) =>
   deviceTypeRequired(c) && c.installation_action === 'replacement'
 
-// Card-based types are logged as cards unless the user may enter counts
-// directly — except installation types, which are always cards: a plain
-// number can't carry a per-job installation/device type.
-const canDirect = computed(() => auth.isAdmin || auth.rights.direct_counts)
+// Card-based types are logged as cards unless the employee whose work this
+// is may enter counts directly — except installation types, which are
+// always cards: a plain number can't carry a per-job installation/device
+// type. Deliberately keyed on the *target* employee's own `direct_counts`
+// right, not the acting viewer's: an admin editing someone else's entry must
+// see it exactly as that employee would, or their own admin-implied
+// direct-entry privilege silently reclassifies that employee's real card
+// data as a typed override the moment they save (see allCardTypeIds below,
+// where getting this wrong previously corrupted data — an admin removing
+// one duplicate card from another employee's Classification/QAP entry had
+// the card-derived count resent as a number on top of the real cards,
+// inflating units on every single-card removal instead of shrinking them).
+const canDirect = computed(() =>
+  auth.isAdmin
+    ? targetEmployee.value
+        ? targetEmployee.value.role === 'admin' || Boolean(targetEmployee.value.rights.direct_counts)
+        : false
+    : auth.rights.direct_counts,
+)
 const isCardMode = (w: WorkTypeInfo) =>
   Boolean(w.card_based) && (isInstallationType(w) || !canDirect.value)
 const numericTypes = computed(() => formTypes.value.filter((w) => !isCardMode(w)))
@@ -137,15 +158,22 @@ const installationTypeIds = computed(
   () => new Set(cardTypes.value.filter(isInstallationType).map((w) => w.id)),
 )
 
-// Same classification as cardTypes/installationTypeIds above, but not scoped
-// to whichever employee is loaded into the form — a row in Recent Entries
-// can belong to any employee, and removing one card from it (below) needs to
-// classify that entry's own work types regardless of who the form is
-// currently set to. Built from every work type ever seen (not just active
-// ones), since a type deactivated after use must still classify correctly.
-const allCardTypeIds = computed(() => new Set(workTypes.value.filter(isCardMode).map((w) => w.id)))
+// Same idea as cardTypes/installationTypeIds above, but a *fixed* property of
+// the work type — never `isCardMode`/`canDirect`, which reflects the acting
+// viewer's own direct-entry privilege. A row in Recent Entries can belong to
+// any employee, and removing one card from it (below) needs to classify that
+// entry's own work types by what they objectively are, not by whether the
+// admin doing the removing happens to have direct_counts. Getting this wrong
+// previously corrupted data: an admin using "remove card" on someone else's
+// Classification/QAP card had card_based type ids fall out of this set
+// entirely (since canDirect is true for admins), so the card-derived count
+// got resent as a typed override on top of the real cards — inflating units
+// on every single-card removal instead of shrinking them. Built from every
+// work type ever seen (not just active ones), since a type deactivated after
+// use must still classify correctly.
+const allCardTypeIds = computed(() => new Set(workTypes.value.filter((w) => w.card_based).map((w) => w.id)))
 const allInstallationTypeIds = computed(
-  () => new Set(workTypes.value.filter((w) => isCardMode(w) && isInstallationType(w)).map((w) => w.id)),
+  () => new Set(workTypes.value.filter((w) => w.card_based && isInstallationType(w)).map((w) => w.id)),
 )
 
 /**

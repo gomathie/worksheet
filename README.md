@@ -169,6 +169,12 @@ be unlocked if corrections are needed.
 Admins add **bonuses** (with a description); employees request **reimbursements** (admin
 approves/rejects — only approved count); admins **mark paid** and employees **confirm receipt**.
 
+- **Finance trail:** a per-employee, per-month drill-down (`Trail` button on the payouts table, or
+  `/finance-trail?employee_id=&month=`) — every approved entry and every bonus/reimbursement, in the
+  order it actually landed on the total, each with a running total ending at the same figure Payments
+  and the Payslip show. Answers "why did this number move" directly, including who added a bonus and
+  when, instead of requiring a trip through Entries, Payments, and the Activity log separately.
+
 ### Absences & leave
 Record days not worked by type — **Leave, Sick, Holiday, Unpaid, Other**. Sick/holiday/unpaid/other
 are open to all; **paid Leave requires the assigned right**. Each employee can have an **annual leave
@@ -400,7 +406,7 @@ src/                         Vue 3 app
   types.ts                   TypeScript type definitions
   stores/auth.ts             Pinia auth store (session, rights, role, justLoggedIn)
   router/index.ts            Vue Router with auth/right/role guards
-  views/                     26 page-level components (see below)
+  views/                     27 page-level components (see below)
   components/                Reusable components (charts, notification bell, deadline/news pop-ups, etc.)
 public/                      PWA assets (manifest, service worker, icons)
 migrations/                  D1 SQL migrations (30 files, 0001–0028 — see note on duplicate numbers)
@@ -417,6 +423,7 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `DashboardView` | `/dashboard` | `view_dashboard` |
 | `ReportView` | `/report` | `view_reports` |
 | `PaymentsView` | `/payments` | Authenticated |
+| `FinanceTrailView` | `/finance-trail` | Admin |
 | `PayslipView` | `/payslip` | `view_payslip` |
 | `TrendsView` | `/trends` | Authenticated |
 | `AbsencesView` | `/absences` | Authenticated |

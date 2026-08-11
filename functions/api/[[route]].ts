@@ -76,6 +76,7 @@ import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
   patchTask,
   taskSummary,
 } from '../../server/tasks'
+import { createNews, deleteNews, listNews } from '../../server/news'
 import {
   decidePettyCashRequest,
   getPettyCash,
@@ -944,6 +945,14 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     view_reports: Boolean(raw?.view_reports ?? fallback.view_reports),
     view_remuneration: Boolean(raw?.view_remuneration ?? fallback.view_remuneration),
     view_payslip: Boolean(raw?.view_payslip ?? fallback.view_payslip),
+    // Bug: these four were missing from this list entirely, so no value the
+    // Employees form ever sent for them was persisted — parseRights reads
+    // every key correctly, but a key this function never writes into the
+    // stored JSON reads back as false regardless of what was ticked.
+    view_points: Boolean(raw?.view_points ?? fallback.view_points),
+    send_for_approval: Boolean(raw?.send_for_approval ?? fallback.send_for_approval),
+    manage_tasks: Boolean(raw?.manage_tasks ?? fallback.manage_tasks),
+    delete_tasks: Boolean(raw?.delete_tasks ?? fallback.delete_tasks),
     log_leave: Boolean(raw?.log_leave ?? fallback.log_leave),
     direct_counts: Boolean(raw?.direct_counts ?? fallback.direct_counts),
     add_expenses: Boolean(raw?.add_expenses ?? fallback.add_expenses),
@@ -953,6 +962,7 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     add_users: Boolean(raw?.add_users ?? fallback.add_users),
     approve_users: Boolean(raw?.approve_users ?? fallback.approve_users),
     use_petty_cash: Boolean(raw?.use_petty_cash ?? fallback.use_petty_cash),
+    send_announcements: Boolean(raw?.send_announcements ?? fallback.send_announcements),
   })
 }
 
@@ -2897,6 +2907,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'PATCH') return patchTask(request, env, taskMatch[1])
     if (method === 'DELETE') return deleteTask(request, env, taskMatch[1])
   }
+  if (path === '/api/news' && method === 'GET') return listNews(request, env)
+  if (path === '/api/news' && method === 'POST') return createNews(request, env)
+  const newsMatch = /^\/api\/news\/([\w-]+)$/.exec(path)
+  if (newsMatch && method === 'DELETE') return deleteNews(request, env, newsMatch[1])
   if (path === '/api/card-audit' && method === 'GET') return cardAudit(request, env)
   if (path === '/api/installations-report' && method === 'GET') {
     return installationsReport(request, env)

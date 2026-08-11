@@ -1,5 +1,6 @@
 import type { DailyTotal, MonthlyReport, RateSettings } from '../shared/logic'
 import type { TaskAction, TaskPriority, TaskStatus } from '../shared/tasks'
+import type { NewsStyle } from '../shared/news'
 import type {
   ExpenseAction,
   ExpenseStatus,
@@ -9,6 +10,7 @@ import type {
 
 export type { MonthlyReport, RateSettings }
 export type { ExpenseAction, ExpenseStatus, ExpenseSummary, WorkflowConfig }
+export type { NewsStyle }
 
 export interface Rights {
   add_entries: boolean
@@ -37,6 +39,21 @@ export interface Rights {
   manage_tasks: boolean
   /** Delete a task outright. Separate because deletion cannot be undone. */
   delete_tasks: boolean
+  /** Post to the News feed, optionally as a login pop-up. See shared/news.ts. */
+  send_announcements: boolean
+}
+
+export interface NewsItem {
+  id: string
+  title: string
+  body: string | null
+  style: NewsStyle
+  created_by: string | null
+  created_by_name: string | null
+  created_at: string
+  expires_at: string
+  /** Present when the viewer holds the right — creator or any admin. */
+  can_delete?: boolean
 }
 
 export type Role = 'admin' | 'manager' | 'employee'

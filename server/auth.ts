@@ -121,6 +121,10 @@ export interface Rights {
   // something manage_tasks carries: you can run the board without being able
   // to erase what was asked for. Cancelling is the reversible alternative.
   delete_tasks: boolean
+  // Post to the News feed and, optionally, as a login pop-up. See
+  // shared/news.ts for the expiry rules (everyone capped at 7 days; an
+  // administrator may go further).
+  send_announcements: boolean
 }
 
 /** Whose records a person may see. Stored on employees.data_scope. */
@@ -185,6 +189,7 @@ export const DEFAULT_RIGHTS: Rights = {
   use_petty_cash: false,
   manage_tasks: false,
   delete_tasks: false,
+  send_announcements: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -206,6 +211,7 @@ const ALL_RIGHTS: Rights = {
   use_petty_cash: true,
   manage_tasks: true,
   delete_tasks: true,
+  send_announcements: true,
   // Not granted here — see the carve-out in parseRights.
   approve_expenses: false,
   approve_users: false,
@@ -291,6 +297,7 @@ export function parseRights(employee: Employee): Rights {
       use_petty_cash: Boolean(raw.use_petty_cash),
       manage_tasks: Boolean(raw.manage_tasks),
       delete_tasks: Boolean(raw.delete_tasks),
+      send_announcements: Boolean(raw.send_announcements),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

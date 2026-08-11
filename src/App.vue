@@ -5,6 +5,7 @@ import { api } from './api'
 import { useAuthStore } from './stores/auth'
 import NotificationBell from './components/NotificationBell.vue'
 import TaskDeadlineAlert from './components/TaskDeadlineAlert.vue'
+import NewsPopup from './components/NewsPopup.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -248,6 +249,7 @@ async function changePassword() {
         >Time Entry</RouterLink
       >
       <RouterLink :to="{ name: 'tasks' }" class="btn" active-class="btn-solid">Tasks</RouterLink>
+      <RouterLink :to="{ name: 'news' }" class="btn" active-class="btn-solid">News</RouterLink>
       <RouterLink
         v-if="auth.rights.view_dashboard"
         :to="{ name: 'dashboard' }"
@@ -394,5 +396,6 @@ async function changePassword() {
 
     <RouterView />
     <TaskDeadlineAlert v-if="auth.user" />
+    <NewsPopup v-if="auth.user" />
   </div>
 </template>

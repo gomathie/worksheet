@@ -142,6 +142,12 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/news',
+      name: 'news',
+      component: () => import('../views/NewsView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/card-audit',
       name: 'card-audit',
       component: () => import('../views/CardAuditView.vue'),

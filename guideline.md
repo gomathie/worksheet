@@ -141,6 +141,22 @@ given to someone else it records what was asked of them, so deleting it needs
 the **Delete tasks** right. **Prefer Cancel** — it keeps the record and can be
 undone.
 
+## News
+
+**News** is where team-wide announcements show up. Anyone can read it; posting
+needs the **Send announcements** right (administrators always have it).
+
+- A post is either a plain **Announcement** (just sits on the News page) or a
+  **Pop-up on login** — same thing, but it also interrupts everyone's *next*
+  sign-in with a modal, on top of appearing on the page. It shows once per
+  sign-in, not on every page you visit afterwards, and not again if you just
+  refresh the page rather than actually signing in again.
+- Every post **expires on its own** — the person posting it picks how many
+  days it stays up, from **1 to 7**. An **administrator** posting one can set
+  it longer, up to 90 days. There's no way to leave one up forever.
+- Whoever posted it (or an administrator) can **retract** it early from the
+  News page.
+
 ## Expense vouchers
 
 An expense voucher is how you claim for something **where no receipt was
@@ -300,6 +316,7 @@ just hidden in the interface.
 | Petty cash | Hold a float and charge vouchers to it |
 | Manage tasks | Assign tasks to others and see the whole board |
 | Delete tasks | Delete a task that has been assigned to someone else |
+| Send announcements | Post to News, optionally as a login pop-up — see the News section |
 
 **Two rights the admin role does not carry automatically: `Approve expenses` and
 `Approve users`.** An approver is an administrator who has *also* been ticked for

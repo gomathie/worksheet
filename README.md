@@ -26,8 +26,8 @@ Chart.js (`vue-chartjs`) · Cloudflare Pages + Pages Functions · Cloudflare D1 
   monthly reports, view own remuneration, view own payslip, view own points, record paid leave,
   direct counts
   (type Classification/QAP counts instead of logging cards), file expenses, review expenses,
-  send for approval, record expenses, approve expenses, add users, approve users, and use petty
-  cash.
+  send for approval, record expenses, approve expenses, add users, approve users, use petty
+  cash, manage tasks, delete tasks, and send announcements (News — see below).
   **`approve_expenses` and `approve_users` are the two rights the admin role does not imply** —
   they must be granted deliberately so approval authority can be withheld from an administrator.
 - All permission checks are enforced **server-side**, not just hidden in the UI. New rights default
@@ -103,6 +103,24 @@ intent, not a record that feeds a points or money calculation.
 - Deleting your own unassigned-or-self-assigned to-do needs no right. Once a task has been given to
   someone else, deleting it (as opposed to cancelling it) needs the `delete_tasks` right — organising
   work and erasing the record of it are different powers.
+
+### News
+A `send_announcements` holder (admins get it implicitly, like almost every right) can broadcast a
+message to the whole team, in either of two styles:
+
+- **Announcement** — posted to the News page for anyone to read.
+- **Pop-up on login** — posted to the News page *and* shown as a modal that interrupts the next
+  sign-in, for every employee, while it's still live. Triggered specifically by the login action
+  (client-side, in-memory only) — a page refresh restores the existing session without logging in
+  again, so it never re-shows the pop-up on every reload, only once per fresh sign-in.
+- **Every announcement expires on its own** — the poster sets a lifetime in whole days at creation;
+  there is no "leave it up forever" option. An ordinary holder is capped at **1–7 days**; an
+  **administrator** may go further, up to **90 days**. Both bounds are enforced server-side, not
+  just by the input's own min/max.
+- The poster (or any admin) can **retract** one early from the News page.
+- Posting notifies every active employee **in-app only** — a broadcast is exactly the case where a
+  per-announcement email or SMS blast (SMS billed per person) would be unwelcome, so it deliberately
+  skips those channels regardless of the recipient's own notification settings.
 
 ### Telematics installations & device types
 The **Telematics Installation** work type is card-based like Classification/QAP, but each card
@@ -349,6 +367,7 @@ server/                      Worker-side helpers
   env.ts                     Cloudflare bindings and environment types
   expenses.ts                Expense voucher handlers (workflow, attachments, reports)
   tasks.ts                   Task handlers (CRUD, reassignment, Everyone/accept)
+  news.ts                    News/announcement handlers (post, feed, retract)
   notify.ts                  In-app notifications, with email + SMS layered on top
   pettycash.ts               Petty cash float ledger, top-up requests
   push.ts                    Web Push (VAPID signing, subscription management)
@@ -363,6 +382,7 @@ shared/                      Pure logic shared between server and client
   logic.ts                   Hours, points, and aggregation calculations
   expenses.ts                Expense state machine, validation, summaries
   tasks.ts                   Task permissions and state machine (incl. Everyone/accept)
+  news.ts                    News style/expiry rules (feed vs. popup, 1–7 or 1–90 days)
   installations.ts           Installation-card types, device-type/action vocabulary
 src/                         Vue 3 app
   App.vue                    Shell, navigation, account menu
@@ -374,12 +394,12 @@ src/                         Vue 3 app
   dates.ts                   Day-grouping helper shared by the entries/report/dashboard tables
   usePortraitPrint.ts        Portrait print layout composable
   types.ts                   TypeScript type definitions
-  stores/auth.ts             Pinia auth store (session, rights, role)
+  stores/auth.ts             Pinia auth store (session, rights, role, justLoggedIn)
   router/index.ts            Vue Router with auth/right/role guards
-  views/                     24 page-level components (see below)
-  components/                Reusable components (charts, notification bell, deadline alert, etc.)
+  views/                     25 page-level components (see below)
+  components/                Reusable components (charts, notification bell, deadline/news pop-ups, etc.)
 public/                      PWA assets (manifest, service worker, icons)
-migrations/                  D1 SQL migrations (29 files, 0001–0027 — see note on duplicate numbers)
+migrations/                  D1 SQL migrations (30 files, 0001–0028 — see note on duplicate numbers)
 tests/                       Vitest tests for shared/* and the sanitization helpers
 scripts/                     Helpers (seed admin, generate PWA icons)
 ```
@@ -407,6 +427,7 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | `PettyCashView` | `/petty-cash` | `use_petty_cash` or admin |
 | `TasksView` | `/tasks` | Authenticated |
 | `TaskDetailView` | `/tasks/:id` | Authenticated (visibility scoped per task) |
+| `NewsView` | `/news` | Authenticated (reads; `send_announcements` or admin to post) |
 | `CardAuditView` | `/card-audit` | `view_reports` |
 | `InstallationsReportView` | `/installations-report` | `view_reports` |
 | `EmployeesView` | `/employees` | Admin |
@@ -447,7 +468,7 @@ bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
 ## Migrations
 
 Plain SQL in `migrations/`, applied with wrangler's migration tracking
-(`npm run db:migrate:local` / `npm run db:migrate:prod`). 29 migration files (0001–0027, with two
+(`npm run db:migrate:local` / `npm run db:migrate:prod`). 30 migration files (0001–0028, with two
 numbers used twice — see below) covering: employees, departments, work types and assignments,
 entries and their per-type items, entry cards (card-based work types), adjustments
 (bonuses/reimbursements), payments, absences, expense vouchers (with categories, approvals,
@@ -456,8 +477,9 @@ notifications, push subscriptions, month locks (with rate snapshots), employee c
 `ID-2023NNN` scheme), manager role and data scopes, user approval workflow, settings, work-type
 modules, tasks (incl. task codes and the Everyone/broadcast flag), employee phone numbers,
 installation cards (installation type, device type, new/replacement action, replaced device type),
-device types (admin-managed list with a propose/approve workflow), and the audit log. Money-sensitive
-data is filtered server-side for non-admins.
+device types (admin-managed list with a propose/approve workflow), news/announcements (feed and
+login pop-ups, each with its own expiry), and the audit log. Money-sensitive data is filtered
+server-side for non-admins.
 
 > **Migrations that contain `CREATE TRIGGER` (or other `BEGIN … END` blocks) fail on
 > `db:migrate:prod`.** The remote endpoint used by `wrangler d1 migrations apply --remote` splits SQL

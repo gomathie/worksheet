@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -66,22 +66,45 @@ onMounted(async () => {
   await refreshPushState()
 })
 
-// Keep in step with the panel's `w-80` below.
+// Nominal panel width — clamped down to fit narrow viewports (see
+// positionPanel). Kept in JS rather than left to CSS alone because the
+// panel is positioned with fixed pixel coordinates, not anchored to an
+// edge of an ancestor, so the coordinates and the width have to agree.
 const PANEL_WIDTH = 320
+const MARGIN = 12
 
 const root = ref<HTMLElement | null>(null)
-// Which edge of the bell the panel hangs from. The header wraps on narrow
-// screens, moving the bell from the right of the top bar to the left; anchored
-// right it would then hang off the left edge of the screen. The wrap point
-// depends on the header's own content, so measure rather than pick a
-// breakpoint.
-const alignLeft = ref(false)
+const panelTop = ref(0)
+const panelLeft = ref(0)
+const panelWidth = ref(PANEL_WIDTH)
+
+// `fixed` + explicit coordinates, computed from the bell's actual position
+// every time it opens, rather than an anchor-to-an-edge-of-the-button
+// approach. The header wraps the bell to different places depending on
+// viewport width and its own content, so there's no single "hang from the
+// left" or "hang from the right" rule that holds everywhere — a rule tuned
+// for one layout (e.g. "not enough room on the right, so assume there's
+// room on the left") silently breaks the moment something upstream changes
+// where the button ends up. Measuring the viewport directly and clamping
+// into it is the version that can't get out of sync with the header again.
+function positionPanel() {
+  const r = root.value?.getBoundingClientRect()
+  if (!r) return
+  const vw = window.innerWidth
+  const width = Math.min(PANEL_WIDTH, vw - MARGIN * 2)
+  panelWidth.value = width
+  // Prefer hanging from the bell's right edge (matches where it's always
+  // sat), then slide left just far enough to stay clear of both edges.
+  const preferred = r.right - width
+  panelLeft.value = Math.max(MARGIN, Math.min(preferred, vw - width - MARGIN))
+  panelTop.value = r.bottom + 4
+}
 
 async function toggle() {
   open.value = !open.value
   if (open.value) {
-    const r = root.value?.getBoundingClientRect()
-    alignLeft.value = !!r && r.right - PANEL_WIDTH < 8
+    await nextTick()
+    positionPanel()
     await load()
   }
 }
@@ -133,12 +156,14 @@ function ago(iso: string): string {
 
     <div v-if="open" class="fixed inset-0 z-10" @click="open = false" />
 
-    <!-- Anchor side is measured when opening (see alignLeft); the max-width
-         keeps the panel on screen on very narrow phones. -->
+    <!-- Position is measured from the bell's real on-screen location every
+         time it opens (see positionPanel) — fixed, not anchored to `root`,
+         so it can't run off either edge regardless of where the header has
+         wrapped the bell to. -->
     <div
       v-if="open"
-      class="panel absolute z-20 mt-1 max-h-96 w-80 max-w-[calc(100vw-2.5rem)] overflow-y-auto !p-1 text-sm shadow-lg"
-      :class="alignLeft ? 'left-0' : 'right-0'"
+      class="panel fixed z-20 max-h-96 overflow-y-auto !p-1 text-sm shadow-lg"
+      :style="{ top: `${panelTop}px`, left: `${panelLeft}px`, width: `${panelWidth}px` }"
     >
       <div class="flex items-center justify-between border-b border-line px-3 py-2">
         <span class="display text-base">Notifications</span>

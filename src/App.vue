@@ -207,7 +207,15 @@ async function saveProfile() {
           </p>
         </div>
       </RouterLink>
-      <div v-if="auth.user" class="flex items-center gap-2 text-sm">
+      <!-- ml-auto: the header wraps this onto its own line below the masthead
+           on a narrow screen, and with only one item on that line
+           `justify-between` on the header has nothing to distribute space
+           between, so it defaults to flex-start (left) instead of the
+           intended right edge — which then threw the dropdown's `right-0`
+           off too, anchoring it to the wrong edge and overhanging the left
+           of the viewport. ml-auto pushes this cluster to the line's own
+           right edge regardless, on every width, fixing both at once. -->
+      <div v-if="auth.user" class="ml-auto flex items-center gap-2 text-sm">
         <NotificationBell />
         <div class="relative">
         <button
@@ -223,7 +231,7 @@ async function saveProfile() {
 
         <div
           v-if="menuOpen"
-          class="panel absolute right-0 z-20 mt-1 w-52 !p-1 text-sm shadow-lg"
+          class="panel absolute right-0 z-20 mt-1 max-h-[80vh] w-52 max-w-[calc(100vw-2.5rem)] overflow-y-auto !p-1 text-sm shadow-lg"
         >
           <div class="border-b border-line px-3 py-2">
             <p class="font-medium">{{ auth.user.name }}</p>

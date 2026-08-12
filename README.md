@@ -61,9 +61,10 @@ list endpoints that can return other people's records.
 - The Approvals page doubles as both the expense approval queue and the user approval queue.
 
 ### Employee codes
-Each employee gets an auto-generated human-readable **staff code** (e.g. `EMP-001`) shown on the
-team list and payslips. The prefix is configurable in Settings (`employee_code_prefix`). Codes are
-generated sequentially and are unique.
+Each employee gets an auto-generated human-readable **staff code** shown on the team list and
+payslips. The prefix is configurable in Settings (`employee_code_prefix`) — defaults to `EMP-` for
+a fresh install, but this deployment's is `ID-2023` (see `migrations/0021_employee_code_id2023.sql`
+for why). Codes are generated sequentially and are unique.
 
 ### Work types & rates
 - Admins define **work types** in Settings, each worth **points per unit** (e.g. Classification,

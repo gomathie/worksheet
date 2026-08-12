@@ -36,7 +36,7 @@ just hidden in the interface.
 
 | Right | Grants |
 |---|---|
-| Add / Edit / Delete own entries | Three separate controls over their own time entries |
+| Add / Edit / Delete own entries | Three separate controls over their own time entries. Edit covers adding to or correcting an entry; taking recorded work away — removing a card, or lowering a typed count — needs Delete too, enforced server-side, since reducing what's logged destroys it just as surely as deleting the entry outright |
 | View dashboard | The team dashboard |
 | View monthly reports | The monthly report **and Card Audit** |
 | View own remuneration / payslip | Their own pay figures |

@@ -39,3 +39,15 @@ export function todayInTz(tz: string): string {
     day: '2-digit',
   }).format(new Date())
 }
+
+/** The current wall-clock time as HH:MM in the team's time zone — pairs with
+ * todayInTz to compare a logged (date, time) against "right now" without
+ * ever converting either side through UTC. */
+export function nowTimeInTz(tz: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date())
+}

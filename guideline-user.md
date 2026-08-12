@@ -8,9 +8,6 @@ you, so some sections here may not apply. If a page isn't in your menu, you
 don't hold the right for it — ask an administrator rather than assuming it's
 broken.
 
-Administrators: see the **Admin Guide** (Account menu) for everything on top
-of this — people, rights, work types, the expense workflow, and more.
-
 ---
 
 ## Signing in
@@ -62,22 +59,19 @@ logged as **individual cards**, not a single number:
   matters: the two used to count as different cards.
 - Type a brand-new name freely; it joins the suggestion list once you save.
 
-> **If you hold the "direct counts" right**, you get a plain number box for these
-> types instead of the card list.
-
 ### Telematics installations
 
 If you're assigned **Telematics Installation** work, cards for it work a bit
 differently — there's no duplicate warning (several installs of the same device
 in a day is normal, not a repeat), and each card asks for:
 
-- **Installation type** — currently just *Telematics device*.
+- **Installation type** — currently just _Telematics device_.
 - **Device type** — the make you installed (Teltonika, Concox, ...).
 - **New or replacement** — whether this was a fresh install or you swapped out a
   faulty unit. Pick **replacement** and you'll also be asked which make **came
   out**, so the organisation can see which devices fail most often.
 
-**Can't find your device?** Use *Can't find your device? Suggest a device type*
+**Can't find your device?** Use _Can't find your device? Suggest a device type_
 under the card list. It's sent for an administrator to approve — your suggestion
 won't appear in the device list until then, so it isn't usable on a card yet.
 
@@ -85,7 +79,7 @@ won't appear in the device list until then, so it isn't usable on a card yet.
 
 If you log a card that has **already been done for the same work type on the
 same day** — by you or anyone else — you'll see a warning naming who did it,
-*before* anything saves. You can go back and change it, or continue.
+_before_ anything saves. You can go back and change it, or continue.
 
 **If you continue, the administrators are notified.**
 
@@ -96,11 +90,18 @@ decision rather than an accident.
 ### Recent entries
 
 Below the form, the month's entries are listed with the **card names** under each
-count, so you can see what a day actually was without opening it. Entries are
-**grouped by day** — if you logged twice in one day, you'll see one heading for
-that date (with the total hours and how many entries) rather than two
-unconnected-looking rows. Change the month with the picker, and **Download CSV**
-for a copy.
+count, so you can see what a day actually was without opening it, and **when it
+was logged** (not the same as the shift's date/time — that's when you actually
+sat down and entered it). Entries are **grouped by day** — if you logged twice
+in one day, you'll see one heading for that date (with the total hours and how
+many entries) rather than two unconnected-looking rows. Change the month with
+the picker, and **Download CSV** for a copy.
+
+**Editing vs. removing.** With the edit right you can correct an entry or add
+to it. Taking something away — removing a card, or lowering a typed count —
+needs the delete right as well, same as deleting the entry outright would;
+without it, the ✕ next to a card just won't be there, and the card names show
+as plain text instead.
 
 ## Tasks
 
@@ -126,7 +127,7 @@ is wrong, ask the person who raised it to change it.
 
 **Everyone tasks.** Instead of naming one person, anyone can open a task to
 **Everyone** — a ticket for the team to pick up rather than an instruction to
-somebody in particular. It shows an *Everyone* badge and sits unclaimed —
+somebody in particular. It shows an _Everyone_ badge and sits unclaimed —
 visible to the whole team, not just managers — until somebody taps **Accept**,
 either from the list or the task's own page. Accepting needs no special right;
 after that it behaves exactly like any other task assigned to you, and whoever
@@ -167,15 +168,15 @@ isn't needed.
 
 **Expenses → New voucher**. Fill in the date, purpose, amount, and:
 
-**Where the money came from** — who actually paid, which is separate from *how*
+**Where the money came from** — who actually paid, which is separate from _how_
 it was paid (you can be funded from office cash and pay by mobile money):
 
-| Option | Use it when |
-|---|---|
-| **My own pocket** | You paid with your own money and are out of pocket |
-| **Petty cash float I hold** | You spent from the float you're holding |
-| **Office cash** | Cash from the office, not your own float |
-| **Company account / card** | Paid directly by the organisation |
+| Option                      | Use it when                                        |
+| --------------------------- | -------------------------------------------------- |
+| **My own pocket**           | You paid with your own money and are out of pocket |
+| **Petty cash float I hold** | You spent from the float you're holding            |
+| **Office cash**             | Cash from the office, not your own float           |
+| **Company account / card**  | Paid directly by the organisation                  |
 
 Only **My own pocket** leaves you owed money — the others already came from the
 organisation.
@@ -201,7 +202,7 @@ Draft → Submitted → Manager Review → Being Screened → Awaiting Admin App
       → Approved → Recorded
 ```
 
-- **Manager Review** only applies if you have a *Reports to* manager set;
+- **Manager Review** only applies if you have a _Reports to_ manager set;
   otherwise it goes straight to screening.
 - **Being Screened** is a check before it reaches an approver.
 - **Approved** means authorised. **Recorded** means entered in the external
@@ -233,7 +234,7 @@ every voucher charged to your float.
 - Your balance is **worked out, never stored**: money issued to you, minus
   vouchers in play. A voucher that's rejected, returned or reopened puts the
   money back automatically.
-- Ticking *Paid from the petty cash I am holding* on a voucher reduces the
+- Ticking _Paid from the petty cash I am holding_ on a voucher reduces the
   balance when you submit.
 - A claim **larger than your float is refused at submission** — not while
   drafting, since a top-up may not be recorded yet.

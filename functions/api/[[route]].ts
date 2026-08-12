@@ -132,19 +132,41 @@ function assertCount(value: unknown, field: string): number {
   return n
 }
 
-function validateEntryInput(body: {
-  work_date?: string
-  time_start?: string
-  time_end?: string
-}) {
+/** `date` plus one day, as another YYYY-MM-DD — used below to find which
+ * calendar day an overnight shift actually finishes on. */
+function addOneDay(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+}
+
+function validateEntryInput(
+  body: { work_date?: string; time_start?: string; time_end?: string },
+  env: Env,
+) {
   if (!body.work_date || !DATE_RE.test(body.work_date)) {
     throw new ApiError(400, 'work_date must be YYYY-MM-DD')
   }
+  let startMin: number
+  let endMin: number
   try {
-    parseTime(body.time_start ?? '')
-    parseTime(body.time_end ?? '')
+    startMin = parseTime(body.time_start ?? '')
+    endMin = parseTime(body.time_end ?? '')
   } catch {
     throw new ApiError(400, 'time_start/time_end must be HH:MM')
+  }
+
+  // A shift that hasn't finished yet can't be logged as done — overnight
+  // shifts (end < start, e.g. 22:00–06:00) actually finish the *next*
+  // calendar day, so that's what gets compared, not work_date itself.
+  // Compared as plain (date, time) strings in the team's zone, the same way
+  // todayInTz/isNewsActive do elsewhere — no UTC conversion or DST
+  // arithmetic, just lexicographic comparison of same-format strings.
+  const tz = env.TEAM_TZ ?? 'Africa/Accra'
+  const finishDate = endMin < startMin ? addOneDay(body.work_date) : body.work_date
+  const today = todayInTz(tz)
+  const now = nowTimeInTz(tz)
+  if (finishDate > today || (finishDate === today && body.time_end! > now)) {
+    throw new ApiError(400, "This shift hasn't finished yet — check the date and end time")
   }
 }
 
@@ -1680,7 +1702,7 @@ async function createEntry(request: Request, env: Env): Promise<Response> {
     if (!target) throw new ApiError(400, 'Unknown employee')
   }
 
-  validateEntryInput(body)
+  validateEntryInput(body, env)
   await assertMonthUnlocked(env, body.work_date!.slice(0, 7))
   // Enforce the per-day entry limit for employees logging their own time.
   // Admins are exempt (they manage/correct entries).
@@ -1763,7 +1785,7 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
     time_end: body.time_end ?? entry.time_end,
     notes: body.notes !== undefined ? body.notes?.trim() || null : entry.notes,
   }
-  validateEntryInput(next)
+  validateEntryInput(next, env)
   // Neither the old nor the new month may be locked.
   await assertMonthUnlocked(env, entry.work_date.slice(0, 7))
   if (next.work_date.slice(0, 7) !== entry.work_date.slice(0, 7)) {

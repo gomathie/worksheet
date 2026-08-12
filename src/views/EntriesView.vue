@@ -269,6 +269,34 @@ const cardsForType = (entry: Entry, typeId: string) =>
   (entry.cards ?? []).filter((c) => c.work_type_id === typeId)
 
 /**
+ * When the entry was actually logged, in the viewer's own local time — not
+ * to be confused with work_date/time_start, which describe the shift
+ * worked, not when someone sat down and entered it. Stored as a bare
+ * "YYYY-MM-DD HH:MM:SS" (UTC, no offset marker — see server's `datetime
+ * ('now')`), so a space-for-T swap plus a trailing Z is what turns it back
+ * into a real instant before formatting, same conversion NotificationBell's
+ * `ago()` uses.
+ */
+function loggedAt(createdAt: string): string {
+  const d = new Date(createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T') + 'Z')
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+/** Full local date + time, for a hover title on the compact `loggedAt` text. */
+function loggedAtFull(createdAt: string): string {
+  const d = new Date(createdAt.includes('T') ? createdAt : createdAt.replace(' ', 'T') + 'Z')
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+/**
  * Remove one card from an already-saved entry, leaving the rest of it
  * untouched — a duplicate line is normally a single card among several
  * correct ones, so fixing it should not mean opening the full entry, hunting
@@ -522,6 +550,7 @@ function exportCsv() {
     'Hours',
     ...activeTypes.value.map((w) => w.name),
     'Notes',
+    'Logged at',
   ]
   const rows = entries.value.map((e) => [
     e.work_date,
@@ -531,6 +560,7 @@ function exportCsv() {
     e.hours,
     ...activeTypes.value.map((w) => e.units[w.id] ?? 0),
     e.notes ?? '',
+    e.created_at ? loggedAtFull(e.created_at) : '',
   ])
   downloadCsv(`entries-${month.value}.csv`, [header, ...rows])
 }
@@ -815,6 +845,7 @@ const dayGroups = computed(() =>
                 />
               </div>
               <button
+                v-if="!c.id || auth.rights.delete_entries"
                 type="button"
                 class="btn btn-sm btn-danger justify-self-end md:self-start"
                 :aria-label="`Remove card ${i + 1}`"
@@ -902,6 +933,7 @@ const dayGroups = computed(() =>
               <!-- Full-width on a one-column phone layout reads as an error
                    bar, so keep it shrink-wrapped and right-aligned there. -->
               <button
+                v-if="!c.id || auth.rights.delete_entries"
                 type="button"
                 class="btn btn-sm btn-danger justify-self-end md:self-start"
                 :aria-label="`Remove card ${i + 1}`"
@@ -1017,7 +1049,15 @@ const dayGroups = computed(() =>
                 class="transition-colors duration-700"
                 :class="highlightEntryId === e.id ? 'bg-amber-soft' : ''"
               >
-                <td class="mono whitespace-nowrap">{{ e.work_date }}</td>
+                <td class="mono whitespace-nowrap">
+                  {{ e.work_date }}
+                  <span
+                    v-if="e.created_at"
+                    class="block text-[11px] leading-snug font-normal text-muted"
+                    :title="`Logged ${loggedAtFull(e.created_at)}`"
+                    >logged {{ loggedAt(e.created_at) }}</span
+                  >
+                </td>
                 <td v-if="auth.isAdmin">{{ e.employee_name }}</td>
                 <td class="num">{{ e.time_start }}</td>
                 <td class="num">{{ e.time_end }}</td>
@@ -1026,13 +1066,16 @@ const dayGroups = computed(() =>
                      is the question asked when something needs checking. The
                      names already come down with the entry, so list them under
                      the figure rather than making someone open the entry. With
-                     edit rights, each line gets its own remove control — a
+                     delete rights, each line gets its own remove control — a
                      duplicate is normally one card among several correct ones,
                      so fixing it should not mean opening the full entry to find
-                     and resave everything else along with it. -->
+                     and resave everything else along with it. Gated on delete,
+                     not edit: removing a card destroys already-recorded work
+                     same as the Del button does, just one line at a time (the
+                     server enforces this regardless — see patchEntry). -->
                 <td v-for="wt in activeTypes" :key="wt.id" class="num">
                   {{ e.units[wt.id] ?? 0 }}
-                  <template v-if="auth.rights.edit_entries && cardsForType(e, wt.id).length">
+                  <template v-if="auth.rights.delete_entries && cardsForType(e, wt.id).length">
                     <div
                       v-for="c in cardsForType(e, wt.id)"
                       :key="c.id"

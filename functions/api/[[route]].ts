@@ -1808,7 +1808,25 @@ async function patchEntry(request: Request, env: Env, id: string): Promise<Respo
       installationTypeIds: await installationTypeIds(env),
     })
     const cards = await normalizeCards(env, next.employee_id, body.cards, cardTypes)
-    await writeEntryItems(env, id, unitsWithCards(items, cards))
+    const nextUnits = unitsWithCards(items, cards)
+
+    // Reducing what's already recorded — fewer cards, or a smaller typed
+    // count, for any one work type — destroys previously-logged work just
+    // as surely as the Del button does, only piecemeal and through the edit
+    // form instead of in one step. `edit_entries` covers adding to or
+    // correcting an entry; taking recorded work away needs `delete_entries`
+    // too, same as deleting the entry outright.
+    const { results: existingItemRows } = await env.DB.prepare(
+      'SELECT work_type_id, units FROM entry_items WHERE entry_id = ?',
+    )
+      .bind(id)
+      .all<{ work_type_id: string; units: number }>()
+    const reducesRecordedWork = existingItemRows.some(
+      (r) => (nextUnits[r.work_type_id] ?? 0) < r.units,
+    )
+    if (reducesRecordedWork) requireRight(user, 'delete_entries')
+
+    await writeEntryItems(env, id, nextUnits)
     await writeEntryCards(env, id, cards)
     await notifyAdminsOfCardClash(env, user, next.work_date, id)
   }

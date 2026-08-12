@@ -165,6 +165,10 @@ export interface Entry {
   cards?: EntryCard[]
   notes: string | null
   status: 'approved' | 'pending' | 'rejected'
+  /** When the record was actually logged — distinct from work_date/time_start,
+   * which describe the shift worked, not when it was entered into the app. */
+  created_at: string
+  updated_at: string
 }
 
 export interface DailyDetailRow {

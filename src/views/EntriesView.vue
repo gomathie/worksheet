@@ -5,6 +5,7 @@ import { api } from '../api'
 import {
   computeHours,
   findSameDayCardClashes,
+  shiftIsInFuture,
   type CardClash,
   type SameDayCard,
 } from '../../shared/logic'
@@ -460,9 +461,30 @@ async function findClashes(): Promise<CardClash[]> {
   }
 }
 
-/** Runs the check first; submit() itself is what actually saves. */
+/**
+ * A shift that plainly hasn't finished yet can't be logged as done — see
+ * shiftIsInFuture for the grace window and the overnight-shift handling.
+ * Best-effort client guard, using the browser's own local clock: it assumes
+ * the viewer is in the team's time zone, which won't always hold, so the
+ * server (comparing against TEAM_TZ specifically) is what actually enforces
+ * this; this just avoids a round trip for the common case.
+ */
+function shiftNotYetFinished(): boolean {
+  const { work_date, time_start, time_end } = form.value
+  if (!work_date || !time_start || !time_end) return false
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const nowHm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return shiftIsInFuture(work_date, time_start, time_end, today, nowHm)
+}
+
+/** Runs the checks first; submit() itself is what actually saves. */
 async function trySubmit() {
   error.value = ''
+  if (shiftNotYetFinished()) {
+    error.value = "This shift hasn't finished yet — check the date and end time."
+    return
+  }
   const found = await findClashes()
   if (found.length > 0) {
     clashes.value = found

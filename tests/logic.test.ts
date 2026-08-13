@@ -8,6 +8,9 @@ import {
   groupCardAudit,
   hasSameDayDuplicate,
   findSameDayCardClashes,
+  shiftIsInFuture,
+  addOneDay,
+  FUTURE_GRACE_MINUTES,
   type CardAuditRow,
   parseTime,
   type RateSettings,
@@ -49,6 +52,45 @@ describe('computeHours', () => {
   })
   it('returns 0 when start equals end', () => {
     expect(computeHours('08:00', '08:00')).toBe(0)
+  })
+})
+
+describe('addOneDay', () => {
+  it('advances the date, including across month/year boundaries', () => {
+    expect(addOneDay('2026-08-11')).toBe('2026-08-12')
+    expect(addOneDay('2026-01-31')).toBe('2026-02-01')
+    expect(addOneDay('2026-12-31')).toBe('2027-01-01')
+  })
+})
+
+describe('shiftIsInFuture', () => {
+  it('is false for a shift that already finished, same day', () => {
+    expect(shiftIsInFuture('2026-08-11', '09:00', '10:00', '2026-08-11', '10:30')).toBe(false)
+  })
+  it('is false for any shift on a past work_date, regardless of time', () => {
+    expect(shiftIsInFuture('2026-08-10', '09:00', '23:59', '2026-08-11', '00:01')).toBe(false)
+  })
+  it('is true for a work_date after today', () => {
+    expect(shiftIsInFuture('2026-08-12', '09:00', '17:00', '2026-08-11', '10:00')).toBe(true)
+  })
+  it('is true for an end time well past now, same day', () => {
+    expect(shiftIsInFuture('2026-08-11', '09:00', '17:00', '2026-08-11', '10:00')).toBe(true)
+  })
+  it('allows up to FUTURE_GRACE_MINUTES past now, same day', () => {
+    // now = 10:00, end = 10:59 -> 59 minutes ahead, within the grace window
+    expect(shiftIsInFuture('2026-08-11', '09:00', '10:59', '2026-08-11', '10:00')).toBe(false)
+    expect(FUTURE_GRACE_MINUTES).toBe(60)
+    // exactly on the boundary is still allowed ("more than", not "at least")
+    expect(shiftIsInFuture('2026-08-11', '09:00', '11:00', '2026-08-11', '10:00')).toBe(false)
+    // one minute past the boundary is not
+    expect(shiftIsInFuture('2026-08-11', '09:00', '11:01', '2026-08-11', '10:00')).toBe(true)
+  })
+  it('treats end < start as an overnight shift finishing the next day', () => {
+    // Logged for 2026-08-11 22:00 -> 06:00; if "now" is 2026-08-11 23:00,
+    // the shift hasn't reached its (next-day) finish time yet.
+    expect(shiftIsInFuture('2026-08-11', '22:00', '06:00', '2026-08-11', '23:00')).toBe(true)
+    // Once it's actually the 12th and past 06:00, it has finished.
+    expect(shiftIsInFuture('2026-08-11', '22:00', '06:00', '2026-08-12', '07:00')).toBe(false)
   })
 })
 

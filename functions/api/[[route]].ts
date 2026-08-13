@@ -11,7 +11,7 @@ import type {
   PaymentRow,
   WorkTypeRow,
 } from '../../server/env'
-import { ApiError, json, readJson, todayInTz } from '../../server/http'
+import { ApiError, json, nowTimeInTz, readJson, todayInTz } from '../../server/http'
 import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
@@ -49,6 +49,7 @@ import {
   normalizeCardName,
   groupCardAudit,
   findSameDayCardClashes,
+  shiftIsInFuture,
   type CardAuditRow,
   type SameDayCard,
   parseTime,
@@ -132,13 +133,6 @@ function assertCount(value: unknown, field: string): number {
   return n
 }
 
-/** `date` plus one day, as another YYYY-MM-DD — used below to find which
- * calendar day an overnight shift actually finishes on. */
-function addOneDay(date: string): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
-}
-
 function validateEntryInput(
   body: { work_date?: string; time_start?: string; time_end?: string },
   env: Env,
@@ -146,26 +140,20 @@ function validateEntryInput(
   if (!body.work_date || !DATE_RE.test(body.work_date)) {
     throw new ApiError(400, 'work_date must be YYYY-MM-DD')
   }
-  let startMin: number
-  let endMin: number
   try {
-    startMin = parseTime(body.time_start ?? '')
-    endMin = parseTime(body.time_end ?? '')
+    parseTime(body.time_start ?? '')
+    parseTime(body.time_end ?? '')
   } catch {
     throw new ApiError(400, 'time_start/time_end must be HH:MM')
   }
 
-  // A shift that hasn't finished yet can't be logged as done — overnight
-  // shifts (end < start, e.g. 22:00–06:00) actually finish the *next*
-  // calendar day, so that's what gets compared, not work_date itself.
-  // Compared as plain (date, time) strings in the team's zone, the same way
-  // todayInTz/isNewsActive do elsewhere — no UTC conversion or DST
-  // arithmetic, just lexicographic comparison of same-format strings.
+  // A shift that plainly hasn't finished yet can't be logged as done — see
+  // shiftIsInFuture for the (small) grace window and how an overnight shift
+  // is handled.
   const tz = env.TEAM_TZ ?? 'Africa/Accra'
-  const finishDate = endMin < startMin ? addOneDay(body.work_date) : body.work_date
-  const today = todayInTz(tz)
-  const now = nowTimeInTz(tz)
-  if (finishDate > today || (finishDate === today && body.time_end! > now)) {
+  if (
+    shiftIsInFuture(body.work_date, body.time_start!, body.time_end!, todayInTz(tz), nowTimeInTz(tz))
+  ) {
     throw new ApiError(400, "This shift hasn't finished yet — check the date and end time")
   }
 }

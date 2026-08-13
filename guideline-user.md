@@ -34,7 +34,9 @@ add the app to your home screen first.
 
 1. Check the **date** (defaults to today) and set **time start** and **time
    end**. Hours are worked out for you, and an overnight shift is handled —
-   22:00 to 06:00 is eight hours, not minus sixteen.
+   22:00 to 06:00 is eight hours, not minus sixteen. The end time can't be
+   more than an hour ahead of right now — a shift that hasn't happened yet
+   can't be logged as done.
 2. Record what you did (below).
 3. Add **notes** if anything is worth remembering.
 4. **Add entry**.

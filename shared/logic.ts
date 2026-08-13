@@ -76,6 +76,54 @@ export function computeHours(start: string, end: string): number {
   return round2(diff / 60)
 }
 
+/** `date` (YYYY-MM-DD) plus one day, as another YYYY-MM-DD. */
+export function addOneDay(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+}
+
+/** Minutes since the Unix epoch for a (YYYY-MM-DD, HH:MM) pair. `Date.UTC`
+ * here is a pure calendar calculator (days-since-epoch for a Y/M/D triple),
+ * not a time zone conversion — the pair is already resolved into whichever
+ * zone matters to the caller before it ever reaches this function. */
+function toEpochMinutes(date: string, time: string): number {
+  const [y, m, d] = date.split('-').map(Number)
+  const days = Date.UTC(y, m - 1, d) / 86_400_000
+  return days * 1440 + parseTime(time)
+}
+
+/** How far past "now" a shift's end time may be and still count as already
+ * finished — long enough to cover filling in the form itself, or a small
+ * clock difference, not long enough to log a shift that plainly hasn't
+ * happened yet. */
+export const FUTURE_GRACE_MINUTES = 60
+
+/**
+ * True when a shift (work_date, time_start, time_end) claims to finish more
+ * than FUTURE_GRACE_MINUTES after (today, nowTime) — i.e. it plainly can't
+ * have been completed yet, so logging it as done would be recording work
+ * that hasn't happened. An overnight shift (time_end < time_start, e.g.
+ * 22:00–06:00) actually finishes the *next* calendar day, not on work_date
+ * itself, so that's what gets compared.
+ *
+ * `today`/`nowTime` are passed in already resolved to whichever time zone
+ * matters to the caller (the team's for the server, the browser's local
+ * zone for a client-side pre-check) — this has no time zone handling of
+ * its own to get wrong.
+ */
+export function shiftIsInFuture(
+  workDate: string,
+  timeStart: string,
+  timeEnd: string,
+  today: string,
+  nowTime: string,
+): boolean {
+  const finishDate = timeEnd < timeStart ? addOneDay(workDate) : workDate
+  const finishMin = toEpochMinutes(finishDate, timeEnd)
+  const nowMin = toEpochMinutes(today, nowTime)
+  return finishMin > nowMin + FUTURE_GRACE_MINUTES
+}
+
 /**
  * Points for a set of logged units. Each work type's general rate applies
  * unless the employee has a custom rate override for it.

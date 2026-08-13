@@ -81,10 +81,24 @@ for why). Codes are generated sequentially and are unique.
 ### Time entry
 - Log a day: employee, date, start/end (overnight supported, hours auto-computed), **units per
   assigned work type** (or individual cards for card-based types), notes. Admins can log for anyone.
+- **Can't log a shift that hasn't finished** — `shiftIsInFuture` (`shared/logic.ts`) rejects a
+  work_date/time_end combination more than `FUTURE_GRACE_MINUTES` (60) past "now", checked both
+  client-side (browser-local clock, best-effort) and server-side (`TEAM_TZ`-aware via
+  `todayInTz`/`nowTimeInTz`, authoritative) on create and edit alike. An overnight shift's "now"
+  compares against its *next-day* finish, not work_date itself. Applies to everyone, admins
+  included — no role is exempt, since the constraint is factual (work that hasn't happened can't
+  be logged as done), not a workflow rule like the entry limit below.
 - **Per-day entry limit:** a global default (0 = unlimited) plus optional per-employee overrides;
   employees can't exceed their cap (admins exempt).
 - **Approval workflow (opt-in):** when enabled, employee entries start *pending* and count toward
   pay only once an admin approves; admin-logged entries auto-approve. Editing re-queues for approval.
+- **`edit_entries` can add, `delete_entries` is required to take away** — `patchEntry` compares the
+  incoming items/cards against what's already stored and requires `delete_entries` too the moment
+  any work type's recorded units would go down (fewer cards, or a smaller typed count), whether
+  that happens via the single-card ✕ in Recent Entries or piecemeal through the full edit form.
+  Enforced server-side regardless of what the client sends; the UI additionally hides the
+  affected controls for someone without the right, rather than showing something that would
+  just 403 on save.
 
 ### Tasks
 A standalone to-do list, deliberately unconnected to entries, cards or pay — a task is a note about

@@ -9,7 +9,7 @@ import {
   isOverdue,
   type TaskStatus,
 } from '../../shared/tasks'
-import type { Employee, Task } from '../types'
+import type { Task, TaskAssignee } from '../types'
 
 // A single task, Jira-issue-style: the code, its state, and everything
 // about it in one place — deliberately simple, no comment thread or activity
@@ -20,7 +20,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const task = ref<Task | null>(null)
-const employees = ref<Employee[]>([])
+const employees = ref<TaskAssignee[]>([])
 const error = ref('')
 const busy = ref(false)
 
@@ -45,7 +45,8 @@ async function load() {
 onMounted(async () => {
   await load()
   if (canManage.value) {
-    employees.value = (await api<Employee[]>('/api/employees')).filter((e) => e.active)
+    // See TasksView: /api/employees hides everyone else from a non-admin.
+    employees.value = await api<TaskAssignee[]>('/api/tasks/assignees')
   }
 })
 

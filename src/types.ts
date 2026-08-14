@@ -576,6 +576,14 @@ export interface MyRemuneration {
   adjustments: Adjustment[]
 }
 
+/** Just enough to populate an "Assigned to" select — see
+ *  /api/tasks/assignees, which exists because /api/employees intentionally
+ *  hides everyone else from a non-admin. */
+export interface TaskAssignee {
+  id: string
+  name: string
+}
+
 export interface Task {
   id: string
   task_code: string | null

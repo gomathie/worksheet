@@ -230,9 +230,13 @@ expense, so it must be accepted again.
 
 Only for people given the **petty cash** right.
 
-**Petty Cash** shows your balance, your movements, your open top-up request, and
-every voucher charged to your float.
+**Petty Cash** shows your float, your movements, your open top-up request, and
+every voucher charged to it.
 
+- Three figures, so you can account for the float rather than just see what's
+  left: **Issued to you** (everything handed over, less anything returned),
+  **Spent** (every voucher currently charged to it), and **Remaining** — with
+  a bar showing how much of the float is used up.
 - Your balance is **worked out, never stored**: money issued to you, minus
   vouchers in play. A voucher that's rejected, returned or reopened puts the
   money back automatically.

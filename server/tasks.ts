@@ -76,6 +76,28 @@ function withActions(rows: TaskRow[], actor: TaskActor) {
 }
 
 /**
+ * Who a task can be given to: id and name, nothing else.
+ *
+ * A `manage_tasks` holder who is not an administrator needs the team's names
+ * to assign work, but `/api/employees` deliberately returns only the caller
+ * themself to a non-admin (it carries rights, rate overrides and pay
+ * settings). The result was a right that could not actually be used — the
+ * "Assigned to" select listed one person, the holder. This endpoint closes
+ * that gap without widening the other one: two harmless columns, and only
+ * for someone who can already assign.
+ */
+export async function listTaskAssignees(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (user.role !== 'admin' && !parseRights(user).manage_tasks) {
+    throw new ApiError(403, 'You do not have permission for this')
+  }
+  const { results } = await env.DB.prepare(
+    "SELECT id, name FROM employees WHERE active = 1 AND approval_status = 'approved' ORDER BY name",
+  ).all<{ id: string; name: string }>()
+  return json(results)
+}
+
+/**
  * Tasks the caller may see: everything for a manager of tasks, otherwise the
  * ones assigned to them, the ones they raised, plus anything open to
  * everyone (claimed or not — the shared board). Scoped in SQL rather than

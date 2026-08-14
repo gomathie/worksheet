@@ -70,6 +70,7 @@ import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
   createTask,
   deleteTask,
   getTask,
+  listTaskAssignees,
   listTasks,
   patchTask,
   taskSummary,
@@ -3255,6 +3256,11 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/tasks' && method === 'GET') return listTasks(request, env)
   if (path === '/api/tasks' && method === 'POST') return createTask(request, env)
   if (path === '/api/tasks/summary' && method === 'GET') return taskSummary(request, env)
+  // Must precede the /api/tasks/:id matcher below, or "assignees" is read as
+  // a task id.
+  if (path === '/api/tasks/assignees' && method === 'GET') {
+    return listTaskAssignees(request, env)
+  }
   const taskMatch = /^\/api\/tasks\/([\w-]+)$/.exec(path)
   if (taskMatch) {
     if (method === 'GET') return getTask(request, env, taskMatch[1])

@@ -13,7 +13,7 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from '../../shared/tasks'
-import type { Employee, Task } from '../types'
+import type { Task, TaskAssignee } from '../types'
 
 // A standalone to-do list. Deliberately unconnected to entries, cards or pay:
 // a task records intent, and nothing here feeds a points or money figure.
@@ -23,7 +23,7 @@ const route = useRoute()
 const router = useRouter()
 
 const tasks = ref<Task[]>([])
-const employees = ref<Employee[]>([])
+const employees = ref<TaskAssignee[]>([])
 const error = ref('')
 const notice = ref('')
 const busy = ref('')
@@ -66,7 +66,10 @@ async function load() {
 onMounted(async () => {
   await load()
   if (canManage.value) {
-    employees.value = (await api<Employee[]>('/api/employees')).filter((e) => e.active)
+    // Not /api/employees — that returns only the caller to a non-admin (it
+    // carries rights and pay settings), which left a manage_tasks holder
+    // with a one-name "Assigned to" list and no way to use their own right.
+    employees.value = await api<TaskAssignee[]>('/api/tasks/assignees')
   }
   // Deep link from the task detail page's Edit button (?edit=<id>) — open
   // the form pre-filled, then drop the param so a refresh doesn't reopen it.
@@ -149,6 +152,31 @@ async function accept(t: Task) {
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to accept the task'
+  } finally {
+    busy.value = ''
+  }
+}
+
+/**
+ * Reassign straight from the card. Previously the only routes to this were
+ * Edit (which scrolls the task up into the form) or View (a whole page
+ * away) — a lot of ceremony for picking a name, and easy to miss entirely.
+ * `''` is the "Unassigned" option; a broadcast task keeps its pool status
+ * because the server treats a null assignee on a broadcast task as
+ * unclaimed rather than as a private task nobody owns.
+ */
+async function assign(t: Task, assigneeId: string) {
+  if (assigneeId === (t.assignee_id ?? '')) return
+  error.value = ''
+  busy.value = t.id
+  try {
+    await api(`/api/tasks/${t.id}`, {
+      method: 'PATCH',
+      json: { assignee_id: assigneeId || null },
+    })
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to reassign the task'
   } finally {
     busy.value = ''
   }
@@ -365,6 +393,21 @@ const statusTone: Record<TaskStatus, string> = {
           >
             Accept
           </button>
+          <!-- Assigning is the point of the manage_tasks right, so it lives
+               on the card itself rather than behind Edit or View. -->
+          <select
+            v-if="canManage && can(t, 'edit')"
+            :value="t.assignee_id ?? ''"
+            class="field-input !w-40"
+            :disabled="busy === t.id"
+            :aria-label="`Assign ${t.title}`"
+            @change="assign(t, ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">
+              {{ t.broadcast ? 'Everyone — unclaimed' : 'Unassigned' }}
+            </option>
+            <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </select>
           <select
             v-if="can(t, 'set_status')"
             :value="t.status"

@@ -51,7 +51,7 @@ just hidden in the interface.
 | Add users | Propose a new account, which lands pending |
 | **Approve users** | Activate a pending account. **Requires the admin role as well** |
 | Petty cash | Hold a float and charge vouchers to it |
-| Manage tasks | Assign tasks to others and see the whole board |
+| Manage tasks | Assign tasks to others and see the whole board. The holder gets an assignee picker **on each task card**, so reassigning never means opening the task first |
 | Delete tasks | Delete a task that has been assigned to someone else |
 | Send announcements | Post to News (pop-up on login is admin-only regardless — see the News section in the User Guide) |
 
@@ -170,6 +170,11 @@ nothing is usable on a card without your say-so.
   so "why did this number move" has a direct answer.
 
 ## Petty cash administration
+
+**Floats held** lists every holder with what they were **issued**, what they've
+**used** (and what percentage of their float that is), and what they should
+still be **holding** — with a totals row giving the organisation-wide figure
+that has to reconcile against physical cash.
 
 **Petty Cash** additionally shows every float, the pending request queue, and the
 direct issue/recover form.

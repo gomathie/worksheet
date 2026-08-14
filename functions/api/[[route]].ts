@@ -1992,6 +1992,11 @@ async function createAdjustment(request: Request, env: Env): Promise<Response> {
       kind: 'reimbursement_requested',
       title: `${who} requested a reimbursement`,
       body: `${who} requested a reimbursement of ${money} for ${month}${description ? ` — ${description}` : ''}.\n\nScreen it on the Approvals tab.`,
+      // In-app only: this is a queue ping to staff who are already working in
+      // the app, and it now has a visible queue on the Approvals page to land
+      // in. SMS is billed per message, so it's reserved for the events an
+      // employee needs to hear about when they're *not* in the app.
+      inAppOnly: true,
     })
   }
   const created = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
@@ -2091,6 +2096,7 @@ async function decideAdjustment(
       kind: 'reimbursement_returned',
       title: 'Your reimbursement needs more information',
       body: `Your reimbursement of ${money} for ${existing.month} was returned for more information:\n\n${note}\n\nUpdate it on the Payments tab.`,
+      inAppOnly: true,
     })
     return json(
       await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?').bind(id).first(),
@@ -2126,6 +2132,8 @@ async function decideAdjustment(
       kind: 'reimbursement_needs_approval',
       title: `Reimbursement for ${claimant} needs your approval`,
       body: `${claimant}'s reimbursement of ${money} for ${existing.month}${existing.description ? ` — ${existing.description}` : ''} has been screened and sent for approval.`,
+      // Queue ping to an approver working in the app — see above.
+      inAppOnly: true,
     })
     return json(
       await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?').bind(id).first(),
@@ -2155,6 +2163,7 @@ async function decideAdjustment(
       kind: body.status === 'approved' ? 'reimbursement_approved' : 'reimbursement_rejected',
       title: `Your reimbursement was ${body.status}`,
       body: `Your reimbursement of ${money} for ${existing.month}${existing.description ? ` (${existing.description})` : ''} was ${body.status}.`,
+      inAppOnly: true,
     })
   }
   const updated = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')

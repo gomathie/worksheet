@@ -352,9 +352,16 @@ describe('validateAttachment', () => {
 })
 
 describe('formatVoucherNumber', () => {
-  it('zero-pads the sequence to four digits behind the COH-EXP prefix', () => {
-    expect(formatVoucherNumber('2026', 7)).toBe('COH-EXP-2026-0007')
-    expect(formatVoucherNumber(2026, 1234)).toBe('COH-EXP-2026-1234')
+  it('runs the year and a 4-digit sequence together behind the COH-EXP prefix', () => {
+    expect(formatVoucherNumber('2026', 7)).toBe('COH-EXP-20260007')
+    expect(formatVoucherNumber(2026, 1234)).toBe('COH-EXP-20261234')
+  })
+
+  it('keeps the year readable as the first four digits', () => {
+    // The point of the format: everything after the prefix reads as
+    // <year><sequence>, so 2027's first voucher is plainly a 2027 one.
+    expect(formatVoucherNumber(2027, 1)).toBe('COH-EXP-20270001')
+    expect(formatVoucherNumber(2026, 26)).toBe('COH-EXP-20260026')
   })
 })
 

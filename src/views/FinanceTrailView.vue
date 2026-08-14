@@ -115,19 +115,19 @@ const monthLabel = computed(() => {
         <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
           <div>
             <p class="field-label">Base</p>
-            <p class="mono text-2xl font-semibold">{{ money(trail.base) }}</p>
+            <p class="stat-figure">{{ money(trail.base) }}</p>
           </div>
           <div>
             <p class="field-label">Bonuses</p>
-            <p class="mono text-2xl font-semibold">{{ money(trail.bonus) }}</p>
+            <p class="stat-figure">{{ money(trail.bonus) }}</p>
           </div>
           <div>
             <p class="field-label">Reimbursements</p>
-            <p class="mono text-2xl font-semibold">{{ money(trail.reimbursements) }}</p>
+            <p class="stat-figure">{{ money(trail.reimbursements) }}</p>
           </div>
           <div>
             <p class="field-label">Total due</p>
-            <p class="mono text-2xl font-semibold text-teal">{{ money(trail.total_due) }}</p>
+            <p class="stat-figure text-teal">{{ money(trail.total_due) }}</p>
           </div>
         </div>
         <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4 text-xs">

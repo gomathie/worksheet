@@ -460,9 +460,19 @@ export function validateAttachment(
 /** Prefix for every voucher number, e.g. COH-EXP-2026-0007. */
 export const VOUCHER_PREFIX = 'COH-EXP'
 
-/** COH-EXP-2026-0007 */
+/**
+ * COH-EXP-20260007 — prefix, then the year and a 4-digit per-year sequence
+ * run together as one block.
+ *
+ * Applies to vouchers created from this change onwards only. The earlier
+ * shape (COH-EXP-2026-0007, with a hyphen before the sequence) is left
+ * untouched on existing rows: a voucher number is quoted in external
+ * accounting records, so rewriting one would break the reference it exists
+ * to provide. Nothing parses the number — it is only ever displayed,
+ * searched by substring, and kept unique — so the two shapes coexist safely.
+ */
 export function formatVoucherNumber(year: string | number, sequence: number): string {
-  return `${VOUCHER_PREFIX}-${year}-${String(sequence).padStart(4, '0')}`
+  return `${VOUCHER_PREFIX}-${year}${String(sequence).padStart(4, '0')}`
 }
 
 // ------------------------------------------------------- duplicate detection

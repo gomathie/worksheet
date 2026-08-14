@@ -345,7 +345,7 @@ const downloadPdf = () => window.print()
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div>
           <p class="field-label">Amount</p>
-          <p class="mono text-3xl font-semibold text-teal">{{ money }}</p>
+          <p class="stat-figure text-teal">{{ money }}</p>
         </div>
         <div>
           <p class="field-label">Employee</p>

@@ -165,19 +165,19 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
       <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div>
           <p class="field-label">Base</p>
-          <p class="mono text-2xl font-semibold">{{ money(mine.base) }}</p>
+          <p class="stat-figure">{{ money(mine.base) }}</p>
         </div>
         <div>
           <p class="field-label">Bonuses</p>
-          <p class="mono text-2xl font-semibold">{{ money(mine.bonus) }}</p>
+          <p class="stat-figure">{{ money(mine.bonus) }}</p>
         </div>
         <div>
           <p class="field-label">Reimbursements</p>
-          <p class="mono text-2xl font-semibold">{{ money(mine.reimbursements) }}</p>
+          <p class="stat-figure">{{ money(mine.reimbursements) }}</p>
         </div>
         <div>
           <p class="field-label">Total due</p>
-          <p class="mono text-2xl font-semibold text-teal">{{ money(mine.total_due) }}</p>
+          <p class="stat-figure text-teal">{{ money(mine.total_due) }}</p>
         </div>
       </div>
 

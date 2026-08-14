@@ -217,7 +217,11 @@ allowance** with used/remaining balance.
 Employees declare business expenses — including those with **no receipt** — and route them through
 approval to payment.
 
-- **Filing:** voucher number is auto-generated (`COH-EXP-2026-0007`); fields are employee, department,
+- **Filing:** voucher number is auto-generated as `COH-EXP-<year><4-digit sequence>`
+  (`COH-EXP-20260007`), the sequence restarting each year. Vouchers filed before this format
+  landed keep their original `COH-EXP-2026-0007` numbers — a voucher number is quoted in external
+  accounting records, so existing ones are never rewritten; nothing parses the number, so the two
+  shapes coexist. Fields are employee, department,
   date of expense, date submitted, category, purpose, vendor (optional), amount, currency, payment
   method (Cash / Mobile Money / Bank / Card / Other), and whether a receipt exists. Vouchers can be
   saved as a **draft** and submitted later.

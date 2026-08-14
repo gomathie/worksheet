@@ -75,7 +75,11 @@ export async function notifyUsers(
 /** Active employees holding a given right, for queue notifications. */
 export async function employeesWithRight(
   env: Env,
-  right: 'review_expenses' | 'record_expenses' | 'approve_expenses',
+  right:
+    | 'review_expenses'
+    | 'record_expenses'
+    | 'approve_expenses'
+    | 'send_for_approval',
 ): Promise<string[]> {
   const { results } = await env.DB.prepare(
     "SELECT id, role, rights FROM employees WHERE active = 1",

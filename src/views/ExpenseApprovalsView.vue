@@ -3,25 +3,32 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
-import type { ExpenseVoucher, PendingUser } from '../types'
+import type { Adjustment, ExpenseVoucher, PendingUser } from '../types'
 
-// Two queues on one page:
-//   manager  — vouchers from the reviewer's direct reports awaiting review
-//   approver — vouchers awaiting final approval (admin + approve_expenses)
-// Both are scoped server-side.
+// Queues on one page, each scoped server-side:
+//   manager       — vouchers from the reviewer's direct reports awaiting review
+//   approver      — vouchers awaiting final approval (admin + approve_expenses)
+//   reimbursement — money claims at the matching stage. These used to appear
+//     only on Payments and Screening, so an approver working this page had no
+//     sign a claim was waiting and had to go hunting for it.
 
 const auth = useAuthStore()
 
 const vouchers = ref<ExpenseVoucher[]>([])
 const approvals = ref<ExpenseVoucher[]>([])
+const claimsToScreen = ref<Adjustment[]>([])
+const claimsToApprove = ref<Adjustment[]>([])
 const error = ref('')
 const notice = ref('')
 const busy = ref('')
 const comments = ref<Record<string, string>>({})
+const claimNotes = ref<Record<string, string>>({})
 
 const isManager = computed(() => auth.rights.review_expenses)
 // Approval requires the admin role as well as the right.
 const isApprover = computed(() => auth.isAdmin && auth.rights.approve_expenses)
+// Screening a claim is the same authority as screening a voucher.
+const isScreener = computed(() => auth.isAdmin || auth.rights.send_for_approval)
 // New-user approval is a separate authority from expense approval.
 const canApproveUsers = computed(() => auth.canApproveUsers)
 const canSeePendingUsers = computed(
@@ -41,6 +48,14 @@ async function load() {
     }
     if (canSeePendingUsers.value) {
       pendingUsers.value = await api<PendingUser[]>('/api/users/pending')
+    }
+    if (isScreener.value) {
+      claimsToScreen.value = await api<Adjustment[]>(
+        '/api/adjustments/pending-reimbursements',
+      )
+    }
+    if (isApprover.value) {
+      claimsToApprove.value = await api<Adjustment[]>('/api/adjustments/awaiting-approval')
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load the approval queue'
@@ -84,6 +99,48 @@ async function decide(v: ExpenseVoucher, action: Decision) {
     })
     delete comments.value[v.id]
     notice.value = `${v.voucher_number} ${PAST_TENSE[action]}.`
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Something went wrong'
+  } finally {
+    busy.value = ''
+  }
+}
+
+// --- reimbursement claims
+//
+// Same four moves a voucher gets, against the adjustments endpoint: send to
+// the approver, return for more information, approve, reject. 'returned' and
+// 'rejected' both require a note — handing something back or refusing it
+// without saying why just costs another round trip.
+type ClaimAction = 'awaiting_approval' | 'returned' | 'approved' | 'rejected'
+
+const CLAIM_PAST_TENSE: Record<ClaimAction, string> = {
+  awaiting_approval: 'sent for approval',
+  returned: 'returned for more information',
+  approved: 'approved',
+  rejected: 'rejected',
+}
+
+async function decideClaim(a: Adjustment, action: ClaimAction) {
+  const note = (claimNotes.value[a.id] ?? '').trim()
+  if ((action === 'returned' || action === 'rejected') && !note) {
+    error.value =
+      action === 'returned'
+        ? 'Say what additional information is needed.'
+        : 'A note is required when rejecting a claim.'
+    return
+  }
+  error.value = ''
+  notice.value = ''
+  busy.value = a.id
+  try {
+    await api(`/api/adjustments/${a.id}`, {
+      method: 'PATCH',
+      json: { status: action, note: note || undefined },
+    })
+    delete claimNotes.value[a.id]
+    notice.value = `${a.employee_name ?? 'Claim'}'s reimbursement ${CLAIM_PAST_TENSE[action]}.`
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'

@@ -269,6 +269,11 @@ export interface Adjustment {
   decided_at?: string | null
   /** Set when an own-pocket expense voucher raised this claim. */
   voucher_id?: string | null
+  /** Why a claim was last handed back for more information. Only ever set
+   * while it sits at 'pending'; cleared once it moves on again. */
+  return_note?: string | null
+  returned_at?: string | null
+  returned_by?: string | null
 }
 
 export interface FinanceTrailEntryLine {

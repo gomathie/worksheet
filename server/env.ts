@@ -203,7 +203,9 @@ export interface AdjustmentRow {
   amount: number
   description: string | null
   // 'pending' is raised but not yet screened; 'awaiting_approval' has been put
-  // to an approver by a `send_for_approval` holder.
+  // to an approver by a `send_for_approval` holder. A claim returned for more
+  // information comes back to 'pending' — the state the employee can still
+  // edit or withdraw from — with return_note saying what was asked for.
   status: 'pending' | 'awaiting_approval' | 'approved' | 'rejected'
   created_by: string | null
   created_at: string
@@ -211,6 +213,11 @@ export interface AdjustmentRow {
   decided_at: string | null
   /** The expense voucher that raised this claim, when it was automatic. */
   voucher_id: string | null
+  /** Why it was last handed back, when it was. Cleared once the claim moves
+   * on again, so it only ever describes the current 'pending' state. */
+  return_note: string | null
+  returned_at: string | null
+  returned_by: string | null
 }
 
 export interface PaymentRow {

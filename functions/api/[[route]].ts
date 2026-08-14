@@ -1981,20 +1981,23 @@ async function createAdjustment(request: Request, env: Env): Promise<Response> {
     )
     .run()
   await audit(env, user.id, `create_${type}`, id, { employee_id: employeeId, month, amount, status })
-  // A new employee reimbursement request pings the admins.
+  // A new employee reimbursement request goes to whoever screens claims —
+  // the same desk that screens the vouchers, and the same in-app + email +
+  // SMS path every other queue notification uses. This used to call the
+  // email-only `notify()` helper directly, which wrote nothing to the
+  // notifications table (so the bell never lit up) and silently did nothing
+  // at all when SMTP was off or an admin had no email set.
   if (type === 'reimbursement' && status === 'pending') {
     const who =
       (await env.DB.prepare('SELECT name FROM employees WHERE id = ?')
         .bind(employeeId)
         .first<{ name: string }>())?.name ?? 'An employee'
-    for (const to of await adminEmails(env)) {
-      await notify(
-        env,
-        to,
-        'Ledger: new reimbursement request',
-        `${who} requested a reimbursement of ${amount} for ${month}${description ? ` — ${description}` : ''}.\n\nReview it on the Payments tab.`,
-      )
-    }
+    const money = `${(await loadSettings(env)).currency}${amount.toFixed(2)}`
+    await notifyUsers(env, await employeesWithRight(env, 'send_for_approval'), {
+      kind: 'reimbursement_requested',
+      title: `${who} requested a reimbursement`,
+      body: `${who} requested a reimbursement of ${money} for ${month}${description ? ` — ${description}` : ''}.\n\nScreen it on the Approvals tab.`,
+    })
   }
   const created = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
     .bind(id)
@@ -2025,6 +2028,31 @@ async function listPendingReimbursements(
   return json(results)
 }
 
+/**
+ * Reimbursements screened and now sitting with an approver — the Approvals
+ * page's second pile, alongside the vouchers awaiting a decision. Gated on
+ * the same authority that decides them: `approve_expenses` *and* the admin
+ * role, since approving a claim is the same act as approving the voucher
+ * that raised it.
+ */
+async function listReimbursementsAwaitingApproval(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (user.role !== 'admin' || !parseRights(user).approve_expenses) {
+    throw new ApiError(403, 'You do not have permission for this')
+  }
+  const { results } = await env.DB.prepare(
+    `SELECT a.*, emp.name AS employee_name
+       FROM adjustments a
+       JOIN employees emp ON emp.id = a.employee_id
+      WHERE a.type = 'reimbursement' AND a.status = 'awaiting_approval'
+      ORDER BY a.created_at`,
+  ).all()
+  return json(results)
+}
+
 async function decideAdjustment(
   request: Request,
   env: Env,
@@ -2040,7 +2068,40 @@ async function decideAdjustment(
   if (!existing) throw new ApiError(404, 'Adjustment not found')
 
   await assertMonthUnlocked(env, existing.month)
-  const body = await readJson<{ status?: string }>(request)
+  const body = await readJson<{ status?: string; note?: string }>(request)
+
+  // Returned for more information — the claim goes back to the employee with
+  // a note saying what's needed, exactly like a voucher's 'return'. Open to
+  // a screener as well as an admin: asking a question isn't a decision, and
+  // it's the screener who most often spots the gap. Requires a note, since
+  // handing something back without saying why just wastes a round trip.
+  if (body.status === 'returned') {
+    if (user.role !== 'admin' && !parseRights(user).send_for_approval) {
+      throw new ApiError(403, 'You cannot return this claim')
+    }
+    if (existing.status !== 'pending' && existing.status !== 'awaiting_approval') {
+      throw new ApiError(400, 'Only a claim still in review can be returned')
+    }
+    const note = (body.note ?? '').trim().slice(0, 500)
+    if (!note) throw new ApiError(400, 'Say what information is needed')
+    await env.DB.prepare(
+      "UPDATE adjustments SET status = 'pending', return_note = ?, returned_at = ?, returned_by = ? WHERE id = ?",
+    )
+      .bind(note, new Date().toISOString(), user.id, id)
+      .run()
+    await audit(env, user.id, 'return_adjustment', id, { note })
+    const money = `${(await loadSettings(env)).currency}${existing.amount.toFixed(2)}`
+    await notifyUser(env, {
+      employeeId: existing.employee_id,
+      kind: 'reimbursement_returned',
+      title: 'Your reimbursement needs more information',
+      body: `Your reimbursement of ${money} for ${existing.month} was returned for more information:\n\n${note}\n\nUpdate it on the Payments tab.`,
+    })
+    return json(
+      await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?').bind(id).first(),
+    )
+  }
+
   if (body.status === 'awaiting_approval') {
     if (user.role !== 'admin' && !parseRights(user).send_for_approval) {
       throw new ApiError(403, 'You cannot send this claim for approval')
@@ -2048,10 +2109,29 @@ async function decideAdjustment(
     if (existing.status !== 'pending') {
       throw new ApiError(400, 'Only a pending claim can be sent for approval')
     }
-    await env.DB.prepare('UPDATE adjustments SET status = ? WHERE id = ?')
+    // Clearing the return note here keeps it describing only the *current*
+    // pending state — once the claim moves on, whatever was previously asked
+    // for has been answered.
+    await env.DB.prepare(
+      'UPDATE adjustments SET status = ?, return_note = NULL, returned_at = NULL, returned_by = NULL WHERE id = ?',
+    )
       .bind('awaiting_approval', id)
       .run()
     await audit(env, user.id, 'screen_adjustment', id, { status: 'awaiting_approval' })
+    // Screened and put to the approvers — mirrors a voucher's
+    // 'request_approval' step, which notified them all along; this branch
+    // notified nobody, so a claim could sit with an approver who had no way
+    // of knowing it had arrived.
+    const claimant =
+      (await env.DB.prepare('SELECT name FROM employees WHERE id = ?')
+        .bind(existing.employee_id)
+        .first<{ name: string }>())?.name ?? 'An employee'
+    const money = `${(await loadSettings(env)).currency}${existing.amount.toFixed(2)}`
+    await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
+      kind: 'reimbursement_needs_approval',
+      title: `Reimbursement for ${claimant} needs your approval`,
+      body: `${claimant}'s reimbursement of ${money} for ${existing.month}${existing.description ? ` — ${existing.description}` : ''} has been screened and sent for approval.`,
+    })
     return json(
       await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?').bind(id).first(),
     )
@@ -2059,24 +2139,28 @@ async function decideAdjustment(
 
   const admin = await requireAdmin(request, env)
   if (body.status !== 'approved' && body.status !== 'rejected') {
-    throw new ApiError(400, "status must be 'awaiting_approval', 'approved' or 'rejected'")
+    throw new ApiError(
+      400,
+      "status must be 'awaiting_approval', 'returned', 'approved' or 'rejected'",
+    )
   }
   await env.DB.prepare(
-    'UPDATE adjustments SET status = ?, decided_by = ?, decided_at = ? WHERE id = ?',
+    'UPDATE adjustments SET status = ?, decided_by = ?, decided_at = ?, return_note = NULL, returned_at = NULL, returned_by = NULL WHERE id = ?',
   )
     .bind(body.status, admin.id, new Date().toISOString(), id)
     .run()
   await audit(env, admin.id, 'decide_adjustment', id, { status: body.status })
   if (existing.type === 'reimbursement') {
-    const emp = await env.DB.prepare('SELECT email FROM employees WHERE id = ?')
-      .bind(existing.employee_id)
-      .first<{ email: string | null }>()
-    await notify(
-      env,
-      emp?.email ?? null,
-      `Ledger: reimbursement ${body.status}`,
-      `Your reimbursement of ${existing.amount} for ${existing.month}${existing.description ? ` (${existing.description})` : ''} was ${body.status}.`,
-    )
+    // Was email-only, so an employee with no email address — or any employee
+    // at all while SMTP is off — was never told the outcome of their own
+    // claim. notifyUser covers the bell as well as email/SMS.
+    const money = `${(await loadSettings(env)).currency}${existing.amount.toFixed(2)}`
+    await notifyUser(env, {
+      employeeId: existing.employee_id,
+      kind: body.status === 'approved' ? 'reimbursement_approved' : 'reimbursement_rejected',
+      title: `Your reimbursement was ${body.status}`,
+      body: `Your reimbursement of ${money} for ${existing.month}${existing.description ? ` (${existing.description})` : ''} was ${body.status}.`,
+    })
   }
   const updated = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')
     .bind(id)
@@ -2133,15 +2217,15 @@ async function setPaid(request: Request, env: Env): Promise<Response> {
   }
   await audit(env, admin.id, 'set_paid', body.employee_id, { month, paid: !!body.paid })
   if (body.paid) {
-    const emp = await env.DB.prepare('SELECT email FROM employees WHERE id = ?')
-      .bind(body.employee_id)
-      .first<{ email: string | null }>()
-    await notify(
-      env,
-      emp?.email ?? null,
-      'Ledger: payment recorded',
-      `Your remuneration for ${month} has been marked as paid.\n\nYou can confirm receipt on the Payments tab.`,
-    )
+    // Same fix as the reimbursement notifications above: this was email-only,
+    // so being marked paid never reached the bell, and reached nobody at all
+    // with SMTP off.
+    await notifyUser(env, {
+      employeeId: body.employee_id,
+      kind: 'payment_marked_paid',
+      title: `Your ${month} remuneration was marked paid`,
+      body: `Your remuneration for ${month} has been marked as paid.\n\nYou can confirm receipt on the Payments tab.`,
+    })
   }
   return json({ ok: true })
 }
@@ -3223,6 +3307,9 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/adjustments/pending-reimbursements' && method === 'GET') {
     return listPendingReimbursements(request, env)
+  }
+  if (path === '/api/adjustments/awaiting-approval' && method === 'GET') {
+    return listReimbursementsAwaitingApproval(request, env)
   }
   if (path === '/api/adjustments' && method === 'GET') return listAdjustments(request, env)
   if (path === '/api/adjustments' && method === 'POST') return createAdjustment(request, env)

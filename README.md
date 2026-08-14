@@ -167,6 +167,14 @@ three installs of the same device type in a day is normal, not a repeat.
 - **Dashboard:** monthly totals, per-type stat cards, a daily bar chart, per-person summary.
   Employees see the team's work performance but money **only for themselves** — rates and
   colleagues' pay are never exposed to non-admins.
+- **Days worked:** a day counts once the person either logged a time entry **or** completed a
+  task on it (`aggregateMonthly`'s `otherWorkedDays`, which adds to `days_worked` without
+  touching hours/units/daily totals — a completed task contributes no hours of its own). Feeds
+  the per-person `Days` column, plus the viewer's own headline tile and a day-by-day marker grid
+  (`my_days` / `my_days_worked`) where an elapsed day with neither reads as an explicit "no work
+  done". Days later than today are omitted rather than marked unworked. `my_days` goes to every
+  viewer regardless of rights — it's their own attendance. A task's `completed_at` is a real
+  instant, so which day it lands on is resolved through `TEAM_TZ` (`dateInTz`), not UTC.
 - **Monthly Report:** printable per-person report with base/bonus/reimbursement/total for admins,
   plus **CSV export** of the summary and daily detail.
 - **Payslip:** printable per-person statement (work done, base, itemised bonuses/reimbursements,

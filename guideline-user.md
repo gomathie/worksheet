@@ -260,7 +260,11 @@ What you see here depends on your rights.
 - **Payslip** — your own printable statement: work done, base pay, itemised
   bonuses and reimbursements, total due.
 - **Dashboard** — the team's output for the month. Money shown here is **only
-  ever your own**.
+  ever your own**. It also shows **your days worked**: a day counts once you
+  either logged time or completed a task on it, and **Your days this month**
+  marks every day so far — worked days in teal, days with **no work done**
+  greyed out. Days still to come aren't shown, and logging twice in a day is
+  still one day.
 - **Monthly Report** — the fuller per-person report.
 - **Trends** — your figures over the last 3, 6 or 12 months.
 - **Card Audit** — who classified or QAP'd a given card. Admin Guide has more.

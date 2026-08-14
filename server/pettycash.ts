@@ -37,24 +37,43 @@ export interface PettyCashLedgerRow {
 
 const CONSUMING = PETTY_CASH_CONSUMING_STATUSES.map(() => '?').join(',')
 
-/** The float this employee should still be holding, in currency units. */
-export async function balanceFor(env: Env, employeeId: string): Promise<number> {
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * One employee's float, split into its three parts.
+ *
+ * `issued` is net of returns and adjustments, `spent` is every voucher
+ * currently drawing on the float, and `balance` is what should physically be
+ * in their hands. The holder is accountable for all three, not just the
+ * remainder — "you are holding 40" answers nothing about whether that's 40
+ * of 50 or 40 of 500 — so all three travel together.
+ */
+export async function summaryFor(
+  env: Env,
+  employeeId: string,
+): Promise<{ issued: number; spent: number; balance: number }> {
   const row = await env.DB.prepare(
     `SELECT
        (SELECT COALESCE(SUM(
            CASE type WHEN 'issue' THEN amount WHEN 'return' THEN -amount ELSE amount END
          ), 0)
-          FROM petty_cash_ledger WHERE employee_id = ?1)
-       -
+          FROM petty_cash_ledger WHERE employee_id = ?1) AS issued,
        (SELECT COALESCE(SUM(amount), 0)
           FROM expense_vouchers
          WHERE employee_id = ?1
            AND paid_from_petty_cash = 1
-           AND status IN (${CONSUMING})) AS balance`,
+           AND status IN (${CONSUMING})) AS spent`,
   )
     .bind(employeeId, ...PETTY_CASH_CONSUMING_STATUSES)
-    .first<{ balance: number }>()
-  return Math.round((row?.balance ?? 0) * 100) / 100
+    .first<{ issued: number; spent: number }>()
+  const issued = round2(row?.issued ?? 0)
+  const spent = round2(row?.spent ?? 0)
+  return { issued, spent, balance: round2(issued - spent) }
+}
+
+/** The float this employee should still be holding, in currency units. */
+export async function balanceFor(env: Env, employeeId: string): Promise<number> {
+  return (await summaryFor(env, employeeId)).balance
 }
 
 /** Balances for everyone who has ever been issued a float. */
@@ -99,8 +118,8 @@ export async function getPettyCash(request: Request, env: Env): Promise<Response
   const rights = parseRights(user)
   const settings = await loadSettings(env)
 
-  const [balance, { results: ledger }] = await Promise.all([
-    balanceFor(env, user.id),
+  const [summary, { results: ledger }] = await Promise.all([
+    summaryFor(env, user.id),
     env.DB.prepare(
       `SELECT l.*, c.name AS created_by_name
          FROM petty_cash_ledger l
@@ -156,7 +175,11 @@ export async function getPettyCash(request: Request, env: Env): Promise<Response
     currency: settings.currency,
     can_use: rights.use_petty_cash,
     can_issue: user.role === 'admin',
-    balance,
+    balance: summary.balance,
+    // The other two thirds of the same story: what has been put into this
+    // person's hands over time, and how much of it is already committed.
+    issued: summary.issued,
+    spent_total: summary.spent,
     ledger,
     spent,
     holders,

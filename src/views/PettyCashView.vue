@@ -72,6 +72,33 @@ onMounted(load)
 const currency = computed(() => data.value?.currency ?? '')
 const money = (n: number) => `${currency.value}${n.toFixed(2)}`
 
+/** How much of the float is committed, for the bar under the figures.
+ *  Clamped to 0–100 so an overdrawn float shows a full bar rather than
+ *  overflowing its track. */
+const spentPct = computed(() => {
+  const d = data.value
+  if (!d || d.issued <= 0) return 0
+  return Math.min(100, Math.max(0, Math.round((d.spent_total / d.issued) * 100)))
+})
+
+/** Same figure per holder, for the oversight table. */
+const usedPct = (h: { issued: number; spent: number }) =>
+  h.issued > 0 ? Math.min(100, Math.max(0, Math.round((h.spent / h.issued) * 100))) : 0
+
+/** Organisation-wide position: what is out there, spent, and still held.
+ *  Summed client-side from the rows already on screen, so the total can
+ *  never disagree with the list it sits under. */
+const holderTotals = computed(() =>
+  (data.value?.holders ?? []).reduce(
+    (t, h) => ({
+      issued: Math.round((t.issued + h.issued) * 100) / 100,
+      spent: Math.round((t.spent + h.spent) * 100) / 100,
+      balance: Math.round((t.balance + h.balance) * 100) / 100,
+    }),
+    { issued: 0, spent: 0, balance: 0 },
+  ),
+)
+
 async function record() {
   error.value = ''
   notice.value = ''
@@ -199,14 +226,37 @@ const signed = (e: { type: string; amount: number }) =>
     <template v-if="data">
       <!-- ------------------------------------------------------ own float -->
       <div v-if="data.can_use || data.balance !== 0" class="panel mb-6">
-        <p class="field-label">Cash you are holding</p>
-        <p
-          class="mono text-4xl font-semibold"
-          :class="data.balance < 0 ? 'text-red' : 'text-teal'"
+        <!-- The remainder alone doesn't let anyone account for a float —
+             "holding 40" reads very differently against 50 issued than
+             against 500. All three figures, as one sum you can check. -->
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <p class="field-label">Issued to you</p>
+            <p class="stat-figure">{{ money(data.issued) }}</p>
+          </div>
+          <div>
+            <p class="field-label">Spent</p>
+            <p class="stat-figure">{{ money(data.spent_total) }}</p>
+          </div>
+          <div>
+            <p class="field-label">Remaining</p>
+            <p class="stat-figure" :class="data.balance < 0 ? 'text-red' : 'text-teal'">
+              {{ money(data.balance) }}
+            </p>
+          </div>
+        </div>
+        <div
+          v-if="data.issued > 0"
+          class="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-cream"
+          :title="`${spentPct}% of the float spent`"
         >
-          {{ money(data.balance) }}
-        </p>
-        <p class="mt-2 text-sm text-muted">
+          <div
+            class="h-full rounded-full transition-all"
+            :class="data.balance < 0 ? 'bg-red' : 'bg-teal'"
+            :style="{ width: `${spentPct}%` }"
+          />
+        </div>
+        <p class="mt-3 text-sm text-muted">
           Issued to you, less every voucher you charged to petty cash. A voucher
           that is rejected or returned to draft puts its amount back.
         </p>
@@ -468,15 +518,22 @@ const signed = (e: { type: string; amount: number }) =>
 
       <!-- ----------------------------------------------------- all floats -->
       <div v-if="data.holders.length" class="panel mb-6">
-        <h3 class="display mb-3 text-xl">Floats held</h3>
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 class="display text-xl">Floats held</h3>
+          <p class="text-sm text-muted">
+            <span class="mono text-teal">{{ money(holderTotals.balance) }}</span>
+            outstanding across {{ data.holders.length }}
+            {{ data.holders.length === 1 ? 'holder' : 'holders' }}
+          </p>
+        </div>
         <div class="table-wrap">
           <table class="data">
             <thead>
               <tr>
                 <th>Employee</th>
                 <th class="num">Issued (net)</th>
-                <th class="num">Spent</th>
-                <th class="num">Holding</th>
+                <th class="num">Used</th>
+                <th class="num">Remaining</th>
                 <th>Last movement</th>
               </tr>
             </thead>
@@ -489,13 +546,29 @@ const signed = (e: { type: string; amount: number }) =>
                   </span>
                 </td>
                 <td class="num">{{ money(h.issued) }}</td>
-                <td class="num">{{ money(h.spent) }}</td>
+                <td class="num">
+                  {{ money(h.spent) }}
+                  <span v-if="h.issued > 0" class="ml-1 text-xs text-muted">
+                    {{ usedPct(h) }}%
+                  </span>
+                </td>
                 <td class="num font-semibold" :class="h.balance < 0 ? 'text-red' : ''">
                   {{ money(h.balance) }}
                 </td>
                 <td class="mono text-xs text-muted">
                   {{ h.last_issued_at?.slice(0, 10) ?? '—' }}
                 </td>
+              </tr>
+              <!-- What the organisation has out there in total — the figure
+                   that has to be reconciled against physical cash. -->
+              <tr class="totals">
+                <td>Total</td>
+                <td class="num">{{ money(holderTotals.issued) }}</td>
+                <td class="num">{{ money(holderTotals.spent) }}</td>
+                <td class="num" :class="holderTotals.balance < 0 ? 'text-red' : ''">
+                  {{ money(holderTotals.balance) }}
+                </td>
+                <td></td>
               </tr>
             </tbody>
           </table>

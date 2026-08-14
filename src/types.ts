@@ -422,7 +422,12 @@ export interface PettyCashPayload {
   currency: string
   can_use: boolean
   can_issue: boolean
+  /** What should physically be in hand: issued − spent_total. */
   balance: number
+  /** Total ever put into this person's hands, net of returns/adjustments. */
+  issued: number
+  /** Total already committed to vouchers drawing on the float. */
+  spent_total: number
   ledger: PettyCashEntry[]
   spent: {
     id: string

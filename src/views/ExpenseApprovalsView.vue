@@ -369,6 +369,102 @@ const currency = computed(
       </div>
     </template>
 
+    <!-- ======================================= reimbursement claim queues -->
+    <!-- A money claim is not a voucher, so it gets its own compact card
+         rather than being forced into the voucher layout — but the same
+         four moves, in the same place, so an approver has one page to
+         watch instead of two. -->
+    <template v-if="isApprover && claimsToApprove.length">
+      <h3 class="display mb-1 text-xl">Reimbursements awaiting your approval</h3>
+      <p class="mb-3 text-sm text-muted">
+        Screened money claims. Approving one adds it to that month's pay.
+      </p>
+      <div v-for="a in claimsToApprove" :key="a.id" class="panel mb-4">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="display text-lg">{{ a.employee_name }}</p>
+            <p class="text-sm text-muted">
+              {{ a.description || 'No description given' }} ·
+              <span class="mono">{{ a.month }}</span>
+            </p>
+          </div>
+          <p class="mono text-2xl font-semibold">{{ a.amount.toFixed(2) }}</p>
+        </div>
+        <input
+          v-model="claimNotes[a.id]"
+          class="field-input mb-3"
+          placeholder="Note — required to return or reject"
+        />
+        <div class="flex flex-wrap gap-2">
+          <button
+            class="btn btn-sm btn-solid"
+            :disabled="busy === a.id"
+            @click="decideClaim(a, 'approved')"
+          >
+            Approve
+          </button>
+          <button
+            class="btn btn-sm"
+            :disabled="busy === a.id"
+            @click="decideClaim(a, 'returned')"
+          >
+            Return for more info
+          </button>
+          <button
+            class="btn btn-sm btn-danger"
+            :disabled="busy === a.id"
+            @click="decideClaim(a, 'rejected')"
+          >
+            Reject
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <template v-if="isScreener && claimsToScreen.length">
+      <h3 class="display mb-1 text-xl">Reimbursements to screen</h3>
+      <p class="mb-3 text-sm text-muted">
+        Raised by employees and not yet put to an approver. Check the claim, then send it
+        on — or hand it back if something's missing.
+      </p>
+      <div v-for="a in claimsToScreen" :key="a.id" class="panel mb-4">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="display text-lg">{{ a.employee_name }}</p>
+            <p class="text-sm text-muted">
+              {{ a.description || 'No description given' }} ·
+              <span class="mono">{{ a.month }}</span>
+            </p>
+            <p v-if="a.return_note" class="mt-1 text-xs text-amber">
+              Previously returned: {{ a.return_note }}
+            </p>
+          </div>
+          <p class="mono text-2xl font-semibold">{{ a.amount.toFixed(2) }}</p>
+        </div>
+        <input
+          v-model="claimNotes[a.id]"
+          class="field-input mb-3"
+          placeholder="Note — required to return the claim"
+        />
+        <div class="flex flex-wrap gap-2">
+          <button
+            class="btn btn-sm btn-solid"
+            :disabled="busy === a.id"
+            @click="decideClaim(a, 'awaiting_approval')"
+          >
+            Send for approval
+          </button>
+          <button
+            class="btn btn-sm"
+            :disabled="busy === a.id"
+            @click="decideClaim(a, 'returned')"
+          >
+            Return for more info
+          </button>
+        </div>
+      </div>
+    </template>
+
     <!-- ============================================ final approval queue -->
     <template v-if="isApprover">
       <h3 class="display mb-1 text-xl">Awaiting your approval</h3>

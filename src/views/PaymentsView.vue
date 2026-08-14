@@ -208,30 +208,34 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
       <div v-if="mine.adjustments.length" class="mt-4">
         <p class="field-label mb-2">Details</p>
         <ul class="space-y-1 text-sm">
-          <li
-            v-for="a in mine.adjustments"
-            :key="a.id"
-            class="flex flex-wrap items-center gap-2"
-          >
-            <span class="display rounded-full border border-line px-2 py-0.5 text-xs tracking-wider">
-              {{ a.type === 'bonus' ? 'Bonus' : 'Reimbursement' }}
-            </span>
-            <span class="mono">{{ money(a.amount) }}</span>
-            <span class="text-muted">{{ a.description }}</span>
-            <span
-              class="text-xs"
-              :class="a.status === 'approved' ? 'text-teal' : a.status === 'rejected' ? 'text-red' : 'text-muted'"
-            >
-              {{ statusLabel(a) }}
-            </span>
-            <button
-              v-if="!auth.isAdmin && a.type === 'reimbursement' && a.status === 'pending'"
-              class="btn btn-sm"
-              :disabled="busy"
-              @click="withdrawRequest(a)"
-            >
-              Withdraw
-            </button>
+          <li v-for="a in mine.adjustments" :key="a.id">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="display rounded-full border border-line px-2 py-0.5 text-xs tracking-wider">
+                {{ a.type === 'bonus' ? 'Bonus' : 'Reimbursement' }}
+              </span>
+              <span class="mono">{{ money(a.amount) }}</span>
+              <span class="text-muted">{{ a.description }}</span>
+              <span
+                class="text-xs"
+                :class="a.status === 'approved' ? 'text-teal' : a.status === 'rejected' ? 'text-red' : 'text-muted'"
+              >
+                {{ statusLabel(a) }}
+              </span>
+              <button
+                v-if="!auth.isAdmin && a.type === 'reimbursement' && a.status === 'pending'"
+                class="btn btn-sm"
+                :disabled="busy"
+                @click="withdrawRequest(a)"
+              >
+                Withdraw
+              </button>
+            </div>
+            <!-- What was asked for, when a claim has been handed back. Without
+                 this the employee sees it sitting at "pending" again with no
+                 idea anything is wanted from them. -->
+            <p v-if="a.return_note" class="mt-1 text-xs text-amber">
+              Returned for more information: {{ a.return_note }}
+            </p>
           </li>
         </ul>
       </div>
@@ -278,27 +282,28 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
       <div v-if="!auth.rights.view_remuneration && myReimbursements.length" class="mt-5">
         <p class="field-label mb-2">Your requests this month</p>
         <ul class="space-y-1 text-sm">
-          <li
-            v-for="a in myReimbursements"
-            :key="a.id"
-            class="flex flex-wrap items-center gap-2"
-          >
-            <span class="mono">{{ money(a.amount) }}</span>
-            <span class="text-muted">{{ a.description }}</span>
-            <span
-              class="text-xs"
-              :class="a.status === 'approved' ? 'text-teal' : a.status === 'rejected' ? 'text-red' : 'text-muted'"
-            >
-              {{ statusLabel(a) }}
-            </span>
-            <button
-              v-if="a.status === 'pending' || a.status === 'awaiting_approval'"
-              class="btn btn-sm"
-              :disabled="busy"
-              @click="withdrawRequest(a)"
-            >
-              Withdraw
-            </button>
+          <li v-for="a in myReimbursements" :key="a.id">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="mono">{{ money(a.amount) }}</span>
+              <span class="text-muted">{{ a.description }}</span>
+              <span
+                class="text-xs"
+                :class="a.status === 'approved' ? 'text-teal' : a.status === 'rejected' ? 'text-red' : 'text-muted'"
+              >
+                {{ statusLabel(a) }}
+              </span>
+              <button
+                v-if="a.status === 'pending' || a.status === 'awaiting_approval'"
+                class="btn btn-sm"
+                :disabled="busy"
+                @click="withdrawRequest(a)"
+              >
+                Withdraw
+              </button>
+            </div>
+            <p v-if="a.return_note" class="mt-1 text-xs text-amber">
+              Returned for more information: {{ a.return_note }}
+            </p>
           </li>
         </ul>
       </div>

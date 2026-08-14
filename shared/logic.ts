@@ -151,13 +151,26 @@ function addUnits(target: Record<string, number>, source: Record<string, number>
   }
 }
 
-/** Aggregate a month's entries into totals, per-person summaries, and daily totals. */
+/** A day worth counting toward days_worked even though it contributes no
+ * hours/units of its own — currently just a completed task. Kept separate
+ * from EntryLike rather than folding a fake "0-hour entry" into `entries`,
+ * since a completed-task day shouldn't appear in the daily hours/units
+ * totals or the daily detail breakdown, only in the day-worked count. */
+export interface WorkedDayLike {
+  employee_id: string
+  date: string
+}
+
+/** Aggregate a month's entries (plus, optionally, other day-worked signals
+ * like completed tasks) into totals, per-person summaries, and daily
+ * totals. */
 export function aggregateMonthly(
   month: string,
   entries: EntryLike[],
   employees: EmployeeLike[],
   workTypes: WorkType[],
   settings: RateSettings,
+  otherWorkedDays: WorkedDayLike[] = [],
 ): MonthlyReport {
   const names = new Map(employees.map((e) => [e.id, e.name]))
   const overridesBy = new Map(employees.map((e) => [e.id, e.rate_overrides]))
@@ -165,12 +178,12 @@ export function aggregateMonthly(
   const daily = new Map<string, DailyTotal>()
   const allDates = new Set<string>()
 
-  for (const e of entries) {
-    let p = perPerson.get(e.employee_id)
+  function personFor(employeeId: string) {
+    let p = perPerson.get(employeeId)
     if (!p) {
       p = {
-        employee_id: e.employee_id,
-        name: names.get(e.employee_id) ?? 'Unknown',
+        employee_id: employeeId,
+        name: names.get(employeeId) ?? 'Unknown',
         days_worked: 0,
         hours: 0,
         units: {},
@@ -178,8 +191,13 @@ export function aggregateMonthly(
         remuneration: 0,
         dates: new Set(),
       }
-      perPerson.set(e.employee_id, p)
+      perPerson.set(employeeId, p)
     }
+    return p
+  }
+
+  for (const e of entries) {
+    const p = personFor(e.employee_id)
     p.dates.add(e.work_date)
     p.hours = round2(p.hours + e.hours)
     addUnits(p.units, e.units)
@@ -192,6 +210,14 @@ export function aggregateMonthly(
     d.hours = round2(d.hours + e.hours)
     addUnits(d.units, e.units)
     allDates.add(e.work_date)
+  }
+
+  // Someone who only completed a task this month, and never logged a time
+  // entry, still gets a per-person row — days_worked > 0, everything else
+  // at its normal zero default — rather than being invisible in the report.
+  for (const w of otherWorkedDays) {
+    personFor(w.employee_id).dates.add(w.date)
+    allDates.add(w.date)
   }
 
   const per_person: PersonSummary[] = [...perPerson.values()]

@@ -233,6 +233,13 @@ export interface ReportPayload {
         points?: undefined
       }
     | { points: number; remuneration?: undefined }
+  /** The viewer's own attendance: one row per elapsed day of the month, so
+   * a day with neither a time entry nor a completed task reads as "no work
+   * done" rather than silently not appearing. Days later than today are
+   * omitted — they haven't happened yet. Sent to every viewer regardless of
+   * rights; it's their own record. */
+  my_days: { date: string; worked: boolean; entry: boolean; task: boolean }[]
+  my_days_worked: number
 }
 
 export interface Absence {

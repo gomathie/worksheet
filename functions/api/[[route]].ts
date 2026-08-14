@@ -11,7 +11,7 @@ import type {
   PaymentRow,
   WorkTypeRow,
 } from '../../server/env'
-import { ApiError, json, nowTimeInTz, readJson, todayInTz } from '../../server/http'
+import { ApiError, dateInTz, json, nowTimeInTz, readJson, todayInTz } from '../../server/http'
 import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
@@ -52,6 +52,7 @@ import {
   shiftIsInFuture,
   type CardAuditRow,
   type SameDayCard,
+  type WorkedDayLike,
   parseTime,
 } from '../../shared/logic'
 import {
@@ -2909,7 +2910,15 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
 
   // Locked months compute from their frozen rate snapshot, not the live rates.
   const rates = await ratesForMonth(env, month)
-  const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits] =
+  const tz = env.TEAM_TZ ?? 'Africa/Accra'
+  // completed_at is a real instant (unlike work_date, a plain calendar date),
+  // so which day it lands on depends on TEAM_TZ. SQLite can't do that
+  // conversion, so the DB query widens by a day on each side (safe for any
+  // real-world offset) and the precise TEAM_TZ day gets resolved in JS below.
+  const [ry, rm] = month.split('-').map(Number)
+  const taskQueryLower = new Date(Date.UTC(ry, rm - 1, 0)).toISOString().slice(0, 10)
+  const taskQueryUpper = new Date(Date.UTC(ry, rm, 2)).toISOString().slice(0, 10)
+  const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits, doneTasksRes] =
     await Promise.all([
       loadSettings(env),
       env.DB.prepare(
@@ -2927,8 +2936,21 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
         .bind(month)
         .all<PaymentRow>(),
       unitsByEntryId(env, month),
+      env.DB.prepare(
+        "SELECT assignee_id, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL AND completed_at >= ? AND completed_at < ?",
+      )
+        .bind(taskQueryLower, taskQueryUpper)
+        .all<{ assignee_id: string | null; completed_at: string }>(),
     ])
   const settings = { ...liveSettings, point_value: rates.point_value, currency: rates.currency }
+
+  // A completed task counts as a day worked for whoever it was assigned to
+  // — same standing as a time entry for this purpose, even though it
+  // contributes no hours/units of its own.
+  const taskWorkedDays: WorkedDayLike[] = doneTasksRes.results
+    .filter((t): t is { assignee_id: string; completed_at: string } => Boolean(t.assignee_id))
+    .map((t) => ({ employee_id: t.assignee_id, date: dateInTz(t.completed_at, tz) }))
+    .filter((w) => w.date.startsWith(month))
 
   const round2 = (n: number) => Math.round(n * 100) / 100
   const bonusBy = new Map<string, number>()
@@ -2960,6 +2982,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     employeeLikes,
     workTypes,
     settings,
+    taskWorkedDays,
   )
   const names = new Map(employeesRes.results.map((e) => [e.id, e.name]))
   const daily_detail = entriesRes.results.map((e) => ({
@@ -2971,6 +2994,30 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     hours: e.hours,
     units: entryUnits.get(e.id) ?? {},
   }))
+
+  // The viewer's own day-by-day picture: every calendar day of the month up
+  // to today, each marked worked or not. Sent to everyone regardless of
+  // rights — it's the viewer's own attendance, the one figure nobody needs
+  // permission to see about themselves. Days after today are omitted rather
+  // than marked "no work done", since a day that hasn't happened yet isn't
+  // a day somebody failed to work.
+  const myEntryDays = new Set(
+    entriesRes.results.filter((e) => e.employee_id === user.id).map((e) => e.work_date),
+  )
+  const myTaskDays = new Set(
+    taskWorkedDays.filter((w) => w.employee_id === user.id).map((w) => w.date),
+  )
+  const today = todayInTz(tz)
+  const daysInMonth = new Date(Date.UTC(ry, rm, 0)).getUTCDate()
+  const my_days: { date: string; worked: boolean; entry: boolean; task: boolean }[] = []
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${month}-${String(day).padStart(2, '0')}`
+    if (date > today) break
+    const entry = myEntryDays.has(date)
+    const task = myTaskDays.has(date)
+    my_days.push({ date, worked: entry || task, entry, task })
+  }
+  const my_days_worked = my_days.filter((d) => d.worked).length
 
   if (user.role === 'admin') {
     const per_person = report.per_person.map((p) => {
@@ -3003,6 +3050,8 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       },
       settings,
       daily_detail,
+      my_days,
+      my_days_worked,
     })
   }
 
@@ -3046,6 +3095,8 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     settings: { currency: settings.currency },
     daily_detail,
     my_summary,
+    my_days,
+    my_days_worked,
   })
 }
 

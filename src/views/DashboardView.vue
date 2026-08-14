@@ -62,6 +62,22 @@ const dailyGroups = computed(() =>
     (row) => row.hours,
   ),
 )
+
+// --- the viewer's own attendance for the month
+const myDays = computed(() => report.value?.my_days ?? [])
+const myDaysWorked = computed(() => report.value?.my_days_worked ?? 0)
+const myDaysMissed = computed(() => myDays.value.length - myDaysWorked.value)
+
+/** Day-of-month number, for the compact marker grid. */
+const dayNum = (date: string) => Number(date.slice(8, 10))
+
+function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: boolean }): string {
+  if (!d.worked) return `${d.date} — no work done`
+  const what = [d.entry ? 'time logged' : null, d.task ? 'task completed' : null]
+    .filter(Boolean)
+    .join(' + ')
+  return `${d.date} — ${what}`
+}
 </script>
 
 <template>
@@ -88,6 +104,14 @@ const dailyGroups = computed(() =>
              sharing the row leaves them ~43px of content and clips the
              figures. From md they sit alongside it again. -->
         <div class="grid basis-full grid-cols-2 gap-4 md:flex-1 md:basis-0 md:grid-cols-4">
+          <!-- The viewer's own attendance, first among the tiles: it's about
+               them, not the team, so it leads regardless of which rights
+               they hold. -->
+          <div class="panel">
+            <p class="field-label">Your days worked</p>
+            <p class="stat-figure text-teal">{{ myDaysWorked }}</p>
+            <p class="mt-1 text-xs text-muted">of {{ myDays.length }} so far</p>
+          </div>
           <div v-for="wt in visibleTypes" :key="wt.id" class="panel">
             <p class="field-label">{{ wt.name }}</p>
             <p class="stat-figure">{{ report.totals.units[wt.id] ?? 0 }}</p>
@@ -121,6 +145,38 @@ const dailyGroups = computed(() =>
             </div>
           </template>
         </div>
+      </div>
+
+      <!-- Day-by-day attendance for the viewer. Every elapsed day of the
+           month is shown, so a day with nothing logged reads as an explicit
+           "no work done" rather than simply being absent from a list. -->
+      <div v-if="myDays.length" class="panel mb-6">
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 class="display text-xl">Your days this month</h3>
+          <p class="text-sm text-muted">
+            <span class="text-teal">{{ myDaysWorked }} worked</span>
+            <span v-if="myDaysMissed"> · {{ myDaysMissed }} with no work done</span>
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <div
+            v-for="d in myDays"
+            :key="d.date"
+            class="mono flex h-9 w-9 items-center justify-center rounded border text-xs"
+            :class="
+              d.worked
+                ? 'border-teal bg-teal-soft text-teal'
+                : 'border-line bg-cream text-muted'
+            "
+            :title="dayTitle(d)"
+          >
+            {{ dayNum(d.date) }}
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-muted">
+          A day counts as worked if you logged time or completed a task on it. Days still to
+          come this month aren't shown.
+        </p>
       </div>
 
       <div class="panel mb-6">

@@ -239,6 +239,53 @@ describe('aggregateMonthly', () => {
     expect(r.per_person).toEqual([])
     expect(r.daily_totals).toEqual([])
   })
+
+  describe('other worked days (completed tasks)', () => {
+    it('counts a task-only day toward days_worked', () => {
+      const r = aggregateMonthly('2026-07', entries, employees, workTypes, rates, [
+        { employee_id: 'a', date: '2026-07-03' },
+      ])
+      const ama = r.per_person.find((p) => p.employee_id === 'a')!
+      expect(ama.days_worked).toBe(3) // 07-01, 07-02 from entries + 07-03 from a task
+      expect(r.totals.days_worked).toBe(3)
+    })
+
+    it('does not double-count a day that has both an entry and a task', () => {
+      const r = aggregateMonthly('2026-07', entries, employees, workTypes, rates, [
+        { employee_id: 'a', date: '2026-07-01' },
+      ])
+      expect(r.per_person.find((p) => p.employee_id === 'a')!.days_worked).toBe(2)
+      expect(r.totals.days_worked).toBe(2)
+    })
+
+    it('leaves hours, units and daily totals untouched', () => {
+      const withTask = aggregateMonthly('2026-07', entries, employees, workTypes, rates, [
+        { employee_id: 'a', date: '2026-07-03' },
+      ])
+      const without = aggregateMonthly('2026-07', entries, employees, workTypes, rates)
+      expect(withTask.totals.hours).toBe(without.totals.hours)
+      expect(withTask.totals.units).toEqual(without.totals.units)
+      expect(withTask.totals.points).toBe(without.totals.points)
+      expect(withTask.daily_totals).toEqual(without.daily_totals)
+    })
+
+    it('gives someone with only a completed task a row of their own', () => {
+      const r = aggregateMonthly('2026-08', [], employees, workTypes, rates, [
+        { employee_id: 'b', date: '2026-08-04' },
+      ])
+      expect(r.per_person).toHaveLength(1)
+      expect(r.per_person[0]).toMatchObject({
+        employee_id: 'b',
+        name: 'Kojo',
+        days_worked: 1,
+        hours: 0,
+        points: 0,
+        remuneration: 0,
+      })
+      // A task contributes no hours/units, so the daily breakdown stays empty.
+      expect(r.daily_totals).toEqual([])
+    })
+  })
 })
 
 describe('normalizeCardName', () => {

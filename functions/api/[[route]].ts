@@ -33,13 +33,7 @@ import {
   type Rights,
 } from '../../server/auth'
 import { loadSettings, saveSettings } from '../../server/settings'
-import {
-  adminEmails,
-  loadSmtp,
-  notify,
-  saveSmtp,
-  sendMail,
-} from '../../server/email'
+import { loadSmtp, saveSmtp, sendMail } from '../../server/email'
 import { loadSms, saveSms, sendSms } from '../../server/sms'
 import {
   aggregateMonthly,
@@ -64,6 +58,7 @@ import {
 } from '../../shared/installations'
 import { getCookie } from '../../server/http'
 import {
+  employeesWithRight,
   listNotifications,
   markNotificationsRead,
   notifyUser,

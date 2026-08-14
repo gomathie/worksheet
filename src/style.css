@@ -119,14 +119,20 @@ html {
 .btn-view:hover:not(:disabled) { border-color: var(--color-teal); background: var(--color-teal-soft); }
 .btn-view svg { width: 13px; height: 13px; flex-shrink: 0; }
 
-/* For dense tables and inline action groups. Still meets the ~30px floor
-   that keeps a row of actions usable on a phone. */
+/* For dense tables and inline action groups. */
 .btn-sm {
   font-size: 12px;
   min-height: 28px;
   padding: 4px 10px;
   border-radius: 7px;
   gap: 4px;
+}
+/* 28px is fine for a mouse but under the ~32px comfort floor for a finger,
+   and .btn-sm is exactly what a phone gets in the crowded places (table row
+   actions, the header cluster). Grow it back on touch pointers only, so
+   dense desktop tables stay dense. */
+@media (pointer: coarse) {
+  .btn-sm { min-height: 32px; padding: 6px 12px; }
 }
 
 .field-label {

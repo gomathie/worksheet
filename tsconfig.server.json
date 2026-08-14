@@ -1,0 +1,26 @@
+{
+  // The Worker side: the Pages Function router and the server modules it
+  // pulls in. Previously nothing type-checked these at all — `npm run build`
+  // only covered src/ and shared/ — so a plain mistake like calling an
+  // un-imported function compiled clean and only surfaced as a 500 at
+  // runtime. Same strictness as the app config, minus the DOM libs (a
+  // Worker has no document) plus the Workers types.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "composite": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo"
+  },
+  "include": ["functions/**/*.ts", "server/**/*.ts", "shared/**/*.ts"]
+}

@@ -22,7 +22,6 @@ import { scopeClause, visibleEmployeeIds } from './scope'
 import { balanceFor } from './pettycash'
 import {
   DEFAULT_DECLARATION,
-  PAYMENT_METHODS,
   DUPLICATE_WINDOW_DAYS,
   canSpendFromPettyCash,
   consumesPettyCash,

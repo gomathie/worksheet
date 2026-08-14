@@ -156,6 +156,12 @@ nothing is usable on a card without your say-so.
 - **Reimbursements** — employees request; you approve or reject. Only approved
   ones count. A claim goes `pending → awaiting approval → approved`, with
   screening in between, so what you decide on has already been checked.
+  Claims appear on the **Approvals** page alongside the vouchers — to screen
+  if you hold *Send for approval*, to decide if you hold *Approve expenses* —
+  and everyone involved is notified at each step (the bell, plus email/SMS if
+  configured). You can also **Return for more info** instead of deciding: the
+  claim goes back to the employee with your note attached, and they're told
+  what's needed.
 - **Mark paid** when money goes out; the employee then **confirms receipt**.
 - **Trail** — click it next to anyone in the payouts table when a total looks
   off. It lays out every entry and every bonus/reimbursement behind that

@@ -256,7 +256,10 @@ What you see here depends on your rights.
 
 - **Payments** — your reimbursement requests and their status, and a
   **confirm receipt** button once an administrator marks you paid. Please confirm
-  when the money arrives; it's how payment gets closed off.
+  when the money arrives; it's how payment gets closed off. You're notified
+  when a claim is approved, rejected, or **returned for more information** —
+  a returned one comes back to you with a note saying what's needed, shown
+  beside the claim, and you can update or withdraw it from there.
 - **Payslip** — your own printable statement: work done, base pay, itemised
   bonuses and reimbursements, total due.
 - **Dashboard** — the team's output for the month. Money shown here is **only

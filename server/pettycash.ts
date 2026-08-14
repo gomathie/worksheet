@@ -14,7 +14,7 @@ import type { Employee, Env } from './env'
 import { ApiError, json, readJson } from './http'
 import { audit, parseRights, requireAdmin, requireUser } from './auth'
 import { loadSettings } from './settings'
-import { notifyUser } from './notify'
+import { firstName, notifyUser } from './notify'
 import { visibleEmployeeIds } from './scope'
 import {
   PETTY_CASH_CONSUMING_STATUSES,
@@ -279,7 +279,7 @@ export async function recordPettyCashMovement(
         : type === 'return'
           ? `Petty cash returned: ${money}`
           : `Petty cash adjusted: ${money}`,
-    body: `${admin.name} recorded a petty cash ${type} of ${money}${
+    body: `${firstName(admin.name)} recorded a petty cash ${type} of ${money}${
       method ? ` by ${PETTY_CASH_METHOD_LABELS[method]}` : ''
     }${reference ? ` (ref ${reference})` : ''}${
       note ? ` — ${note}` : ''
@@ -332,7 +332,7 @@ export async function requestPettyCash(request: Request, env: Env): Promise<Resp
       employeeId: a.id,
       kind: 'petty_cash_requested',
       title: `Petty cash requested: ${settings.currency}${amount.toFixed(2)}`,
-      body: `${user.name} asked for a petty cash top-up of ${settings.currency}${amount.toFixed(
+      body: `${firstName(user.name)} asked for a petty cash top-up of ${settings.currency}${amount.toFixed(
         2,
       )}${reason ? ` — ${reason}` : ''}. Confirm what you hand over on the Petty Cash tab.`,
     })
@@ -437,7 +437,7 @@ export async function decidePettyCashRequest(
     employeeId: existing.employee_id,
     kind: 'petty_cash_issued',
     title: `Petty cash issued: ${money}`,
-    body: `${admin.name} confirmed ${money} by ${
+    body: `${firstName(admin.name)} confirmed ${money} by ${
       PETTY_CASH_METHOD_LABELS[method!]
     }${reference ? ` (ref ${reference})` : ''}${note ? ` — ${note}` : ''}. You are now holding ${
       settings.currency

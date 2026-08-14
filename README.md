@@ -348,6 +348,13 @@ against it.
   with a phone number set — either by an admin (Employees tab) or by the employee themself (Account
   menu → Edit profile). The API key is stored write-only, same as the SMTP password; a **Send test**
   button verifies it.
+- **Keeping SMS cheap.** SMS is billed per 160-character segment, so two rules apply to every
+  notification: names are rendered **first-name only** (`firstName`, `shared/names.ts`), and
+  anything that is purely a *queue ping to staff already working in the app* is marked
+  `inAppOnly: true` so it reaches the bell and stops there. The reimbursement flow is the worked
+  example — raise, screen and return are all in-app; only the **final approve/reject** reaches the
+  employee by SMS, one message per claim, because that's the outcome of their own money and two of
+  the team have a phone number but no email address.
 
 ### Receipt attachments (R2) — currently off
 Receipt **file uploads are disabled**: no R2 bucket is bound in `wrangler.toml`. Everything else

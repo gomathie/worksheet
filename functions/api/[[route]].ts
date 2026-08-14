@@ -59,6 +59,7 @@ import {
 import { getCookie } from '../../server/http'
 import {
   employeesWithRight,
+  firstName,
   listNotifications,
   markNotificationsRead,
   notifyUser,
@@ -621,7 +622,7 @@ async function proposeDeviceType(request: Request, env: Env): Promise<Response> 
     {
       kind: 'device_type_pending_approval',
       title: `New device type "${name}" needs approval`,
-      body: `${user.name} suggested "${name}" as a device type. It won't appear as an option until approved.`,
+      body: `${firstName(user.name)} suggested "${name}" as a device type. It won't appear as an option until approved.`,
     },
   )
 
@@ -1547,13 +1548,13 @@ async function notifyAdminsOfCardClash(
   if (admins.length === 0) return
 
   const lines = clashes.map(
-    (c) => `• ${c.card_name} (${c.work_type_name}) — already done by ${c.employee_name}`,
+    (c) => `• ${c.card_name} (${c.work_type_name}) — already done by ${firstName(c.employee_name)}`,
   )
   await notifyUsers(env, admins, {
     kind: 'card_duplicate',
-    title: `${actor.name} logged a card already done on ${workDate}`,
+    title: `${firstName(actor.name)} logged a card already done on ${workDate}`,
     body:
-      `${actor.name} logged ${clashes.length} card${clashes.length === 1 ? '' : 's'} ` +
+      `${firstName(actor.name)} logged ${clashes.length} card${clashes.length === 1 ? '' : 's'} ` +
       `on ${workDate} that had already been done that day:\n\n${lines.join('\n')}`,
   })
 }
@@ -1983,10 +1984,11 @@ async function createAdjustment(request: Request, env: Env): Promise<Response> {
   // notifications table (so the bell never lit up) and silently did nothing
   // at all when SMTP was off or an admin had no email set.
   if (type === 'reimbursement' && status === 'pending') {
-    const who =
+    const who = firstName(
       (await env.DB.prepare('SELECT name FROM employees WHERE id = ?')
         .bind(employeeId)
-        .first<{ name: string }>())?.name ?? 'An employee'
+        .first<{ name: string }>())?.name ?? 'An employee',
+    )
     const money = `${(await loadSettings(env)).currency}${amount.toFixed(2)}`
     await notifyUsers(env, await employeesWithRight(env, 'send_for_approval'), {
       kind: 'reimbursement_requested',
@@ -2123,10 +2125,11 @@ async function decideAdjustment(
     // 'request_approval' step, which notified them all along; this branch
     // notified nobody, so a claim could sit with an approver who had no way
     // of knowing it had arrived.
-    const claimant =
+    const claimant = firstName(
       (await env.DB.prepare('SELECT name FROM employees WHERE id = ?')
         .bind(existing.employee_id)
-        .first<{ name: string }>())?.name ?? 'An employee'
+        .first<{ name: string }>())?.name ?? 'An employee',
+    )
     const money = `${(await loadSettings(env)).currency}${existing.amount.toFixed(2)}`
     await notifyUsers(env, await employeesWithRight(env, 'approve_expenses'), {
       kind: 'reimbursement_needs_approval',
@@ -2163,7 +2166,13 @@ async function decideAdjustment(
       kind: body.status === 'approved' ? 'reimbursement_approved' : 'reimbursement_rejected',
       title: `Your reimbursement was ${body.status}`,
       body: `Your reimbursement of ${money} for ${existing.month}${existing.description ? ` (${existing.description})` : ''} was ${body.status}.`,
-      inAppOnly: true,
+      // Deliberately NOT inAppOnly — the one point in a claim's life that
+      // reaches the employee by SMS (and email, once SMTP is on). It's the
+      // final outcome of their own money, it fires once per claim, and two
+      // of the team have a phone number but no email address, so without
+      // this their only way to learn the result is to open the app and look.
+      // Every other step in the flow stays in-app: those are queue pings to
+      // staff already working in the app, and SMS is billed per message.
     })
   }
   const updated = await env.DB.prepare('SELECT * FROM adjustments WHERE id = ?')

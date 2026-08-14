@@ -7,7 +7,7 @@
 import type { Employee, Env } from './env'
 import { ApiError, json, readJson, todayInTz } from './http'
 import { audit, parseRights, requireUser } from './auth'
-import { notifyUser, notifyUsers } from './notify'
+import { firstName, notifyUser, notifyUsers } from './notify'
 import {
   allowedTaskActions,
   canTask,
@@ -217,7 +217,7 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
     await notifyUser(env, {
       employeeId: assignee,
       kind: 'task_assigned',
-      title: `${user.name} assigned you a task`,
+      title: `${firstName(user.name)} assigned you a task`,
       body: due ? `${code}: ${title}\n\nWanted by ${due}.` : `${code}: ${title}`,
     })
   } else if (broadcast) {
@@ -231,7 +231,7 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       results.map((e) => e.id),
       {
         kind: 'task_broadcast',
-        title: `${user.name} opened a task to everyone`,
+        title: `${firstName(user.name)} opened a task to everyone`,
         body: due ? `${code}: ${title}\n\nWanted by ${due}.` : `${code}: ${title}`,
       },
     )
@@ -326,7 +326,7 @@ export async function patchTask(
     await notifyUser(env, {
       employeeId: assignee,
       kind: 'task_assigned',
-      title: `${user.name} assigned you a task`,
+      title: `${firstName(user.name)} assigned you a task`,
       body: `${task.task_code}: ${title}`,
     })
   }
@@ -334,7 +334,7 @@ export async function patchTask(
     await notifyUser(env, {
       employeeId: task.created_by,
       kind: 'task_accepted',
-      title: `${user.name} accepted a task you opened to everyone`,
+      title: `${firstName(user.name)} accepted a task you opened to everyone`,
       body: `${task.task_code}: ${title}`,
     })
   }
@@ -347,7 +347,7 @@ export async function patchTask(
     await notifyUser(env, {
       employeeId: task.created_by,
       kind: 'task_done',
-      title: `${user.name} completed a task you raised`,
+      title: `${firstName(user.name)} completed a task you raised`,
       body: `${task.task_code}: ${title}`,
     })
   }

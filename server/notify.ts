@@ -20,6 +20,12 @@ export interface NotifyInput {
   inAppOnly?: boolean
 }
 
+// firstName lives in shared/names.ts (a pure helper, and importable from
+// tests without dragging in this module's Workers-only email/SMS deps).
+// Re-exported here so notification code can pull it from the same place it
+// pulls notifyUser/notifyUsers.
+export { firstName } from '../shared/names'
+
 /**
  * Record one notification and try to email it. Returns without throwing on
  * any failure — a broken mail server must not roll back an approval.

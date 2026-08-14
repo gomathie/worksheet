@@ -13,7 +13,7 @@
 import type { Employee, Env } from './env'
 import { ApiError, json, readJson } from './http'
 import { audit, parseRights, requireUser } from './auth'
-import { notifyUser, notifyUsers } from './notify'
+import { firstName, notifyUser, notifyUsers } from './notify'
 
 /** Active, approved employees holding a given user-administration right. */
 async function usersWithRight(
@@ -161,7 +161,7 @@ export async function proposeUser(
   await notifyUsers(env, await usersWithRight(env, 'approve_users'), {
     kind: 'user_pending_approval',
     title: `New user ${name} needs approval`,
-    body: `${user.name} proposed a new account for ${name}${
+    body: `${firstName(user.name)} proposed a new account for ${name}${
       email ? ` (${email})` : ''
     }. They cannot sign in until it is approved.`,
   })
@@ -237,7 +237,7 @@ export async function decideUser(
       employeeId: id,
       kind: 'account_approved',
       title: 'Your account has been approved',
-      body: `Welcome to Ledger, ${existing.name}. You can now sign in.`,
+      body: `Welcome to Ledger, ${firstName(existing.name)}. You can now sign in.`,
     })
   }
 

@@ -522,6 +522,32 @@ connect the repo; production branch `main`, build command `npm run build`, outpu
 Pushing to `main` then builds and deploys automatically. The committed `wrangler.toml` carries the
 bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
 
+## Error tracking (Sentry)
+
+Both halves report to Sentry when configured, and do nothing (no dependency on Sentry being
+reachable, no behavior change) when they aren't:
+
+- **Frontend** (`src/main.ts`, `@sentry/vue`): enabled only in production builds, and only if
+  `VITE_SENTRY_DSN` is set at build time. Set it as a build-environment variable wherever `npm run
+  build` runs (e.g. the Cloudflare Pages dashboard's build environment variables) — it ends up in
+  the shipped JS, which is normal for a Sentry DSN.
+- **Backend** (`functions/_middleware.ts`, `@sentry/cloudflare`): wraps every Pages Function
+  (currently just `functions/api/`), capturing unhandled exceptions and request/response context,
+  plus explicit reporting of the "Internal error" path in `functions/api/[[route]].ts`'s catch
+  block. Enabled only if the `SENTRY_DSN` binding is set:
+
+  ```bash
+  npx wrangler pages secret put SENTRY_DSN --project-name ledger              # production
+  npx wrangler pages secret put SENTRY_DSN --project-name ledger --env preview # preview
+  ```
+
+  Requires the `nodejs_compat` compatibility flag in `wrangler.toml` (already added) — the SDK
+  needs `AsyncLocalStorage`.
+
+Both read from the same Sentry project's DSN (Settings → Client Keys); nothing else to create on
+the Sentry side. `tracesSampleRate` is set low (0.2) on both sides — this is an internal team tool,
+not high-traffic, so that is plenty to catch real problems without burning through quota.
+
 ## Migrations
 
 Plain SQL in `migrations/`, applied with wrangler's migration tracking

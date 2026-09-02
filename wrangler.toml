@@ -1,6 +1,9 @@
 # Ledger — Cloudflare Pages project (static Vue build + Pages Functions API)
 name = "ledger"
 compatibility_date = "2026-07-01"
+# Required by @sentry/cloudflare (functions/_middleware.ts): it needs
+# AsyncLocalStorage, which is behind this flag.
+compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
 
 [vars]

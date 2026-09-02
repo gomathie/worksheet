@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/cloudflare'
 import type {
   AbsenceRow,
   AdjustmentRow,
@@ -3510,6 +3511,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   } catch (e) {
     if (e instanceof ApiError) return json({ error: e.message }, e.status)
     console.error(e)
+    // ApiErrors are expected (bad input, permissions, ...) and never reach
+    // here. Anything that does is a bug — the _middleware.ts Sentry plugin
+    // only sees requests that finish by throwing, and this handler always
+    // catches and turns the throw into a response, so report it explicitly.
+    Sentry.captureException(e)
     return json({ error: 'Internal error' }, 500)
   }
 }

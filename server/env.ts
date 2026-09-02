@@ -6,6 +6,9 @@ export interface Env {
   // module works in full except uploads, which return a clear 503 rather
   // than failing obscurely. See README "Receipt attachments".
   ATTACHMENTS?: R2Bucket
+  // Server-side error monitoring (see functions/_middleware.ts). Optional:
+  // without it the API works exactly as before, just unmonitored.
+  SENTRY_DSN?: string
 }
 
 export interface Employee {

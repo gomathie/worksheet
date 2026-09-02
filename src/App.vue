@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import * as Sentry from '@sentry/vue'
 import { api } from './api'
 import { useAuthStore } from './stores/auth'
 import NotificationBell from './components/NotificationBell.vue'
@@ -140,6 +141,14 @@ const profileBusy = ref(false)
 const profileError = ref('')
 const profileDone = ref(false)
 
+// TEMP — verifies the Sentry frontend integration end to end. Remove this
+// once a test event has been confirmed in the Sentry Issues tab.
+function testSentry() {
+  Sentry.metrics.count('test_counter', 1)
+  // @ts-expect-error deliberately undefined — this is the thing we're testing
+  myUndefinedFunction()
+}
+
 function openProfile() {
   menuOpen.value = false
   showPw.value = false
@@ -278,6 +287,15 @@ async function saveProfile() {
         </div>
       </div>
     </header>
+
+    <!-- TEMP — Sentry verify button, see testSentry() above. Remove both once
+         a test event has been confirmed in the Sentry Issues tab. -->
+    <button
+      class="btn btn-sm no-print fixed right-4 bottom-4 z-50 !bg-red-600 !text-white"
+      @click="testSentry"
+    >
+      Test Sentry
+    </button>
 
     <div v-if="auth.user && showProfile" class="no-print mt-4 max-w-md">
       <form class="panel" @submit.prevent="saveProfile">

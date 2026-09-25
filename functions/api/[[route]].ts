@@ -3176,23 +3176,50 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     : rights.view_points
       ? { points: mine?.points ?? 0 }
       : undefined
+
+  // Work-type scoping: non-admins only see work types they are personally
+  // assigned to. This keeps Classification/QAP data hidden from employees
+  // who don't work those types, and likewise for any other work type.
+  const myTypeIds = await assignedTypeIds(env, user.id)
+  const myTypeSet = new Set(myTypeIds)
+  const filterUnits = (units: Record<string, number>): Record<string, number> => {
+    const out: Record<string, number> = {}
+    for (const [id, v] of Object.entries(units)) {
+      if (myTypeSet.has(id)) out[id] = v
+    }
+    return out
+  }
+
+  const scopedWorkTypes = rates.workTypes
+    .filter((w) => myTypeSet.has(w.id))
+    .map((w) => ({ id: w.id, name: w.name }))
+
   return json({
     month: report.month,
     scope: 'limited',
-    work_types: rates.workTypes.map((w) => ({ id: w.id, name: w.name })),
+    work_types: scopedWorkTypes,
     locked: rates.locked,
     locked_at: rates.locked_at,
     totals: {
       hours: report.totals.hours,
-      units: report.totals.units,
+      units: filterUnits(report.totals.units),
       days_worked: report.totals.days_worked,
     },
     per_person: report.per_person.map(
-      ({ points: _points, remuneration: _remuneration, ...p }) => p,
+      ({ points: _points, remuneration: _remuneration, ...p }) => ({
+        ...p,
+        units: filterUnits(p.units),
+      }),
     ),
-    daily_totals: report.daily_totals,
+    daily_totals: report.daily_totals.map((d) => ({
+      ...d,
+      units: filterUnits(d.units),
+    })),
     settings: { currency: settings.currency },
-    daily_detail,
+    daily_detail: daily_detail.map((d) => ({
+      ...d,
+      units: filterUnits(d.units),
+    })),
     my_summary,
     my_days,
     my_days_worked,

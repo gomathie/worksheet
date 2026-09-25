@@ -14,12 +14,16 @@ const report = ref<ReportPayload | null>(null)
 const error = ref('')
 
 // Types to show as columns/series: active ones, plus any inactive type that
-// still has units logged this month.
+// still has units logged this month — then scoped to the viewer's own
+// assignments (admins see everything).
+const myTypeIds = computed(() => new Set(auth.user!.work_types.map((w) => w.id)))
 const visibleTypes = computed(() => {
   const r = report.value
   if (!r) return []
   return r.work_types.filter(
-    (w) => w.active === undefined || w.active || (r.totals.units[w.id] ?? 0) > 0,
+    (w) =>
+      (w.active === undefined || w.active || (r.totals.units[w.id] ?? 0) > 0) &&
+      (auth.isAdmin || myTypeIds.value.has(w.id)),
   )
 })
 

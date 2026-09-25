@@ -131,11 +131,14 @@ function exportDailyCsv() {
   downloadCsv(`report-daily-${month.value}.csv`, [header, ...rows])
 }
 
+const myTypeIds = computed(() => new Set(auth.user!.work_types.map((w) => w.id)))
 const visibleTypes = computed(() => {
   const r = report.value
   if (!r) return []
   return r.work_types.filter(
-    (w) => w.active === undefined || w.active || (r.totals.units[w.id] ?? 0) > 0,
+    (w) =>
+      (w.active === undefined || w.active || (r.totals.units[w.id] ?? 0) > 0) &&
+      (auth.isAdmin || myTypeIds.value.has(w.id)),
   )
 })
 

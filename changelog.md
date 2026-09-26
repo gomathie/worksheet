@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Remember Me on Login
+  - Added a "Remember me" checkbox to the sign-in form that saves credentials to localStorage for automatic pre-fill on next visit.
 - Feature: Mobile UX Improvements (Responsive Tables)
   - Transformed dense data grids across all 30+ tables into block-level, stacked cards for mobile devices.
   - Injected an automated DOM observer to automatically label table cells on mobile without requiring template rewrites.

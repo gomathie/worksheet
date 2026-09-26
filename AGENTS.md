@@ -620,3 +620,35 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Testing Performed:**
 - Evaluated CSS logic and mutation observer script for correctness.
+
+### Feature: Remember Me on Login
+**Date:** September 26, 2026
+
+**User Request:**
+"ad remeber username and pass when done"
+
+**Implementation Details:**
+1. **Frontend (`src/views/LoginView.vue`)**:
+   - Added a `Remember me` checkbox below the password field.
+   - On successful login, if the checkbox is ticked, the username and password are saved to `localStorage` under the key `ledger_remember`.
+   - On mount, the component reads from `localStorage` and pre-fills the username and password fields if previously saved, also ticking the checkbox.
+   - If the user unchecks the box and logs in, the saved credentials are cleared from `localStorage`.
+
+**Testing Performed:**
+- Build completed successfully.
+
+### Fix: Build Errors After Merge
+**Date:** September 26, 2026
+
+**User Request:**
+"check if the changes appear in the app"
+
+**Implementation Details:**
+1. **`server/cron.ts`**: Fixed escaped template literals, corrected imports to use `./http` instead of non-existent `@mjackson/form-data-parser` and `./error`, removed unused `Employee` import and `sentCount` variable.
+2. **`server/leaves.ts`**: Same import fixes, handled `visibleEmployeeIds` possibly returning `null`, fixed `json()` second argument type.
+3. **`server/tasks.ts`**: Removed duplicate `const recurrence` declaration.
+4. **`src/views/TaskDetailView.vue`**: Removed extra `</div>` closing tag causing Vue template parse error.
+
+**Testing Performed:**
+- Full build (`vue-tsc -b && vite build`) completed successfully.
+- Dev server started and served the app at `http://127.0.0.1:8788`.

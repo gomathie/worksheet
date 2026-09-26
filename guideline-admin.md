@@ -30,7 +30,7 @@ Decides **whose records a person can see**:
 | `Everyone` | All records |
 
 Administrators see everything regardless. Scope is enforced on the server, not
-just hidden in the interface.
+just hidden in the interface. This scope also dictates what employees see on the **Dashboard** and **Monthly Reports** — they will only see statistics for the people within their scope.
 
 ### The rights
 
@@ -51,9 +51,9 @@ just hidden in the interface.
 | Add users | Propose a new account, which lands pending |
 | **Approve users** | Activate a pending account. **Requires the admin role as well** |
 | Petty cash | Hold a float and charge vouchers to it |
-| Manage tasks | Assign tasks to others and see the whole board. The holder gets an assignee picker **on each task card**, so reassigning never means opening the task first |
+| Manage tasks | Assign tasks to others and see the whole board. The holder gets an assignee picker **on each task card**, so reassigning never means opening the task first. They can also add secondary assignees or observers. |
 | Delete tasks | Delete a task that has been assigned to someone else |
-| Send announcements | Post to News (pop-up on login is admin-only regardless — see the News section in the User Guide) |
+| Send announcements | Post to News. You can specify an **Author Name** (e.g., "Management") so the announcement is sent from a specific entity rather than defaulting to "System". |
 
 **Two rights the admin role does not carry automatically: `Approve expenses` and
 `Approve users`.** An approver is an administrator who has *also* been ticked for
@@ -76,8 +76,8 @@ approval**. Rejections need a note.
 - **Cards** ticked means the type is logged as individual cards rather than a
   typed count (Classification, QAP).
 - **Module** groups related types under one heading — Classification and QAP sit
-  under *Data Analytics*. Leave blank for a standalone type. It's just a label;
-  type the same name on two types and they group together.
+  under *Data Analytics*. Leave blank for a standalone type. 
+  **Important**: Assigning an employee to a work type that has a module automatically grants them access to ALL other work types in that same module.
 - Deactivate a type rather than deleting it; past figures keep working.
 - Assign types to people in **Employees**. Someone with no countable types is
   tracked by hours and notes alone. Per-person **rate overrides** are available.

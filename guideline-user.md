@@ -109,7 +109,7 @@ as plain text instead.
 
 **Tasks** is a shared to-do list for work that isn't a time entry or an expense.
 
-- **Anyone can add a task for themselves** — a title, and optionally details, a
+- **Anyone can add a task for themselves** — a title, details, **subtask checklists**, a
   priority and a date you want it done by — or **raise it as a ticket open to
   Everyone** (see below); neither needs a right. Assigning a task to **one
   named person** needs the **Manage tasks** right, since that's putting it on
@@ -121,6 +121,9 @@ as plain text instead.
 - Anything open and past its date is marked **overdue**. Finished and cancelled
   tasks are never flagged, and a task with no date can't be late.
 - Finished tasks hide themselves; tick **Show finished** to see them.
+- **Recurring tasks**: You can set tasks to repeat daily, weekly, or monthly. When finished, a new instance is automatically generated.
+- **Additional Assignees**: You can add a secondary "Additional Assignee" or an "Observer" to any task.
+- **Comments**: Every task has a comment section for discussion.
 
 **If someone assigns you a task** you get a notification, and whoever raised it
 is told when you finish. You can move it along but **not change its wording** —
@@ -139,6 +142,8 @@ raised it is told you took it.
 get a pop-up when you load the app — up to twice a day, once in the morning and
 once in the afternoon — warning that missing a deadline attracts a reduction in
 points. **Got it** or **View tasks** dismisses it until the next check.
+
+**Age warnings.** If a task sits open for more than 2 days, you'll receive a warning that it will affect your payment. After 3 days, a critical warning notifies you it is scheduled for deletion or reassignment. Use the **Working on it** button on the task to reset this timer if you're actively making progress.
 
 **Deleting.** Your own to-do list is yours to clear out. But once a task has been
 given to someone else it records what was asked of them, so deleting it needs
@@ -254,6 +259,8 @@ every voucher charged to it.
 Sick, holiday, unpaid and other are open to everyone; **paid Leave needs the
 leave right**. If you have an annual allowance, used and remaining are shown.
 
+**Time Off Requests:** There is a dedicated **Leaves (Time Off)** page where you can request multi-day absences (Sick, Vacation, Personal, Unpaid). These requests are routed to management for approval.
+
 ## Pay, payslip and reports
 
 What you see here depends on your rights.
@@ -266,7 +273,7 @@ What you see here depends on your rights.
   beside the claim, and you can update or withdraw it from there.
 - **Payslip** — your own printable statement: work done, base pay, itemised
   bonuses and reimbursements, total due.
-- **Dashboard** — the team's output for the month. Money shown here is **only
+- **Dashboard** — the team's output for the month. You can select **Custom Date Ranges** instead of just strict months. Money shown here is **only
   ever your own**. It also shows **your days worked**: a day counts once you
   either logged time or completed a task on it, and **Your days this month**
   marks every day so far — worked days in teal, days with **no work done**
@@ -277,6 +284,8 @@ What you see here depends on your rights.
 - **Card Audit** — who classified or QAP'd a given card. Admin Guide has more.
 - **Installations** — telematics installation activity by device type and
   action, including which devices get replaced most. Admin Guide has more.
+
+**Weekly Digests:** You will automatically receive a weekly summary (in-app and via email/SMS) detailing your total hours and units logged for the past week.
 
 ---
 

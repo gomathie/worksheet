@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Dashboard Data Scope Filtering
+  - The Dashboard and Monthly Reports now enforce the `data_scope` setting for all employees (e.g., Own, Direct Reports, Department, All).
+  - Previously, all non-admins could view everyone's unit totals and worked days on the dashboard. Now, users will only see aggregate numbers and daily details for the specific employees they are allowed to see based on their data scope.
 - Feature: Data Analytics Module Grouping
   - Employees assigned to any task within the "Data Analytics" module (like QAP or Classification) automatically gain visibility and access to all other tasks in that same module.
   - This applies seamlessly across the Time Entry page, Dashboard, and Reports, grouping these related tasks together.

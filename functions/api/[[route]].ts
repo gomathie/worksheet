@@ -76,6 +76,7 @@ import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
   patchTask,
   taskSummary,
 } from '../../server/tasks'
+import { isVisible, visibleEmployeeIds } from '../../server/scope'
 import { createNews, deleteNews, listNews } from '../../server/news'
 import {
   decidePettyCashRequest,
@@ -3047,11 +3048,14 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     ])
   const settings = { ...liveSettings, point_value: rates.point_value, currency: rates.currency }
 
+  // Fetch the viewer's data_scope to limit which employees they see on the dashboard/reports.
+  const scopeIds = await visibleEmployeeIds(env, user)
+
   // A completed task counts as a day worked for whoever it was assigned to
   // — same standing as a time entry for this purpose, even though it
   // contributes no hours/units of its own.
   const taskWorkedDays: WorkedDayLike[] = doneTasksRes.results
-    .filter((t): t is { assignee_id: string; completed_at: string } => Boolean(t.assignee_id))
+    .filter((t): t is { assignee_id: string; completed_at: string } => Boolean(t.assignee_id) && isVisible(scopeIds, t.assignee_id!))
     .map((t) => ({ employee_id: t.assignee_id, date: dateInTz(t.completed_at, tz) }))
     .filter((w) => w.date.startsWith(month))
 
@@ -3069,16 +3073,20 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     name: w.name,
     points_per_unit: w.points_per_unit,
   }))
-  const entryLikes = entriesRes.results.map((e) => ({
-    employee_id: e.employee_id,
-    work_date: e.work_date,
-    hours: e.hours,
-    units: entryUnits.get(e.id) ?? {},
-  }))
-  const employeeLikes = employeesRes.results.map((e) => ({
-    ...e,
-    rate_overrides: rates.overridesByEmployee.get(e.id),
-  }))
+  const entryLikes = entriesRes.results
+    .filter((e) => isVisible(scopeIds, e.employee_id))
+    .map((e) => ({
+      employee_id: e.employee_id,
+      work_date: e.work_date,
+      hours: e.hours,
+      units: entryUnits.get(e.id) ?? {},
+    }))
+  const employeeLikes = employeesRes.results
+    .filter((e) => isVisible(scopeIds, e.id))
+    .map((e) => ({
+      ...e,
+      rate_overrides: rates.overridesByEmployee.get(e.id),
+    }))
   const report = aggregateMonthly(
     month,
     entryLikes,
@@ -3088,15 +3096,17 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     taskWorkedDays,
   )
   const names = new Map(employeesRes.results.map((e) => [e.id, e.name]))
-  const daily_detail = entriesRes.results.map((e) => ({
-    date: e.work_date,
-    employee_id: e.employee_id,
-    employee_name: names.get(e.employee_id) ?? 'Unknown',
-    time_start: e.time_start,
-    time_end: e.time_end,
-    hours: e.hours,
-    units: entryUnits.get(e.id) ?? {},
-  }))
+  const daily_detail = entriesRes.results
+    .filter((e) => isVisible(scopeIds, e.employee_id))
+    .map((e) => ({
+      date: e.work_date,
+      employee_id: e.employee_id,
+      employee_name: names.get(e.employee_id) ?? 'Unknown',
+      time_start: e.time_start,
+      time_end: e.time_end,
+      hours: e.hours,
+      units: entryUnits.get(e.id) ?? {},
+    }))
 
   // The viewer's own day-by-day picture: every calendar day of the month up
   // to today, each marked worked or not. Sent to everyone regardless of

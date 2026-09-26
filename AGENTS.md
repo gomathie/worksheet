@@ -467,3 +467,21 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Testing Performed:**
 - Ran backend type checks (`npx tsc --noEmit -p tsconfig.server.json`) which completed successfully with `code 0`.
+
+### Feature: Dashboard Data Scope Filtering
+**Date:** September 26, 2026
+
+**User Request:**
+"check if there are rights related to what employees can see on the dashboard. if not implement it. so rights can be set for what employees can see"
+
+**Implementation Details:**
+1. **Identified Existing Capability**:
+   - The system already had a `data_scope` field on employees (`own`, `direct_reports`, `department`, `all`). However, the `monthlyReport` API (which powers the dashboard) was hardcoding a behavior where "Non-admins see everyone's work performance but their own figures only".
+2. **Backend Enforcement (`functions/api/[[route]].ts`)**:
+   - Imported `visibleEmployeeIds` and `isVisible` from `server/scope.ts`.
+   - In `monthlyReport`, calculated `scopeIds` for the requesting user using `visibleEmployeeIds(env, user)`.
+   - Filtered the raw entries (`entryLikes`, `daily_detail`), employees list (`employeeLikes`), and task logs (`taskWorkedDays`) through `isVisible(scopeIds, employeeId)` *before* sending them to `aggregateMonthly()`.
+   - As a result, standard employees now only see dashboard totals (hours, units, days worked), daily details, and charts for the exact set of employees they are allowed to see based on their assigned `data_scope`.
+
+**Testing Performed:**
+- Re-ran backend type checks (`npx tsc --noEmit -p tsconfig.server.json`), resolving a small nullability error on `assignee_id`. Completed successfully with `code 0`.

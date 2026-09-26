@@ -28,6 +28,8 @@ export interface TaskRow {
   title: string
   details: string | null
   assignee_id: string | null
+  secondary_person_id: string | null
+  secondary_role: string | null
   created_by: string | null
   status: TaskStatus
   priority: TaskPriority
@@ -42,6 +44,8 @@ export interface TaskRow {
 function taskLike(t: TaskRow): TaskLike {
   return {
     assignee_id: t.assignee_id,
+    secondary_person_id: t.secondary_person_id,
+    secondary_role: t.secondary_role,
     created_by: t.created_by,
     status: t.status,
     broadcast: Boolean(t.broadcast),
@@ -51,10 +55,12 @@ function taskLike(t: TaskRow): TaskLike {
 const SELECT_TASK = `
   SELECT t.*,
          a.name AS assignee_name,
-         c.name AS created_by_name
+         c.name AS created_by_name,
+         s.name AS secondary_person_name
     FROM tasks t
     LEFT JOIN employees a ON a.id = t.assignee_id
-    LEFT JOIN employees c ON c.id = t.created_by`
+    LEFT JOIN employees c ON c.id = t.created_by
+    LEFT JOIN employees s ON s.id = t.secondary_person_id`
 
 function actorFor(user: Employee): TaskActor {
   const rights = parseRights(user)
@@ -114,11 +120,11 @@ export async function listTasks(request: Request, env: Env): Promise<Response> {
   const binds: unknown[] = []
 
   if (!actor.is_admin && !actor.can_manage) {
-    sql += ' AND (t.assignee_id = ? OR t.created_by = ? OR t.broadcast = 1)'
-    binds.push(user.id, user.id)
+    sql += ' AND (t.assignee_id = ? OR t.secondary_person_id = ? OR t.created_by = ? OR t.broadcast = 1)'
+    binds.push(user.id, user.id, user.id)
   } else if (mineOnly) {
-    sql += ' AND t.assignee_id = ?'
-    binds.push(user.id)
+    sql += " AND (t.assignee_id = ? OR (t.secondary_person_id = ? AND t.secondary_role = 'assignee'))"
+    binds.push(user.id, user.id)
   }
   if (status) {
     sql += ' AND t.status = ?'
@@ -141,6 +147,8 @@ interface TaskBody {
   title?: string
   details?: string | null
   assignee_id?: string | null
+  secondary_person_id?: string | null
+  secondary_role?: string | null
   status?: string
   priority?: string
   due_date?: string | null
@@ -210,6 +218,18 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   }
   if (assignee) await assertAssignee(env, assignee)
 
+  const secondaryAssignee = broadcast ? null : (body.secondary_person_id ?? null)
+  if (!broadcast && secondaryAssignee !== null && !manages) {
+    throw new ApiError(403, 'You can only create tasks for yourself')
+  }
+  if (secondaryAssignee) {
+    await assertAssignee(env, secondaryAssignee)
+    if (secondaryAssignee === assignee) {
+      throw new ApiError(400, 'Primary and secondary person cannot be the same')
+    }
+  }
+  const secondaryRole = secondaryAssignee ? (body.secondary_role === 'assignee' ? 'assignee' : 'observer') : null
+
   const due = parseDueDate(body.due_date)
   if (due === undefined) throw new ApiError(400, 'due_date must be YYYY-MM-DD')
   const priority = parseTaskPriority(body.priority ?? 'normal')
@@ -218,8 +238,8 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   const id = crypto.randomUUID()
   const code = await nextTaskCode(env)
   await env.DB.prepare(
-    `INSERT INTO tasks (id, task_code, title, details, assignee_id, created_by, priority, due_date, broadcast)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -227,13 +247,15 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       title,
       (body.details ?? '')?.toString().trim().slice(0, 2000) || null,
       assignee,
+      secondaryAssignee,
+      secondaryRole,
       user.id,
       priority,
       due,
       broadcast ? 1 : 0,
     )
     .run()
-  await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee, broadcast })
+  await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee, secondary_person_id: secondaryAssignee, secondary_role: secondaryRole, broadcast })
 
   if (assignee && assignee !== user.id) {
     await notifyUser(env, {
@@ -284,6 +306,8 @@ export async function patchTask(
     body.title !== undefined ||
     body.details !== undefined ||
     body.assignee_id !== undefined ||
+    body.secondary_person_id !== undefined ||
+    body.secondary_role !== undefined ||
     body.priority !== undefined ||
     body.due_date !== undefined
 
@@ -318,11 +342,28 @@ export async function patchTask(
     assignee = user.id
   }
 
+  let secondaryAssignee = task.secondary_person_id
+  let secondaryRole = task.secondary_role
+  if (body.secondary_person_id !== undefined) {
+    secondaryAssignee = body.secondary_person_id || null
+    if (secondaryAssignee) {
+      await assertAssignee(env, secondaryAssignee)
+    }
+  }
+  if (body.secondary_role !== undefined) {
+    secondaryRole = body.secondary_role === 'assignee' ? 'assignee' : (body.secondary_role === 'observer' ? 'observer' : null)
+  }
+  if (!secondaryAssignee) secondaryRole = null
+  
+  if (assignee && secondaryAssignee && assignee === secondaryAssignee) {
+    throw new ApiError(400, 'Primary and secondary person cannot be the same')
+  }
+
   const now = new Date().toISOString()
   const completed = completionStamp(status, task.status, task.completed_at, now)
 
   await env.DB.prepare(
-    `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, status = ?,
+    `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, secondary_person_id = ?, secondary_role = ?, status = ?,
        priority = ?, due_date = ?, completed_at = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
@@ -332,6 +373,8 @@ export async function patchTask(
         ? (String(body.details).trim().slice(0, 2000) || null)
         : task.details,
       assignee,
+      secondaryAssignee,
+      secondaryRole,
       status,
       priority,
       due,
@@ -339,7 +382,7 @@ export async function patchTask(
       id,
     )
     .run()
-  await audit(env, user.id, 'update_task', id, { status, assignee_id: assignee, accepted: wantsAccept })
+  await audit(env, user.id, 'update_task', id, { status, assignee_id: assignee, secondary_person_id: secondaryAssignee, secondary_role: secondaryRole, accepted: wantsAccept })
 
   // Tell someone when work newly lands on them, whoever opened it to
   // everyone when it is claimed, and whoever asked for it when it is
@@ -349,6 +392,15 @@ export async function patchTask(
       employeeId: assignee,
       kind: 'task_assigned',
       title: `${firstName(user.name)} assigned you a task`,
+      body: `${task.task_code}: ${title}`,
+    })
+  }
+  if (secondaryAssignee && secondaryAssignee !== task.secondary_person_id && secondaryAssignee !== user.id) {
+    const roleLabel = secondaryRole === 'assignee' ? 'assigned you a task as an additional assignee' : 'added you as an observer to a task'
+    await notifyUser(env, {
+      employeeId: secondaryAssignee,
+      kind: 'task_assigned',
+      title: `${firstName(user.name)} ${roleLabel}`,
       body: `${task.task_code}: ${title}`,
     })
   }
@@ -404,9 +456,9 @@ export async function taskSummary(request: Request, env: Env): Promise<Response>
        SUM(CASE WHEN status IN ('todo','in_progress') THEN 1 ELSE 0 END) AS open,
        SUM(CASE WHEN status IN ('todo','in_progress')
                  AND due_date IS NOT NULL AND due_date < ? THEN 1 ELSE 0 END) AS overdue
-     FROM tasks WHERE assignee_id = ?`,
+     FROM tasks WHERE assignee_id = ? OR (secondary_person_id = ? AND secondary_role = 'assignee')`,
   )
-    .bind(today(env), user.id)
+    .bind(today(env), user.id, user.id)
     .first<{ open: number | null; overdue: number | null }>()
   return json({ open: row?.open ?? 0, overdue: row?.overdue ?? 0 })
 }

@@ -58,6 +58,8 @@ export interface TaskActor {
 
 export interface TaskLike {
   assignee_id: string | null
+  secondary_person_id?: string | null
+  secondary_role?: string | null // 'assignee' | 'observer'
   created_by: string | null
   status: TaskStatus
   /**
@@ -100,7 +102,10 @@ export function allowedTaskActions(task: TaskLike, actor: TaskActor): TaskAction
   }
   // The assignee owns progress, not wording — otherwise "do X" could quietly
   // become "do Y" and then be marked done.
-  if (task.assignee_id && task.assignee_id === actor.id) {
+  const isPrimaryAssignee = task.assignee_id && task.assignee_id === actor.id
+  const isSecondaryAssignee = task.secondary_person_id && task.secondary_person_id === actor.id && task.secondary_role === 'assignee'
+  
+  if (isPrimaryAssignee || isSecondaryAssignee) {
     actions.add('set_status')
   }
   if (actor.is_admin || actor.can_delete || isOwnPrivateTask(task, actor)) {
@@ -122,7 +127,9 @@ export function allowedTaskActions(task: TaskLike, actor: TaskActor): TaskAction
  */
 function isOwnPrivateTask(task: TaskLike, actor: TaskActor): boolean {
   if (!task.created_by || task.created_by !== actor.id) return false
-  return task.assignee_id === null || task.assignee_id === actor.id
+  const primaryPrivate = task.assignee_id === null || task.assignee_id === actor.id
+  const secondaryPrivate = !task.secondary_person_id || task.secondary_person_id === actor.id
+  return primaryPrivate && secondaryPrivate
 }
 
 export function canTask(action: TaskAction, task: TaskLike, actor: TaskActor): boolean {
@@ -136,7 +143,7 @@ export function canViewTask(task: TaskLike, actor: TaskActor): boolean {
   // everyone whether or not it has been claimed yet, so the team can see
   // both what's on offer and who ended up doing it.
   if (task.broadcast) return true
-  return task.assignee_id === actor.id || task.created_by === actor.id
+  return task.assignee_id === actor.id || task.created_by === actor.id || task.secondary_person_id === actor.id
 }
 
 /**

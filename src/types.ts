@@ -592,6 +592,9 @@ export interface Task {
   details: string | null
   assignee_id: string | null
   assignee_name: string | null
+  secondary_person_id: string | null
+  secondary_person_name: string | null
+  secondary_role: string | null
   created_by: string | null
   created_by_name: string | null
   status: TaskStatus

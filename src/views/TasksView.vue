@@ -45,6 +45,8 @@ const blank = () => ({
   assignee_id: auth.user!.id,
   priority: 'normal' as TaskPriority,
   due_date: '',
+  secondary_person_id: '' as string | null,
+  secondary_role: 'assignee' as 'assignee' | 'observer',
 })
 const form = ref(blank())
 const editingId = ref<string | null>(null)
@@ -101,6 +103,8 @@ function startEdit(t: Task) {
     assignee_id: t.assignee_id ?? '',
     priority: t.priority,
     due_date: t.due_date ?? '',
+    secondary_person_id: t.secondary_person_id ?? '',
+    secondary_role: (t.secondary_role as 'assignee' | 'observer') ?? 'assignee',
   }
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -124,6 +128,8 @@ async function save() {
       title: form.value.title.trim(),
       details: form.value.details.trim() || null,
       assignee_id: broadcast ? null : form.value.assignee_id || null,
+      secondary_person_id: broadcast ? null : form.value.secondary_person_id || null,
+      secondary_role: form.value.secondary_person_id ? form.value.secondary_role : null,
       priority: form.value.priority,
       due_date: form.value.due_date || null,
       ...(broadcast ? { broadcast: true } : {}),
@@ -304,6 +310,33 @@ const statusTone: Record<TaskStatus, string> = {
           />
         </div>
         <div>
+          <label class="field-label" for="t-secondary">Additional participant (optional)</label>
+          <select
+            id="t-secondary"
+            v-model="form.secondary_person_id"
+            class="field-input"
+          >
+            <option value="">None</option>
+            <option
+              v-for="e in employees.filter(emp => emp.id !== form.assignee_id)"
+              :key="e.id"
+              :value="e.id"
+            >
+              {{ e.name }}
+            </option>
+          </select>
+          <div v-if="form.secondary_person_id" class="mt-2 flex items-center gap-4 text-sm">
+            <label class="flex items-center gap-1">
+              <input type="radio" v-model="form.secondary_role" value="assignee" />
+              Additional Assignee
+            </label>
+            <label class="flex items-center gap-1">
+              <input type="radio" v-model="form.secondary_role" value="observer" />
+              Observer
+            </label>
+          </div>
+        </div>
+        <div>
           <label class="field-label" for="t-due">Wanted by (optional)</label>
           <input id="t-due" v-model="form.due_date" type="date" class="field-input mono" />
         </div>
@@ -373,6 +406,9 @@ const statusTone: Record<TaskStatus, string> = {
           <p v-if="t.details" class="mt-1 text-sm">{{ t.details }}</p>
           <p class="mt-1 text-xs text-muted">
             {{ t.assignee_name ?? (t.broadcast ? 'Nobody yet — first to accept it' : 'Unassigned') }}
+            <template v-if="t.secondary_person_name">
+              · {{ t.secondary_role === 'assignee' ? 'Also assigned' : 'Observer' }}: {{ t.secondary_person_name }}
+            </template>
             <template v-if="t.due_date">
               · wanted by <span class="mono">{{ t.due_date }}</span>
             </template>

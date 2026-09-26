@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Additional Assignee / Observer for Tasks
+  - Tasks can now have an optional secondary person assigned.
+  - The secondary person can either be an "Additional Assignee" (responsible for progress) or an "Observer" (can view/follow but not responsible).
+  - Backend validation ensures the primary and secondary persons cannot be the same employee.
+  - Dashboards, task lists, and notifications correctly incorporate the secondary person.
 - Feature: Custom Author for Announcements/Pop-ups
   - Added a "From whom" input to the announcement creation form, allowing senders to specify an entity like "Management" or "System".
   - Created a database migration to store `author_name`, which defaults to "System" if left blank.

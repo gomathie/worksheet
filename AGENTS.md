@@ -384,3 +384,26 @@ Follow-up: "check all pop ups related to qap or classification. add by 'Spvsr. B
 **Testing Performed:**
 - Ran `npm run db:migrate:local` successfully.
 - Will monitor frontend TypeScript checks during future changes.
+
+### Feature: Additional Assignee / Observer for Tasks
+**Date:** September 26, 2026
+
+**User Request:**
+"Feature Request: Allow Tasks to Have an Additional Assignee or Observer"
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0030_task_secondary_assignee.sql`)**:
+   - Added `secondary_person_id` and `secondary_role` ('assignee' or 'observer') columns to the `tasks` table.
+2. **Server-side Logic (`server/tasks.ts`, `shared/tasks.ts`)**:
+   - Updated `TaskLike` and `allowedTaskActions` to grant modification rights to the `secondary_person_id` if their role is `assignee`. Observers only get view rights.
+   - Updated `createTask` and `patchTask` APIs to accept, validate, and store the secondary person parameters. Added validations preventing assigning the same person to both roles.
+   - Ensured the correct notification is sent to the secondary person ("assigned you a task as an additional assignee" vs "added you as an observer").
+   - Added the `secondary_person_id` when fetching assignments, ensuring "Assigned to you" accurately includes tasks where the user is a secondary assignee.
+3. **Frontend Changes (`src/views/TasksView.vue`, `src/views/TaskDetailView.vue`, `src/types.ts`)**:
+   - Updated the `Task` type interface to include `secondary_person_id`, `secondary_person_name`, and `secondary_role`.
+   - Added an optional "Additional participant" selector in the `TasksView.vue` task creation/edit form, automatically filtering out the selected primary assignee.
+   - Rendered the secondary person and their role (Also assigned / Observer) on the task cards in `TasksView.vue` and in the assignment block of `TaskDetailView.vue`.
+
+**Testing Performed:**
+- Ran `npm run db:migrate:local` successfully.
+- Checked full type definitions with `npx tsc --noEmit -p tsconfig.app.json ; npx tsc --noEmit -p tsconfig.server.json`, which completed successfully with `code 0`.

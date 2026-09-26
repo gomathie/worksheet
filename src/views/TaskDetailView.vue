@@ -179,6 +179,10 @@ async function remove() {
           <p v-else-if="task.broadcast" class="text-teal">Nobody yet — first to accept it</p>
           <p v-else>Unassigned</p>
         </div>
+        <div v-if="task.secondary_person_name">
+          <p class="field-label">{{ task.secondary_role === 'assignee' ? 'Also assigned to' : 'Observer' }}</p>
+          <p>{{ task.secondary_person_name }}</p>
+        </div>
         <div>
           <p class="field-label">Raised by</p>
           <p>{{ task.created_by_name ?? '—' }}</p>

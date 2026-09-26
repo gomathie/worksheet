@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Login as other users
+  - Added a new `login_as_others` right that allows an admin to impersonate other users without their password.
+  - Added a "Login as" button on the team list page for admins to switch into another user's session.
 - Feature: Remember Me on Login
   - Added a "Remember me" checkbox to the sign-in form that saves credentials to localStorage for automatic pre-fill on next visit.
 - Feature: Mobile UX Improvements (Responsive Tables)

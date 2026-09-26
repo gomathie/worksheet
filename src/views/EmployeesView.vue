@@ -3,6 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api'
 import { DATA_SCOPE_LABELS, type DataScope } from '../types'
 import type { Department, Employee, WorkTypeInfo } from '../types'
+import { useAuthStore } from '../stores/auth'
+
+const auth = useAuthStore()
 
 const employees = ref<Employee[]>([])
 const workTypes = ref<WorkTypeInfo[]>([])
@@ -194,6 +197,18 @@ async function toggleActive(e: Employee) {
   }
 }
 
+async function loginAs(e: Employee) {
+  if (!confirm(`Log in as ${e.name}? You will be logged out of your current session.`)) return
+  try {
+    busy.value = true
+    await api('/api/auth/login-as', { method: 'POST', json: { target_id: e.id } })
+    window.location.href = '/'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to log in as user'
+    busy.value = false
+  }
+}
+
 function workSummary(e: Employee): string {
   const names = activeTypes.value
     .filter((w) => e.work_type_ids.includes(w.id))
@@ -235,6 +250,7 @@ function rightsSummary(e: Employee): string {
     ['manage_tasks', 'Manage tasks'],
     ['delete_tasks', 'Delete tasks'],
     ['send_announcements', 'Send announcements'],
+    ['login_as_others', 'Login as others'],
   ]
   // approve_* are deliberately absent: both require the admin role, so for a
   // non-admin they would claim an authority the API refuses to honour.
@@ -467,6 +483,10 @@ const managerName = (e: Employee) =>
               <input v-model="form.rights.send_announcements" type="checkbox" />
               Post to News (incl. login pop-ups)
             </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.login_as_others" type="checkbox" />
+              Login as other users
+            </label>
           </div>
           <p class="mt-1 text-xs text-muted">
             A non-admin with this right can propose an account. It stays pending
@@ -657,6 +677,14 @@ const managerName = (e: Employee) =>
               </td>
               <td>{{ e.active ? 'Active' : 'Inactive' }}</td>
               <td class="whitespace-nowrap">
+                <button
+                  v-if="auth.user?.rights.login_as_others && e.id !== auth.user.id"
+                  class="btn btn-sm mr-1"
+                  @click="loginAs(e)"
+                  :disabled="!e.active || e.approval_status !== 'approved'"
+                >
+                  Login as
+                </button>
                 <button class="btn btn-sm mr-1" @click="startEdit(e)">Edit</button>
                 <button
                   class="btn btn-sm"

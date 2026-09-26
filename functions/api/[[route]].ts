@@ -211,6 +211,36 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
   return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie('', 0) })
 }
 
+async function handleLoginAs(request: Request, env: Env): Promise<Response> {
+  const user = await requireUser(request, env)
+  if (!user.rights.login_as_others) {
+    throw new ApiError(403, 'Permission denied')
+  }
+
+  const { target_id } = await readJson<{ target_id?: string }>(request)
+  if (!target_id) throw new ApiError(400, 'target_id is required')
+
+  const target = await env.DB.prepare(
+    "SELECT * FROM employees WHERE id = ? AND active = 1 AND approval_status = 'approved'",
+  )
+    .bind(target_id)
+    .first<Employee>()
+
+  if (!target) throw new ApiError(404, 'User not found or inactive')
+
+  const token = randomToken()
+  await env.SESSIONS.put(
+    `session:${token}`,
+    JSON.stringify({ employee_id: target.id }),
+    { expirationTtl: SESSION_TTL_SECONDS },
+  )
+  return json(
+    { id: target.id, name: target.name, role: target.role },
+    200,
+    { 'Set-Cookie': sessionCookie(token, SESSION_TTL_SECONDS) },
+  )
+}
+
 // ---------------------------------------------------------- work type routes
 
 /**
@@ -3308,6 +3338,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   const method = request.method
 
   if (path === '/api/auth/login' && method === 'POST') return handleLogin(request, env)
+  if (path === '/api/auth/login-as' && method === 'POST') return handleLoginAs(request, env)
   if (path === '/api/auth/logout' && method === 'POST') return handleLogout(request, env)
 
   if (path === '/api/me' && method === 'GET') {

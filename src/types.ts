@@ -41,6 +41,8 @@ export interface Rights {
   delete_tasks: boolean
   /** Post to the News feed, optionally as a login pop-up. See shared/news.ts. */
   send_announcements: boolean
+  /** Allow an admin to log in as another user. */
+  login_as_others: boolean
 }
 
 export interface NewsItem {

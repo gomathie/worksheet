@@ -652,3 +652,26 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 **Testing Performed:**
 - Full build (`vue-tsc -b && vite build`) completed successfully.
 - Dev server started and served the app at `http://127.0.0.1:8788`.
+
+### Feature: Login As Other Users
+**Date:** September 26, 2026
+
+**User Request:**
+"add a right that permits an admin to be able to login as other users"
+
+**Implementation Details:**
+1. **Database / Models (`server/auth.ts`, `src/types.ts`)**:
+   - Added `login_as_others: boolean` to the `Rights` interface in both frontend and backend.
+   - Set it to `true` in `ALL_RIGHTS` and `false` in `DEFAULT_RIGHTS`.
+2. **Backend Logic (`functions/api/[[route]].ts`)**:
+   - Added a new `handleLoginAs` POST endpoint at `/api/auth/login-as`.
+   - The endpoint checks if the requester has the `login_as_others` right.
+   - It bypasses password verification for the target user (provided via `target_id`), generates a new session token, and drops the old one.
+3. **Frontend UI (`src/views/EmployeesView.vue`)**:
+   - Added a "Login as other users" checkbox in the employee edit form under Rights.
+   - Displayed "Login as others" in the text summary of granted rights.
+   - Added a `Login as` button to the main Team table's action column. The button only appears if the viewing user has the `login_as_others` right and the row does not belong to the viewing user.
+   - Connected the button to a new `loginAs` async function that makes a POST request to `/api/auth/login-as` and redirects to the dashboard root `/`.
+
+**Testing Performed:**
+- TypeScript type checks passed. Vite dev server hot-reloaded automatically.

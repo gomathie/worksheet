@@ -100,6 +100,12 @@ const activeTypes = computed(() =>
   workTypes.value.filter((w) => w.active === undefined || w.active),
 )
 
+const visibleTypes = computed(() => {
+  if (auth.isAdmin) return activeTypes.value
+  const mine = new Set(auth.user!.work_types.map((w) => w.id))
+  return activeTypes.value.filter((w) => mine.has(w.id))
+})
+
 // The employee whose work is being logged in the form right now — for an
 // admin, whichever the employee-select is set to; everyone else can only
 // ever log their own.
@@ -597,7 +603,7 @@ function exportCsv() {
     'Start',
     'End',
     'Hours',
-    ...activeTypes.value.map((w) => w.name),
+    ...visibleTypes.value.map((w) => w.name),
     'Notes',
     'Logged at',
   ]
@@ -607,7 +613,7 @@ function exportCsv() {
     e.time_start,
     e.time_end,
     e.hours,
-    ...activeTypes.value.map((w) => e.units[w.id] ?? 0),
+    ...visibleTypes.value.map((w) => e.units[w.id] ?? 0),
     e.notes ?? '',
     e.created_at ? loggedAtFull(e.created_at) : '',
   ])
@@ -652,7 +658,7 @@ const showActions = computed(
 const tableColspan = computed(
   () =>
     (auth.isAdmin ? 6 : 5) +
-    activeTypes.value.length +
+    visibleTypes.value.length +
     (approvalOn.value ? 1 : 0) +
     (showActions.value ? 1 : 0),
 )
@@ -1072,7 +1078,7 @@ const dayGroups = computed(() =>
               <th class="num">Start</th>
               <th class="num">End</th>
               <th class="num">Hours</th>
-              <th v-for="wt in activeTypes" :key="wt.id" class="num">{{ wt.name }}</th>
+              <th v-for="wt in visibleTypes" :key="wt.id" class="num">{{ wt.name }}</th>
               <th>Notes</th>
               <th v-if="approvalOn">Status</th>
               <th v-if="showActions"></th>
@@ -1122,7 +1128,7 @@ const dayGroups = computed(() =>
                      not edit: removing a card destroys already-recorded work
                      same as the Del button does, just one line at a time (the
                      server enforces this regardless — see patchEntry). -->
-                <td v-for="wt in activeTypes" :key="wt.id" class="num">
+                <td v-for="wt in visibleTypes" :key="wt.id" class="num">
                   {{ e.units[wt.id] ?? 0 }}
                   <template v-if="auth.rights.delete_entries && cardsForType(e, wt.id).length">
                     <div

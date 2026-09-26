@@ -432,3 +432,20 @@ after 3 days, they should receive a pop up sayign their task has been scheduled 
 
 **Testing Performed:**
 - Ran `npx tsc --noEmit -p tsconfig.app.json` which completed successfully with `code 0` (no errors).
+
+### Feature: Time Entry Work-Type Scoping
+**Date:** September 26, 2026
+
+**User Request:**
+"on the time entry too, if a user is not assigned to qap, they should not see it."
+
+**Implementation Details:**
+1. **Frontend Filtering (`src/views/EntriesView.vue`)**:
+   - The time entry *form* was already filtering out unassigned card types (like QAP and Classifications) for standard users via `formTypes`.
+   - However, the time entry *history table* and the *CSV export* were still using `activeTypes` (which includes all active work types globally), meaning standard users could still see QAP/Classification columns.
+   - Introduced a new `visibleTypes` computed property that restricts `activeTypes` strictly to the current user's `work_type_ids` if they are a standard, non-admin user.
+   - Replaced `activeTypes` with `visibleTypes` in the table header, the row loop, the `tableColspan` calculation, and the CSV export logic.
+   - This explicitly hides QAP and Classification sections from the entire time entry page for users who don't have those assignments, matching the Dashboard's behavior.
+
+**Testing Performed:**
+- Ran frontend type checks (`npx tsc --noEmit -p tsconfig.app.json`) successfully.

@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Time Entry Work-Type Scoping
+  - The entries history table and CSV export now filter out work type columns that the standard user is not assigned to, matching the dashboard behavior.
+  - Ensures users not assigned to specific tasks like QAP or Classifications don't see those columns on the time entry page.
 - Feature: Task Age Alerts
   - Added a popup warning for tasks pending for more than 2 days, warning users that it will affect their payment.
   - Added a critical popup for tasks pending for more than 3 days, warning that the task is scheduled for deletion/reassignment and will affect finances/payment.

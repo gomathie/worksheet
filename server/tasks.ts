@@ -383,7 +383,6 @@ export async function patchTask(
     throw new ApiError(400, 'Primary and secondary person cannot be the same')
   }
 
-  const recurrence = (body.recurrence === 'daily' || body.recurrence === 'weekly' || body.recurrence === 'monthly') ? body.recurrence : task.recurrence
   const checklist = typeof body.checklist === 'string' ? body.checklist : task.checklist
 
   const now = new Date().toISOString()

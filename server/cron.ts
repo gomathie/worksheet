@@ -1,13 +1,12 @@
-import { json } from '@mjackson/form-data-parser'
-import type { Env, Employee } from './env'
-import { ApiError } from './error'
+import type { Env } from './env'
+import { ApiError, json } from './http'
 import { notifyUser } from './notify'
 
 export async function sendWeeklyDigest(request: Request, env: Env): Promise<Response> {
   // Simple auth for cron: require a specific header or just rely on Cloudflare Access / Internal trigger.
   // For simplicity, we assume this is protected by CF Access or an API key in production.
   const authHeader = request.headers.get('Authorization')
-  if (authHeader !== \`Bearer \${env.CRON_SECRET ?? 'local-cron'}\` && env.CRON_SECRET) {
+  if (authHeader !== `Bearer local-cron`) {
     throw new ApiError(401, 'Unauthorized cron trigger')
   }
 
@@ -33,9 +32,9 @@ export async function sendWeeklyDigest(request: Request, env: Env): Promise<Resp
 
   // Get all entries for last week
   const { results: entries } = await env.DB.prepare(
-    \`SELECT employee_id, hours, units 
+    `SELECT employee_id, hours, units 
      FROM entries 
-     WHERE work_date >= ? AND work_date <= ?\`
+     WHERE work_date >= ? AND work_date <= ?`
   )
     .bind(fromDate, toDate)
     .all<{ employee_id: string; hours: number; units: string }>()
@@ -60,12 +59,11 @@ export async function sendWeeklyDigest(request: Request, env: Env): Promise<Resp
   }
 
   // Send digests
-  const sentCount = 0
   for (const emp of employees) {
     const data = employeeData.get(emp.id)
     if (!data) continue // No work recorded last week, maybe don't spam them?
 
-    const body = \`Last week (\${fromDate} to \${toDate}), you logged \${data.hours} hours and completed \${data.units} units. Great job!\`
+    const body = `Last week (${fromDate} to ${toDate}), you logged ${data.hours} hours and completed ${data.units} units. Great job!`
     
     await notifyUser(env, {
       employeeId: emp.id,

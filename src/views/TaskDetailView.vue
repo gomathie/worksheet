@@ -343,7 +343,6 @@ async function postComment() {
           Delete
         </button>
       </div>
-      </div>
     </div>
 
     <!-- Comments Section -->

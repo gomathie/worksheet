@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Data Analytics Module Grouping
+  - Employees assigned to any task within the "Data Analytics" module (like QAP or Classification) automatically gain visibility and access to all other tasks in that same module.
+  - This applies seamlessly across the Time Entry page, Dashboard, and Reports, grouping these related tasks together.
 - Feature: Time Entry Work-Type Scoping
   - The entries history table and CSV export now filter out work type columns that the standard user is not assigned to, matching the dashboard behavior.
   - Ensures users not assigned to specific tasks like QAP or Classifications don't see those columns on the time entry page.

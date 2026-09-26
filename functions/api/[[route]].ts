@@ -721,9 +721,13 @@ async function activeDeviceTypes(env: Env): Promise<Map<string, string>> {
 // --------------------------------------------- per-employee work assignments
 
 async function assignedTypeIds(env: Env, employeeId: string): Promise<string[]> {
-  const { results } = await env.DB.prepare(
-    'SELECT work_type_id FROM employee_work_types WHERE employee_id = ?',
-  )
+  const { results } = await env.DB.prepare(`
+    SELECT DISTINCT w2.id AS work_type_id
+    FROM employee_work_types ewt
+    JOIN work_types w1 ON w1.id = ewt.work_type_id
+    JOIN work_types w2 ON (w2.id = w1.id OR (w1.module IS NOT NULL AND w2.module = w1.module))
+    WHERE ewt.employee_id = ?
+  `)
     .bind(employeeId)
     .all<{ work_type_id: string }>()
   return results.map((r) => r.work_type_id)
@@ -3243,9 +3247,14 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (path === '/api/me' && method === 'GET') {
     const user = await currentUser(request, env)
     if (!user) return json(null)
-    const { results: myTypes } = await env.DB.prepare(
-      'SELECT wt.id, wt.name FROM employee_work_types ewt JOIN work_types wt ON wt.id = ewt.work_type_id WHERE ewt.employee_id = ? AND wt.active = 1 ORDER BY wt.position',
-    )
+    const { results: myTypes } = await env.DB.prepare(`
+      SELECT DISTINCT w2.id, w2.name, w2.position
+      FROM employee_work_types ewt
+      JOIN work_types w1 ON w1.id = ewt.work_type_id
+      JOIN work_types w2 ON (w2.id = w1.id OR (w1.module IS NOT NULL AND w2.module = w1.module))
+      WHERE ewt.employee_id = ? AND w2.active = 1
+      ORDER BY w2.position
+    `)
       .bind(user.id)
       .all<{ id: string; name: string }>()
     return json({

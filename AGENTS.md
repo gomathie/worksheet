@@ -449,3 +449,21 @@ after 3 days, they should receive a pop up sayign their task has been scheduled 
 
 **Testing Performed:**
 - Ran frontend type checks (`npx tsc --noEmit -p tsconfig.app.json`) successfully.
+
+### Feature: Data Analytics Module Grouping
+**Date:** September 26, 2026
+
+**User Request:**
+"grroup qap and classification under Data analytics. Which means any user or employee asigned to data analytics see its related stuff."
+Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY 'Data Analytics' task, they automatically get access to ALL of them."
+
+**Implementation Details:**
+1. **Backend Dynamic Module Expansion (`functions/api/[[route]].ts`)**:
+   - Modified `assignedTypeIds()` and the `/api/me` route to query `employee_work_types` with an expansion join.
+   - If an employee is explicitly assigned to a `work_type` that belongs to a module (where `module IS NOT NULL`, such as `Data Analytics`), the query automatically returns all active work types that share that same module.
+   - This ensures that assigning a standard user to "QAP" implicitly grants them full access to "Classification", since both share the "Data Analytics" module.
+   - This single backend change cascades cleanly to all frontend logic, as `auth.user.work_types` is now populated with the fully expanded module list.
+   - The admin assignment UI (`/api/employees`) continues to show exactly what is saved in the database, allowing admins granular control (they can select one or both checkboxes; removing the module just requires unchecking the assigned ones).
+
+**Testing Performed:**
+- Ran backend type checks (`npx tsc --noEmit -p tsconfig.server.json`) which completed successfully with `code 0`.

@@ -48,6 +48,12 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      path: '/time-off',
+      name: 'time-off',
+      component: () => import('../views/LeavesView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/expenses',
       name: 'expenses',
       component: () => import('../views/ExpensesView.vue'),

@@ -16,7 +16,7 @@ const route = useRoute()
 // top-level pill's highlight and whether that section's row of page buttons
 // is shown underneath — no dropdown/overlay, just a second nav row in flow.
 const reportsActive = computed(() =>
-  ['report', 'trends', 'absences', 'card-audit', 'installations-report', 'activity'].includes(
+  ['report', 'trends', 'absences', 'time-off', 'card-audit', 'installations-report', 'activity'].includes(
     String(route.name),
   ),
 )
@@ -429,6 +429,9 @@ async function saveProfile() {
       >
       <RouterLink :to="{ name: 'absences' }" class="btn btn-sm" active-class="btn-solid"
         >Absences</RouterLink
+      >
+      <RouterLink :to="{ name: 'time-off' }" class="btn btn-sm" active-class="btn-solid"
+        >Leaves (Time Off)</RouterLink
       >
       <RouterLink
         v-if="auth.rights.view_reports"

@@ -39,6 +39,7 @@ export interface TaskRow {
   updated_at: string
   broadcast: number
   recurrence: string | null
+  checklist: string | null
 }
 
 export interface TaskCommentRow {
@@ -167,6 +168,7 @@ interface TaskBody {
   /** Claim an unclaimed broadcast task as your own. Patch only. */
   accept?: boolean
   recurrence?: string | null
+  checklist?: string | null
 }
 
 async function loadTask(env: Env, id: string): Promise<TaskRow> {
@@ -247,12 +249,13 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   if (!priority) throw new ApiError(400, 'Unknown priority')
 
   const recurrence = (body.recurrence === 'daily' || body.recurrence === 'weekly' || body.recurrence === 'monthly') ? body.recurrence : null
+  const checklist = typeof body.checklist === 'string' ? body.checklist : null
 
   const id = crypto.randomUUID()
   const code = await nextTaskCode(env)
   await env.DB.prepare(
-    `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence, checklist)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -267,6 +270,7 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       due,
       broadcast ? 1 : 0,
       recurrence,
+      checklist,
     )
     .run()
   await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee, secondary_person_id: secondaryAssignee, secondary_role: secondaryRole, broadcast })
@@ -379,12 +383,15 @@ export async function patchTask(
     throw new ApiError(400, 'Primary and secondary person cannot be the same')
   }
 
+  const recurrence = (body.recurrence === 'daily' || body.recurrence === 'weekly' || body.recurrence === 'monthly') ? body.recurrence : task.recurrence
+  const checklist = typeof body.checklist === 'string' ? body.checklist : task.checklist
+
   const now = new Date().toISOString()
   const completed = completionStamp(status, task.status, task.completed_at, now)
 
   await env.DB.prepare(
     `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, secondary_person_id = ?, secondary_role = ?, status = ?,
-       priority = ?, due_date = ?, completed_at = ?, recurrence = ?, updated_at = datetime('now')
+       priority = ?, due_date = ?, completed_at = ?, recurrence = ?, checklist = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -400,6 +407,7 @@ export async function patchTask(
       due,
       completed,
       recurrence,
+      checklist,
       id,
     )
     .run()

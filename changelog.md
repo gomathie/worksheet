@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Automated Weekly Digests
+  - Created a cron-compatible endpoint (`/api/cron/weekly-digest`) that aggregates each employee's hours and units for the past week.
+  - Sends a personalized push/email summary notification to all active employees.
+- Feature: Leave & Absence Management Workflow
+  - Added a formal Leave Request system with multi-day tracking (`LeavesView.vue`).
+  - Allows employees to request Sick, Vacation, Unpaid, or Personal leave.
+  - Managers/Admins can approve or reject these requests through a dedicated UI.
+- Feature: Task Checklists
+  - Added support for checklists in tasks, stored as JSON strings.
+  - Task assignees can create and toggle checklist items in the UI.
 - Feature: Custom Dashboard Date Ranges
   - Users can now select custom date ranges (From/To) on the Dashboard, seamlessly updating the statistics, charts, and aggregated data for that exact timeframe.
   - Allows performance reviews over arbitrary periods rather than only strict monthly cycles.

@@ -546,3 +546,57 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Testing Performed:**
 - Ran full type checks which passed successfully (`code 0`).
+
+### Feature: Task Checklists
+**Date:** September 26, 2026
+
+**User Request:**
+"2. Task Subtasks & Checklists"
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0033_task_checklist.sql`)**:
+   - Added a `checklist` text column to `tasks`.
+2. **Backend API (`server/tasks.ts`)**:
+   - Updated `TaskRow` and endpoints to support `checklist`.
+3. **Frontend Views (`src/views/TasksView.vue`, `src/views/TaskDetailView.vue`)**:
+   - Added checklist creation (textarea with newline separated tasks) to task creation form.
+   - Updated `TaskDetailView.vue` with an interactive checklist where users can mark subtasks as complete.
+
+**Testing Performed:**
+- Ran full type checks successfully.
+
+### Feature: Leave & Absence Management
+**Date:** September 26, 2026
+
+**User Request:**
+"1. Leave & Absence Management"
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0034_leaves.sql`)**:
+   - Created a `leaves` table linked to employees with `start_date`, `end_date`, `type`, and `status`.
+2. **Backend Logic (`server/leaves.ts`, `functions/api/[[route]].ts`)**:
+   - Implemented `listLeaves`, `createLeave`, and `updateLeave` (for admin approvals).
+   - Added routes in `[[route]].ts` mapped to `/api/leaves`.
+3. **Frontend View (`src/views/LeavesView.vue`, `src/router/index.ts`, `src/App.vue`)**:
+   - Created a complete Leave management interface for users to request time off (Sick, Vacation, Personal, Unpaid).
+   - Admins see a consolidated view to approve or reject requests.
+   - Added `/time-off` route and linked it under the Reports tab.
+
+**Testing Performed:**
+- Checked type definitions successfully. Ran database migration locally.
+
+### Feature: Automated Weekly Digests
+**Date:** September 26, 2026
+
+**User Request:**
+"5. Automated Weekly Digests"
+
+**Implementation Details:**
+1. **Backend Cron Endpoint (`server/cron.ts`, `functions/api/[[route]].ts`)**:
+   - Created `/api/cron/weekly-digest` as an automated endpoint.
+   - Calculates "last week" date boundaries (Monday to Sunday).
+   - Aggregates hours and units per employee for the period.
+   - Triggers `notifyUser` to send an in-app and email/push digest summary to each active employee with their metrics.
+
+**Testing Performed:**
+- Verified query logic and endpoint routing.

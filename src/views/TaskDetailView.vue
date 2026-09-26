@@ -137,6 +137,40 @@ async function remove() {
   }
 }
 
+interface ChecklistItem {
+  title: string
+  completed: boolean
+}
+
+const parsedChecklist = computed<ChecklistItem[]>(() => {
+  if (!task.value || !task.value.checklist) return []
+  try {
+    return JSON.parse(task.value.checklist)
+  } catch {
+    return []
+  }
+})
+
+async function toggleChecklistItem(index: number, completed: boolean) {
+  if (!task.value) return
+  
+  const newList = [...parsedChecklist.value]
+  newList[index].completed = completed
+  
+  error.value = ''
+  busy.value = true
+  try {
+    task.value = await api<Task>(`/api/tasks/${id.value}`, { 
+      method: 'PATCH', 
+      json: { checklist: JSON.stringify(newList) } 
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to update checklist'
+  } finally {
+    busy.value = false
+  }
+}
+
 async function postComment() {
   if (!newComment.value.trim() || !task.value) return
   error.value = ''
@@ -199,6 +233,22 @@ async function postComment() {
 
       <p v-if="task.details" class="mb-4 text-sm whitespace-pre-wrap">{{ task.details }}</p>
       <p v-else class="mb-4 text-sm text-muted italic">No further details.</p>
+
+      <div v-if="parsedChecklist.length > 0" class="mb-6 rounded-md border border-line bg-surface p-4">
+        <h3 class="field-label mb-2">Checklist</h3>
+        <ul class="space-y-2">
+          <li v-for="(item, idx) in parsedChecklist" :key="idx" class="flex items-start gap-2">
+            <input 
+              type="checkbox" 
+              :checked="item.completed" 
+              :disabled="!can('set_status') || busy"
+              class="mt-1"
+              @change="toggleChecklistItem(idx, ($event.target as HTMLInputElement).checked)"
+            />
+            <span class="text-sm" :class="{ 'line-through text-muted': item.completed }">{{ item.title }}</span>
+          </li>
+        </ul>
+      </div>
 
       <div class="mb-5 grid grid-cols-2 gap-4 border-t border-line pt-4 text-sm sm:grid-cols-3">
         <div>

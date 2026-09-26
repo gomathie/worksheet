@@ -48,6 +48,7 @@ const blank = () => ({
   secondary_person_id: '' as string | null,
   secondary_role: 'assignee' as 'assignee' | 'observer',
   recurrence: 'none' as 'none' | 'daily' | 'weekly' | 'monthly',
+  checklist: '',
 })
 const form = ref(blank())
 const editingId = ref<string | null>(null)
@@ -107,6 +108,16 @@ function startEdit(t: Task) {
     secondary_person_id: t.secondary_person_id ?? '',
     secondary_role: (t.secondary_role as 'assignee' | 'observer') ?? 'assignee',
     recurrence: (t.recurrence as 'daily' | 'weekly' | 'monthly') || 'none',
+    checklist: '',
+  }
+  
+  if (t.checklist) {
+    try {
+      const parsed = JSON.parse(t.checklist) as { title: string; completed: boolean }[]
+      form.value.checklist = parsed.map((item) => (item.completed ? `[x] ${item.title}` : item.title)).join('\n')
+    } catch {
+      form.value.checklist = ''
+    }
   }
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -136,7 +147,22 @@ async function save() {
       due_date: form.value.due_date || null,
       recurrence: form.value.recurrence !== 'none' ? form.value.recurrence : null,
       ...(broadcast ? { broadcast: true } : {}),
+      checklist: null as string | null,
     }
+    
+    if (form.value.checklist.trim()) {
+      const lines = form.value.checklist.trim().split('\n').filter(Boolean)
+      const checklistItems = lines.map(line => {
+        line = line.trim()
+        const completed = line.startsWith('[x] ')
+        return {
+          title: completed ? line.substring(4) : line,
+          completed
+        }
+      })
+      payload.checklist = JSON.stringify(checklistItems)
+    }
+
     if (editingId.value) {
       await api(`/api/tasks/${editingId.value}`, { method: 'PATCH', json: payload })
       notice.value = 'Task updated.'
@@ -366,6 +392,16 @@ const statusTone: Record<TaskStatus, string> = {
             class="field-input"
             placeholder="Anything the person needs to know"
           />
+        </div>
+        <div class="md:col-span-3">
+          <label class="field-label" for="t-checklist">Checklist (optional)</label>
+          <textarea
+            id="t-checklist"
+            v-model="form.checklist"
+            rows="3"
+            class="field-input"
+            placeholder="One step per line. Use [x] for completed steps."
+          ></textarea>
         </div>
         <div>
           <label class="field-label" for="t-priority">Priority</label>

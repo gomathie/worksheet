@@ -604,6 +604,7 @@ export interface Task {
   created_at: string
   updated_at?: string
   recurrence: string | null
+  checklist: string | null
   /** Raised for "Everyone" rather than one person; see TaskDetailView. */
   broadcast: number
   /** What the signed-in user may do to this task; computed server-side. */
@@ -617,4 +618,18 @@ export interface TaskComment {
   employee_name?: string
   content: string
   created_at: string
+}
+
+export interface Leave {
+  id: string
+  employee_id: string
+  employee_name?: string
+  type: string
+  start_date: string
+  end_date: string
+  status: string
+  reason: string | null
+  created_at: string
+  reviewed_by: string | null
+  reviewed_at: string | null
 }

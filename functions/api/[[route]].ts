@@ -116,6 +116,12 @@ import {
   submitVoucher,
   uploadAttachment,
 } from '../../server/expenses'
+import {
+  listLeaves,
+  createLeave,
+  updateLeave,
+} from '../../server/leaves'
+import { sendWeeklyDigest } from '../../server/cron'
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
@@ -3601,6 +3607,23 @@ async function route(request: Request, env: Env): Promise<Response> {
     const body = await readJson<{ ids?: string[]; all?: boolean }>(request)
     await markNotificationsRead(env, user.id, body.all ? 'all' : (body.ids ?? []))
     return json({ ok: true })
+  }
+
+  // ----------------------------------------------------------------- leaves
+  if (path === '/api/leaves' && method === 'GET') {
+    return listLeaves(request, env)
+  }
+  if (path === '/api/leaves' && method === 'POST') {
+    return createLeave(request, env)
+  }
+  const leaveMatch = /^\/api\/leaves\/([\w-]+)$/.exec(path)
+  if (leaveMatch && method === 'PATCH') {
+    return updateLeave(request, env, leaveMatch[1])
+  }
+
+  // ------------------------------------------------------------------ cron
+  if (path === '/api/cron/weekly-digest' && method === 'POST') {
+    return sendWeeklyDigest(request, env)
   }
 
   throw new ApiError(404, 'Not found')

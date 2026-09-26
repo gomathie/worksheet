@@ -47,6 +47,7 @@ const blank = () => ({
   due_date: '',
   secondary_person_id: '' as string | null,
   secondary_role: 'assignee' as 'assignee' | 'observer',
+  recurrence: 'none' as 'none' | 'daily' | 'weekly' | 'monthly',
 })
 const form = ref(blank())
 const editingId = ref<string | null>(null)
@@ -105,6 +106,7 @@ function startEdit(t: Task) {
     due_date: t.due_date ?? '',
     secondary_person_id: t.secondary_person_id ?? '',
     secondary_role: (t.secondary_role as 'assignee' | 'observer') ?? 'assignee',
+    recurrence: (t.recurrence as 'daily' | 'weekly' | 'monthly') || 'none',
   }
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -132,6 +134,7 @@ async function save() {
       secondary_role: form.value.secondary_person_id ? form.value.secondary_role : null,
       priority: form.value.priority,
       due_date: form.value.due_date || null,
+      recurrence: form.value.recurrence !== 'none' ? form.value.recurrence : null,
       ...(broadcast ? { broadcast: true } : {}),
     }
     if (editingId.value) {
@@ -372,6 +375,15 @@ const statusTone: Record<TaskStatus, string> = {
             </option>
           </select>
         </div>
+        <div>
+          <label class="field-label" for="t-recurrence">Recurrence</label>
+          <select id="t-recurrence" v-model="form.recurrence" class="field-input">
+            <option value="none">Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
       </div>
       <div class="mt-4 flex flex-wrap gap-2">
         <button class="btn btn-solid" :disabled="busy === 'form'">
@@ -425,6 +437,9 @@ const statusTone: Record<TaskStatus, string> = {
             </template>
             <template v-if="t.due_date">
               · wanted by <span class="mono">{{ t.due_date }}</span>
+            </template>
+            <template v-if="t.recurrence && t.recurrence !== 'none'">
+              · repeats {{ t.recurrence }}
             </template>
             <template v-if="t.created_by_name">· raised by {{ t.created_by_name }}</template>
           </p>

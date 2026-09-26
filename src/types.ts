@@ -603,8 +603,18 @@ export interface Task {
   completed_at: string | null
   created_at: string
   updated_at?: string
+  recurrence: string | null
   /** Raised for "Everyone" rather than one person; see TaskDetailView. */
   broadcast: number
   /** What the signed-in user may do to this task; computed server-side. */
   actions: TaskAction[]
+}
+
+export interface TaskComment {
+  id: string
+  task_id: string
+  employee_id: string
+  employee_name?: string
+  content: string
+  created_at: string
 }

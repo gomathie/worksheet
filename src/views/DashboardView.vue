@@ -10,6 +10,9 @@ import type { ExpenseVoucher, ReportPayload } from '../types'
 
 const auth = useAuthStore()
 const month = ref(auth.user!.today.slice(0, 7))
+const rangeMode = ref<'month' | 'custom'>('month')
+const fromDate = ref(auth.user!.today.slice(0, 8) + '01')
+const toDate = ref(auth.user!.today)
 const report = ref<ReportPayload | null>(null)
 const error = ref('')
 
@@ -33,16 +36,26 @@ const recentExpenses = ref<ExpenseVoucher[]>([])
 async function load() {
   error.value = ''
   try {
-    report.value = await api<ReportPayload>(`/api/reports/monthly?month=${month.value}`)
+    const params = new URLSearchParams()
+    if (rangeMode.value === 'custom') {
+      params.set('from', fromDate.value)
+      params.set('to', toDate.value)
+    } else {
+      params.set('month', month.value)
+    }
+    report.value = await api<ReportPayload>(`/api/reports/monthly?${params}`)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load report'
   }
   try {
-    const [y, m] = month.value.split('-').map(Number)
-    const params = new URLSearchParams({
-      from: `${month.value}-01`,
-      to: new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10),
-    })
+    let from = fromDate.value
+    let to = toDate.value
+    if (rangeMode.value === 'month') {
+      const [y, m] = month.value.split('-').map(Number)
+      from = `${month.value}-01`
+      to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+    }
+    const params = new URLSearchParams({ from, to })
     recentExpenses.value = (await api<ExpenseVoucher[]>(`/api/expenses?${params}`)).slice(0, 8)
   } catch {
     // The expense panel is supplementary — a failure here must not blank the
@@ -52,7 +65,7 @@ async function load() {
 }
 
 onMounted(load)
-watch(month, load)
+watch([month, rangeMode, fromDate, toDate], load)
 
 const money = (n: number) =>
   `${report.value?.settings.currency ?? '$'}${n.toFixed(2)}`
@@ -88,7 +101,18 @@ function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: bool
   <div>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h2 class="display text-2xl">Dashboard</h2>
-      <MonthPicker v-model="month" />
+      <div class="flex items-center gap-2">
+        <select v-model="rangeMode" class="field-input py-1 text-sm bg-transparent">
+          <option value="month">Month</option>
+          <option value="custom">Custom</option>
+        </select>
+        <MonthPicker v-if="rangeMode === 'month'" v-model="month" />
+        <div v-else class="flex items-center gap-1">
+          <input type="date" v-model="fromDate" class="field-input py-1 text-sm mono" />
+          <span class="text-muted">to</span>
+          <input type="date" v-model="toDate" class="field-input py-1 text-sm mono" />
+        </div>
+      </div>
     </div>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>

@@ -75,6 +75,8 @@ import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
   listTasks,
   patchTask,
   taskSummary,
+  createTaskComment,
+  listTaskComments,
 } from '../../server/tasks'
 import { isVisible, visibleEmployeeIds } from '../../server/scope'
 import { createNews, deleteNews, listNews } from '../../server/news'
@@ -1288,16 +1290,29 @@ async function deleteEmployee(
 
 async function unitsByEntryId(
   env: Env,
-  month: string,
-  employeeId?: string,
+  opts: { month?: string; from?: string; to?: string; employeeId?: string },
 ): Promise<Map<string, Record<string, number>>> {
-  let sql =
-    'SELECT ei.entry_id, ei.work_type_id, ei.units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id WHERE e.work_date LIKE ?'
-  const binds: unknown[] = [`${month}-%`]
-  if (employeeId) {
-    sql += ' AND e.employee_id = ?'
-    binds.push(employeeId)
+  let sql = 'SELECT ei.entry_id, ei.work_type_id, ei.units FROM entry_items ei JOIN entries e ON e.id = ei.entry_id'
+  const binds: unknown[] = []
+  const conditions: string[] = []
+
+  if (opts.from && opts.to) {
+    conditions.push('e.work_date >= ? AND e.work_date <= ?')
+    binds.push(opts.from, opts.to)
+  } else if (opts.month) {
+    conditions.push('e.work_date LIKE ?')
+    binds.push(`${opts.month}-%`)
   }
+
+  if (opts.employeeId) {
+    conditions.push('e.employee_id = ?')
+    binds.push(opts.employeeId)
+  }
+
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ')
+  }
+
   const { results } = await env.DB.prepare(sql)
     .bind(...binds)
     .all<EntryItemRow>()
@@ -1330,7 +1345,7 @@ async function listEntries(request: Request, env: Env): Promise<Response> {
     env.DB.prepare(sql)
       .bind(...binds)
       .all<EntryRow & { employee_name: string }>(),
-    unitsByEntryId(env, month, scopeEmployee),
+    unitsByEntryId(env, { month, employeeId: scopeEmployee }),
     cardsByEntryId(env, month, scopeEmployee),
   ])
   return json(
@@ -3010,25 +3025,64 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     throw new ApiError(403, 'You do not have permission for this')
   }
   const url = new URL(request.url)
-  const month = assertMonth(url.searchParams.get('month') ?? currentMonth(env))
+  const fromParam = url.searchParams.get('from')
+  const toParam = url.searchParams.get('to')
+  const isCustom = Boolean(fromParam && toParam)
+  
+  // If custom range, we use the 'to' month as the anchor for month-specific features like rates, adjustments.
+  const month = assertMonth(url.searchParams.get('month') ?? (toParam ? toParam.slice(0, 7) : currentMonth(env)))
 
   // Locked months compute from their frozen rate snapshot, not the live rates.
+  // For custom ranges, we just use the rates for the 'to' month (live unless the month is locked).
   const rates = await ratesForMonth(env, month)
   const tz = env.TEAM_TZ ?? 'Africa/Accra'
-  // completed_at is a real instant (unlike work_date, a plain calendar date),
-  // so which day it lands on depends on TEAM_TZ. SQLite can't do that
-  // conversion, so the DB query widens by a day on each side (safe for any
-  // real-world offset) and the precise TEAM_TZ day gets resolved in JS below.
+  
   const [ry, rm] = month.split('-').map(Number)
-  const taskQueryLower = new Date(Date.UTC(ry, rm - 1, 0)).toISOString().slice(0, 10)
-  const taskQueryUpper = new Date(Date.UTC(ry, rm, 2)).toISOString().slice(0, 10)
+  
+  let entrySql = "SELECT employee_id, work_date, hours, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? AND status = 'approved' ORDER BY work_date, time_start"
+  let entryBinds = [`${month}-%`]
+  
+  let taskQueryLower = new Date(Date.UTC(ry, rm - 1, 0)).toISOString().slice(0, 10)
+  let taskQueryUpper = new Date(Date.UTC(ry, rm, 2)).toISOString().slice(0, 10)
+  let myDaysDates: string[] = []
+
+  if (isCustom && fromParam && toParam) {
+    entrySql = "SELECT employee_id, work_date, hours, time_start, time_end, id, notes FROM entries WHERE work_date >= ? AND work_date <= ? AND status = 'approved' ORDER BY work_date, time_start"
+    entryBinds = [fromParam, toParam]
+    
+    // Expand task boundaries slightly around the custom range to account for TEAM_TZ shift.
+    const fromDate = new Date(fromParam)
+    fromDate.setUTCDate(fromDate.getUTCDate() - 1)
+    taskQueryLower = fromDate.toISOString().slice(0, 10)
+    
+    const toDate = new Date(toParam)
+    toDate.setUTCDate(toDate.getUTCDate() + 2)
+    taskQueryUpper = toDate.toISOString().slice(0, 10)
+    
+    const today = todayInTz(tz)
+    let cur = new Date(fromParam)
+    const end = new Date(toParam)
+    while (cur <= end) {
+      const dStr = cur.toISOString().slice(0, 10)
+      if (dStr > today) break
+      myDaysDates.push(dStr)
+      cur.setUTCDate(cur.getUTCDate() + 1)
+    }
+  } else {
+    const today = todayInTz(tz)
+    const daysInMonth = new Date(Date.UTC(ry, rm, 0)).getUTCDate()
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${month}-${String(day).padStart(2, '0')}`
+      if (date > today) break
+      myDaysDates.push(date)
+    }
+  }
+
   const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits, doneTasksRes] =
     await Promise.all([
       loadSettings(env),
-      env.DB.prepare(
-        "SELECT employee_id, work_date, hours, time_start, time_end, id, notes FROM entries WHERE work_date LIKE ? AND status = 'approved' ORDER BY work_date, time_start",
-      )
-        .bind(`${month}-%`)
+      env.DB.prepare(entrySql)
+        .bind(...entryBinds)
         .all<EntryRow>(),
       env.DB.prepare('SELECT id, name FROM employees').all<{ id: string; name: string }>(),
       env.DB.prepare(
@@ -3039,7 +3093,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       env.DB.prepare('SELECT * FROM payments WHERE month = ?')
         .bind(month)
         .all<PaymentRow>(),
-      unitsByEntryId(env, month),
+      unitsByEntryId(env, isCustom ? { from: fromParam!, to: toParam! } : { month }),
       env.DB.prepare(
         "SELECT assignee_id, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL AND completed_at >= ? AND completed_at < ?",
       )
@@ -3057,7 +3111,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   const taskWorkedDays: WorkedDayLike[] = doneTasksRes.results
     .filter((t): t is { assignee_id: string; completed_at: string } => Boolean(t.assignee_id) && isVisible(scopeIds, t.assignee_id!))
     .map((t) => ({ employee_id: t.assignee_id, date: dateInTz(t.completed_at, tz) }))
-    .filter((w) => w.date.startsWith(month))
+    .filter((w) => isCustom ? w.date >= fromParam! && w.date <= toParam! : w.date.startsWith(month))
 
   const round2 = (n: number) => Math.round(n * 100) / 100
   const bonusBy = new Map<string, number>()
@@ -3120,12 +3174,8 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   const myTaskDays = new Set(
     taskWorkedDays.filter((w) => w.employee_id === user.id).map((w) => w.date),
   )
-  const today = todayInTz(tz)
-  const daysInMonth = new Date(Date.UTC(ry, rm, 0)).getUTCDate()
   const my_days: { date: string; worked: boolean; entry: boolean; task: boolean }[] = []
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = `${month}-${String(day).padStart(2, '0')}`
-    if (date > today) break
+  for (const date of myDaysDates) {
     const entry = myEntryDays.has(date)
     const task = myTaskDays.has(date)
     my_days.push({ date, worked: entry || task, entry, task })
@@ -3313,6 +3363,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'GET') return getTask(request, env, taskMatch[1])
     if (method === 'PATCH') return patchTask(request, env, taskMatch[1])
     if (method === 'DELETE') return deleteTask(request, env, taskMatch[1])
+  }
+  const taskCommentMatch = /^\/api\/tasks\/([\w-]+)\/comments$/.exec(path)
+  if (taskCommentMatch) {
+    if (method === 'GET') return listTaskComments(request, env, taskCommentMatch[1])
+    if (method === 'POST') return createTaskComment(request, env, taskCommentMatch[1])
   }
   if (path === '/api/news' && method === 'GET') return listNews(request, env)
   if (path === '/api/news' && method === 'POST') return createNews(request, env)

@@ -485,3 +485,64 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Testing Performed:**
 - Re-ran backend type checks (`npx tsc --noEmit -p tsconfig.server.json`), resolving a small nullability error on `assignee_id`. Completed successfully with `code 0`.
+
+### Feature: Task Comments & Activity Feed
+**Date:** September 26, 2026
+
+**User Request:**
+"what other improvements or features can I add -> 1. Task Comments & Activity Feed"
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0031_task_comments.sql`)**:
+   - Created a new `task_comments` table with `id`, `task_id` (foreign key), `employee_id` (foreign key), `content`, and `created_at`.
+2. **Backend Logic (`server/tasks.ts`, `functions/api/[[route]].ts`)**:
+   - Added `TaskCommentRow` interface.
+   - Implemented `listTaskComments` (GET `/api/tasks/:id/comments`) to fetch comments sorted chronologically.
+   - Implemented `createTaskComment` (POST `/api/tasks/:id/comments`) to insert comments and send push notifications to the task creator, primary assignee, and secondary assignee.
+   - Added API endpoints to `[[route]].ts`.
+3. **Frontend Changes (`src/types.ts`, `src/views/TaskDetailView.vue`)**:
+   - Added `TaskComment` interface to `types.ts`.
+   - Updated `TaskDetailView.vue` to fetch comments concurrently with task details.
+   - Added a new UI block below the task details rendering the comment feed and a submission form.
+
+**Testing Performed:**
+- Ran full frontend and backend type checks (`npx tsc --noEmit -p tsconfig.server.json ; npx tsc --noEmit -p tsconfig.app.json`), which completed successfully with `code 0`.
+
+### Feature: Recurring Tasks
+**Date:** September 26, 2026
+
+**User Request:**
+"what other improvements or features can I add -> 4. Recurring Tasks"
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0032_task_recurrence.sql`)**:
+   - Added `recurrence` column to the `tasks` table with allowed values (`daily`, `weekly`, `monthly`, or `NULL`).
+2. **Backend Logic (`server/tasks.ts`)**:
+   - Updated `TaskRow` and `TaskBody` interfaces to include `recurrence`.
+   - Updated `createTask` and `patchTask` endpoints to accept and validate the `recurrence` field.
+   - Implemented logic in `patchTask`: when a recurring task is marked as `done`, the system automatically clones the task as `todo` with a new `due_date` offset by the recurrence interval (1 day, 7 days, or 1 month), preserving assignees, priority, and details while appending a note about its auto-generation.
+3. **Frontend Changes (`src/types.ts`, `src/views/TasksView.vue`, `src/views/TaskDetailView.vue`)**:
+   - Added `recurrence` to the `Task` type.
+   - Updated the task creation/edit form in `TasksView.vue` with a dropdown to select the recurrence interval.
+   - Updated the task cards and `TaskDetailView.vue` to display the active recurrence schedule for a task.
+
+**Testing Performed:**
+- Ran full type checks which passed successfully.
+
+### Feature: Custom Dashboard Date Ranges
+**Date:** September 26, 2026
+
+**User Request:**
+"what other improvements or features can I add -> 5. Custom Dashboard Date Ranges"
+
+**Implementation Details:**
+1. **Backend Route (`functions/api/[[route]].ts`)**:
+   - Refactored `unitsByEntryId` to support custom date range queries using an options object (`from` and `to`).
+   - Upgraded the `/api/reports/monthly` endpoint to accept `from` and `to` query parameters instead of strictly relying on `month`. When custom parameters are provided, it filters database queries (entries, tasks) precisely to that range and uses the `to` month to snapshot applicable rates.
+2. **Frontend Component (`src/views/DashboardView.vue`)**:
+   - Retained the `MonthPicker` for convenience, but added a dropdown toggle (`rangeMode`) to switch between "Month" and "Custom".
+   - Under "Custom", rendered standard HTML5 date inputs for `from` and `to`, bound to reactive state.
+   - Updated the data `load` method to submit custom URL search params when in custom mode, seamlessly transitioning the entire dashboard's aggregations, daily details, and charts to reflect the arbitrary timeframe.
+
+**Testing Performed:**
+- Ran full type checks which passed successfully (`code 0`).

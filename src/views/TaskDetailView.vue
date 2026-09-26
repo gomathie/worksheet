@@ -9,7 +9,7 @@ import {
   isOverdue,
   type TaskStatus,
 } from '../../shared/tasks'
-import type { Task, TaskAssignee } from '../types'
+import type { Task, TaskAssignee, TaskComment } from '../types'
 
 // A single task, Jira-issue-style: the code, its state, and everything
 // about it in one place — deliberately simple, no comment thread or activity
@@ -21,8 +21,11 @@ const auth = useAuthStore()
 
 const task = ref<Task | null>(null)
 const employees = ref<TaskAssignee[]>([])
+const comments = ref<TaskComment[]>([])
 const error = ref('')
 const busy = ref(false)
+const commentBusy = ref(false)
+const newComment = ref('')
 
 const id = computed(() => route.params.id as string)
 
@@ -37,7 +40,12 @@ const can = (a: 'edit' | 'delete' | 'set_status' | 'accept') =>
 async function load() {
   error.value = ''
   try {
-    task.value = await api<Task>(`/api/tasks/${id.value}`)
+    const [t, c] = await Promise.all([
+      api<Task>(`/api/tasks/${id.value}`),
+      api<TaskComment[]>(`/api/tasks/${id.value}/comments`),
+    ])
+    task.value = t
+    comments.value = c
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load task'
   }
@@ -128,6 +136,24 @@ async function remove() {
     busy.value = false
   }
 }
+
+async function postComment() {
+  if (!newComment.value.trim() || !task.value) return
+  error.value = ''
+  commentBusy.value = true
+  try {
+    const created = await api<TaskComment>(`/api/tasks/${id.value}/comments`, {
+      method: 'POST',
+      json: { content: newComment.value }
+    })
+    comments.value.push(created)
+    newComment.value = ''
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to post comment'
+  } finally {
+    commentBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -204,6 +230,10 @@ async function remove() {
           <p class="field-label">Wanted by</p>
           <p class="mono">{{ task.due_date ?? '—' }}</p>
         </div>
+        <div v-if="task.recurrence && task.recurrence !== 'none'">
+          <p class="field-label">Recurrence</p>
+          <p class="capitalize">{{ task.recurrence }}</p>
+        </div>
         <div>
           <p class="field-label">Created</p>
           <p class="mono text-xs">{{ task.created_at }}</p>
@@ -263,6 +293,38 @@ async function remove() {
           Delete
         </button>
       </div>
+      </div>
+    </div>
+
+    <!-- Comments Section -->
+    <div v-if="task" class="panel mt-6">
+      <h3 class="mb-4 text-lg font-medium">Activity & Comments</h3>
+      
+      <div v-if="comments.length > 0" class="mb-6 space-y-4">
+        <div v-for="c in comments" :key="c.id" class="rounded-lg border border-line bg-gray-50 p-3 dark:bg-gray-800">
+          <div class="mb-1 flex items-center justify-between text-xs">
+            <span class="font-medium text-foreground">{{ c.employee_name }}</span>
+            <span class="mono text-muted">{{ c.created_at.slice(0, 16).replace('T', ' ') }}</span>
+          </div>
+          <p class="text-sm whitespace-pre-wrap">{{ c.content }}</p>
+        </div>
+      </div>
+      <p v-else class="mb-6 text-sm text-muted italic">No comments yet. Be the first to comment.</p>
+
+      <form @submit.prevent="postComment" class="flex flex-col gap-2">
+        <textarea
+          v-model="newComment"
+          class="field-input min-h-[80px]"
+          placeholder="Add a comment or progress update..."
+          :disabled="commentBusy"
+          required
+        ></textarea>
+        <div class="flex justify-end">
+          <button type="submit" class="btn btn-sm btn-solid" :disabled="commentBusy || !newComment.trim()">
+            {{ commentBusy ? 'Posting…' : 'Post Comment' }}
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </template>

@@ -38,6 +38,16 @@ export interface TaskRow {
   created_at: string
   updated_at: string
   broadcast: number
+  recurrence: string | null
+}
+
+export interface TaskCommentRow {
+  id: string
+  task_id: string
+  employee_id: string
+  employee_name?: string
+  content: string
+  created_at: string
 }
 
 /** The shape shared/tasks.ts's pure rules actually need, out of a DB row. */
@@ -156,6 +166,7 @@ interface TaskBody {
   broadcast?: boolean
   /** Claim an unclaimed broadcast task as your own. Patch only. */
   accept?: boolean
+  recurrence?: string | null
 }
 
 async function loadTask(env: Env, id: string): Promise<TaskRow> {
@@ -235,11 +246,13 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
   const priority = parseTaskPriority(body.priority ?? 'normal')
   if (!priority) throw new ApiError(400, 'Unknown priority')
 
+  const recurrence = (body.recurrence === 'daily' || body.recurrence === 'weekly' || body.recurrence === 'monthly') ? body.recurrence : null
+
   const id = crypto.randomUUID()
   const code = await nextTaskCode(env)
   await env.DB.prepare(
-    `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -253,6 +266,7 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       priority,
       due,
       broadcast ? 1 : 0,
+      recurrence,
     )
     .run()
   await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee, secondary_person_id: secondaryAssignee, secondary_role: secondaryRole, broadcast })
@@ -309,7 +323,8 @@ export async function patchTask(
     body.secondary_person_id !== undefined ||
     body.secondary_role !== undefined ||
     body.priority !== undefined ||
-    body.due_date !== undefined
+    body.due_date !== undefined ||
+    body.recurrence !== undefined
 
   if (wantsEdit && !canTask('edit', taskLike(task), actor)) {
     throw new ApiError(403, 'You can only change the status of this task')
@@ -333,6 +348,11 @@ export async function patchTask(
 
   const due = body.due_date !== undefined ? parseDueDate(body.due_date) : task.due_date
   if (due === undefined) throw new ApiError(400, 'due_date must be YYYY-MM-DD')
+
+  let recurrence = task.recurrence
+  if (body.recurrence !== undefined) {
+    recurrence = (body.recurrence === 'daily' || body.recurrence === 'weekly' || body.recurrence === 'monthly') ? body.recurrence : null
+  }
 
   let assignee = task.assignee_id
   if (body.assignee_id !== undefined) {
@@ -364,7 +384,7 @@ export async function patchTask(
 
   await env.DB.prepare(
     `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, secondary_person_id = ?, secondary_role = ?, status = ?,
-       priority = ?, due_date = ?, completed_at = ?, updated_at = datetime('now')
+       priority = ?, due_date = ?, completed_at = ?, recurrence = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -379,6 +399,7 @@ export async function patchTask(
       priority,
       due,
       completed,
+      recurrence,
       id,
     )
     .run()
@@ -426,6 +447,30 @@ export async function patchTask(
     })
   }
 
+  // Handle recurrence: clone the task with a new due date if applicable
+  if (status === 'done' && task.status !== 'done' && recurrence) {
+    let nextDue = null
+    if (due) {
+      const d = new Date(due)
+      if (recurrence === 'daily') d.setUTCDate(d.getUTCDate() + 1)
+      else if (recurrence === 'weekly') d.setUTCDate(d.getUTCDate() + 7)
+      else if (recurrence === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1)
+      nextDue = d.toISOString().slice(0, 10)
+    }
+    const newId = crypto.randomUUID()
+    const newCode = await nextTaskCode(env)
+    await env.DB.prepare(
+      `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        newId, newCode, title, body.details !== undefined ? (String(body.details).trim().slice(0, 2000) || null) : task.details,
+        assignee, secondaryAssignee, secondaryRole, task.created_by, priority, nextDue, task.broadcast, recurrence
+      )
+      .run()
+    await audit(env, task.created_by ?? user.id, 'create_task', newId, { task_code: newCode, title, assignee_id: assignee, broadcast: task.broadcast, note: 'auto-recurring' })
+  }
+
   const updated = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`)
     .bind(id)
     .first<TaskRow>()
@@ -461,4 +506,76 @@ export async function taskSummary(request: Request, env: Env): Promise<Response>
     .bind(today(env), user.id, user.id)
     .first<{ open: number | null; overdue: number | null }>()
   return json({ open: row?.open ?? 0, overdue: row?.overdue ?? 0 })
+}
+
+export async function listTaskComments(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const actor = actorFor(user)
+  const task = await loadTask(env, id)
+  if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')
+
+  const { results } = await env.DB.prepare(
+    `SELECT c.*, e.name AS employee_name
+     FROM task_comments c
+     JOIN employees e ON e.id = c.employee_id
+     WHERE c.task_id = ?
+     ORDER BY c.created_at ASC`
+  )
+    .bind(id)
+    .all<TaskCommentRow>()
+  return json(results)
+}
+
+export async function createTaskComment(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const actor = actorFor(user)
+  const task = await loadTask(env, id)
+  
+  // Anyone who can view the task can comment on it.
+  if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')
+
+  const body = await readJson<{ content?: string }>(request)
+  const content = (body.content ?? '').trim().slice(0, 2000)
+  if (!content) throw new ApiError(400, 'Content is required')
+
+  const commentId = crypto.randomUUID()
+  await env.DB.prepare(
+    'INSERT INTO task_comments (id, task_id, employee_id, content) VALUES (?, ?, ?, ?)'
+  )
+    .bind(commentId, id, user.id, content)
+    .run()
+
+  // Notify assigned personnel if someone else comments
+  const notifyIds = new Set<string>()
+  if (task.assignee_id && task.assignee_id !== user.id) notifyIds.add(task.assignee_id)
+  if (task.secondary_person_id && task.secondary_person_id !== user.id) notifyIds.add(task.secondary_person_id)
+  if (task.created_by && task.created_by !== user.id) notifyIds.add(task.created_by)
+
+  const names = [...notifyIds]
+  if (names.length > 0) {
+    await notifyUsers(env, names, {
+      kind: 'task_assigned', // Reusing the notification kind
+      title: `${firstName(user.name)} commented on a task`,
+      body: `${task.task_code}: ${task.title}`
+    })
+  }
+
+  const newComment = await env.DB.prepare(
+    `SELECT c.*, e.name AS employee_name
+     FROM task_comments c
+     JOIN employees e ON e.id = c.employee_id
+     WHERE c.id = ?`
+  )
+    .bind(commentId)
+    .first<TaskCommentRow>()
+
+  return json(newComment)
 }

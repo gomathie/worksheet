@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Custom Dashboard Date Ranges
+  - Users can now select custom date ranges (From/To) on the Dashboard, seamlessly updating the statistics, charts, and aggregated data for that exact timeframe.
+  - Allows performance reviews over arbitrary periods rather than only strict monthly cycles.
+- Feature: Recurring Tasks
+  - Added support for tasks that repeat Daily, Weekly, or Monthly.
+  - When a recurring task is completed, a new instance is automatically generated for the next period, preserving assignments and details.
+- Feature: Task Comments & Activity Feed
+  - Added a new `task_comments` table to the database.
+  - Tasks now have a dedicated comments section on their detail page where assignees and observers can discuss the task and provide progress updates.
+  - Adding a comment automatically sends a push notification to the task creator and any assigned personnel.
 - Feature: Dashboard Data Scope Filtering
   - The Dashboard and Monthly Reports now enforce the `data_scope` setting for all employees (e.g., Own, Direct Reports, Department, All).
   - Previously, all non-admins could view everyone's unit totals and worked days on the dashboard. Now, users will only see aggregate numbers and daily details for the specific employees they are allowed to see based on their data scope.

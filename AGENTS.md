@@ -3,6 +3,13 @@
 Agent Instructions
 1. General Rules
 
+**CRITICAL RULE: MANDATORY WORK LOG AND DOCUMENTATION UPDATES**
+Every single time you are asked to make a change, you MUST:
+1. Append a new entry to the Work Log at the bottom of this file documenting your work. Follow the exact format described in Section 9.
+2. Update `changelog.md` with a summary of the changes made.
+3. Keep all other documentation files (e.g. `guideline-admin.md`, `guideline-user.md`, etc.) updated with respect to their corresponding areas if your changes affect how features work.
+You have not completed a task until you have updated these documents.
+
 Read this file before making changes to the application.
 
 Inspect the existing implementation before modifying it. Do not assume architecture, naming, data flow, or authorization behavior.
@@ -339,3 +346,41 @@ Authorization must continue to be enforced server-side, with frontend filtering 
 
 **Testing Performed:**
 - Checked type definitions across the frontend (`tsconfig.app.json`) and server (`tsconfig.server.json`) to ensure the new scoping additions didn't introduce TypeScript errors. Both type checks completed with `code 0` (no errors).
+
+### Feature: QAP and Classification Entry Limit Popup
+**Date:** September 26, 2026
+
+**User Request:**
+"when user makes more than 10 qap or classifications entries, give a pop up to the user to 'move your next card and pause for 10 mins while we make a check, and continue exactly after that unless told otherwise by your supervisor'"
+Follow-up: "check all pop ups related to qap or classification. add by 'Spvsr. BinitaVh' or by 'Spvsr William Lee' the names should be used interchangeably"
+
+**Implementation Details:**
+1. **Frontend Alert Logic (`src/views/EntriesView.vue`)**:
+   - Modified the `addCard` function that handles adding new cards to the daily entry form.
+   - Identified QAP and Classification cards using the `module` property (`Classification/QAP`) and the card name.
+   - Added logic to count existing QAP/Classification cards in the form (`form.value.cards`).
+   - If the user attempts to add a card when the count is already 10 or more, an `alert()` popup is displayed with the warning message requested, interchangeably inserting either 'Spvsr. BinitaVh' or 'Spvsr William Lee' at the end of the message.
+
+**Testing Performed:**
+- Checked frontend type definitions with `npx tsc --noEmit -p tsconfig.app.json`, which completed successfully with `code 0` (no errors).
+
+### Feature: Custom Author for Announcements/Pop-ups
+**Date:** September 26, 2026
+
+**User Request:**
+"when a user is creating a pop up notification. provide a space to input from whom. for example from Management, Mathias, System of John. if nothing is typed in, it should be System by default."
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0029_news_author.sql`)**:
+   - Added `author_name` column to the `news` table, defaulting to 'System'.
+2. **Server-side Logic (`server/news.ts`)**:
+   - Updated the `createNews` endpoint to accept an `author` field from the request body. If the field is blank, it defaults to 'System'.
+   - Modified `SELECT_NEWS` and the API response mapping to include `author_name`.
+3. **Frontend Changes (`src/views/NewsView.vue`, `src/components/NewsPopup.vue`, `src/types.ts`)**:
+   - Updated the `NewsItem` type interface to include `author_name`.
+   - Added a "From whom (optional)" input field to the announcement creation form in `NewsView.vue`.
+   - Updated the `NewsView` feed and the `NewsPopup` component to clearly display "From: {author_name}" instead of relying solely on the fallback employee name.
+
+**Testing Performed:**
+- Ran `npm run db:migrate:local` successfully.
+- Will monitor frontend TypeScript checks during future changes.

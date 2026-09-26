@@ -50,6 +50,7 @@ export interface NewsItem {
   style: NewsStyle
   created_by: string | null
   created_by_name: string | null
+  author_name: string
   created_at: string
   expires_at: string
   /** Present when the viewer holds the right — creator or any admin. */

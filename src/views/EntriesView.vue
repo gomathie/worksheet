@@ -198,6 +198,33 @@ const cardModules = computed(() => {
 const cardsFor = (typeId: string) =>
   form.value.cards.filter((c) => c.work_type_id === typeId)
 function addCard(wt: WorkTypeInfo) {
+  // Check if this work type is Classification or QAP (either by module or name)
+  const isQapOrClass = 
+    wt.module === 'Classification/QAP' || 
+    wt.name.toLowerCase().includes('qap') || 
+    wt.name.toLowerCase().includes('classification')
+
+  if (isQapOrClass) {
+    let count = 0
+    for (const c of form.value.cards) {
+      const existingWt = workTypes.value.find(w => w.id === c.work_type_id)
+      if (existingWt) {
+        const existingIsQapOrClass = 
+          existingWt.module === 'Classification/QAP' || 
+          existingWt.name.toLowerCase().includes('qap') || 
+          existingWt.name.toLowerCase().includes('classification')
+        if (existingIsQapOrClass) {
+          count++
+        }
+      }
+    }
+    if (count >= 10) {
+      const supervisors = ['Spvsr. BinitaVh', 'Spvsr William Lee']
+      const randomSpvsr = supervisors[Math.floor(Math.random() * supervisors.length)]
+      alert(`move your next card and pause for 10 mins while we make a check, and continue exactly after that unless told otherwise by ${randomSpvsr}`)
+    }
+  }
+
   if (isInstallationType(wt)) {
     form.value.cards.push({
       work_type_id: wt.id,

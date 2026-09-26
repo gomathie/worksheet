@@ -15,6 +15,7 @@ export interface NewsRow {
   body: string | null
   style: NewsStyle
   created_by: string | null
+  author_name: string
   created_at: string
   expires_at: string
 }
@@ -94,6 +95,7 @@ interface NewsBody {
   body?: string
   style?: string
   days?: number
+  author?: string
 }
 
 export async function createNews(request: Request, env: Env): Promise<Response> {
@@ -126,12 +128,14 @@ export async function createNews(request: Request, env: Env): Promise<Response> 
     )
   }
 
+  const authorName = (body.author ?? '').toString().trim() || 'System'
+  
   const id = crypto.randomUUID()
   const expiresAt = addDays(today(env), days)
   await env.DB.prepare(
-    `INSERT INTO news (id, title, body, style, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO news (id, title, body, style, created_by, expires_at, author_name) VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(id, title, text, style, user.id, expiresAt)
+    .bind(id, title, text, style, user.id, expiresAt, authorName)
     .run()
   await audit(env, user.id, 'create_news', id, { title, style, days })
 

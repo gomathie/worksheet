@@ -35,6 +35,7 @@ const blank = () => ({
   body: '',
   style: 'feed' as NewsStyle,
   days: 7,
+  author: '',
 })
 const form = ref(blank())
 
@@ -69,6 +70,7 @@ async function post() {
         body: form.value.body.trim() || null,
         style: form.value.style,
         days,
+        author: form.value.author.trim() || undefined,
       },
     })
     notice.value =
@@ -146,6 +148,17 @@ async function retract(n: NewsItem) {
             {{ auth.isAdmin ? `Up to ${maxDays} as an admin.` : `Up to ${maxDays} days.` }}
           </p>
         </div>
+        <div class="md:col-span-1">
+          <label class="field-label" for="n-author">From whom (optional)</label>
+          <input
+            id="n-author"
+            v-model="form.author"
+            maxlength="100"
+            class="field-input"
+            placeholder="e.g. Management, Mathias, System"
+          />
+          <p class="mt-1 text-xs text-muted">Defaults to System</p>
+        </div>
         <div class="md:col-span-4">
           <label class="field-label" for="n-body">Message (optional)</label>
           <textarea
@@ -186,13 +199,11 @@ async function retract(n: NewsItem) {
             >
           </div>
           <p v-if="n.body" class="mt-1 text-sm whitespace-pre-wrap">{{ n.body }}</p>
-          <!-- Pop-ups read as coming from the organisation, not a person —
-               the server withholds created_by_name from anyone but an admin
-               or the sender for a popup (see news.ts), so this only names
-               someone when the API actually sent a name to show. -->
+          <!-- Display the explicitly provided author name. The server sets 'System' 
+               if none is provided. -->
           <p class="mt-1 text-xs text-muted">
-            <template v-if="n.created_by_name">{{ n.created_by_name }} · </template
-            >posted {{ n.created_at.slice(0, 10) }} · live through {{ n.expires_at }}
+            <template v-if="n.author_name">From: {{ n.author_name }} · </template>
+            posted {{ n.created_at.slice(0, 10) }} · live through {{ n.expires_at }}
           </p>
         </div>
         <button

@@ -102,6 +102,19 @@ async function setStatus(status: TaskStatus) {
   }
 }
 
+async function ping() {
+  if (!task.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    task.value = await api<Task>(`/api/tasks/${id.value}`, { method: 'PATCH', json: { status: task.value.status } })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to mark task as active'
+  } finally {
+    busy.value = false
+  }
+}
+
 async function remove() {
   if (!task.value) return
   if (!confirm(`Delete "${task.value.title}"? This cannot be undone.`)) return
@@ -232,6 +245,15 @@ async function remove() {
           class="btn btn-sm"
           >Edit</RouterLink
         >
+        <button
+          v-if="task.status === 'in_progress' && can('set_status')"
+          class="btn btn-sm btn-solid"
+          title="Mark as still working on it to prevent overdue warnings"
+          :disabled="busy"
+          @click="ping"
+        >
+          Working on it
+        </button>
         <button
           v-if="can('delete')"
           class="btn btn-sm btn-danger"

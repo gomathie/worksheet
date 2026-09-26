@@ -5,6 +5,7 @@ import { api } from './api'
 import { useAuthStore } from './stores/auth'
 import NotificationBell from './components/NotificationBell.vue'
 import TaskDeadlineAlert from './components/TaskDeadlineAlert.vue'
+import TaskAgeAlert from './components/TaskAgeAlert.vue'
 import NewsPopup from './components/NewsPopup.vue'
 
 const auth = useAuthStore()
@@ -530,6 +531,7 @@ async function saveProfile() {
 
     <RouterView />
     <TaskDeadlineAlert v-if="auth.user" />
+    <TaskAgeAlert v-if="auth.user" />
     <NewsPopup v-if="auth.user" />
   </div>
 </template>

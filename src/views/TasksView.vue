@@ -201,6 +201,20 @@ async function setStatus(t: Task, status: TaskStatus) {
   }
 }
 
+async function ping(t: Task) {
+  error.value = ''
+  busy.value = t.id
+  try {
+    await api(`/api/tasks/${t.id}`, { method: 'PATCH', json: { status: t.status } })
+    notice.value = 'Task marked as actively worked on.'
+    await load()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to ping task'
+  } finally {
+    busy.value = ''
+  }
+}
+
 async function remove(t: Task) {
   if (!confirm(`Delete "${t.title}"? This cannot be undone.`)) return
   error.value = ''
@@ -463,6 +477,15 @@ const statusTone: Record<TaskStatus, string> = {
             @click="startEdit(t)"
           >
             Edit
+          </button>
+          <button
+            v-if="t.status === 'in_progress' && can(t, 'set_status')"
+            class="btn btn-sm btn-solid"
+            title="Mark as still working on it to prevent overdue warnings"
+            :disabled="busy === t.id"
+            @click="ping(t)"
+          >
+            Working on it
           </button>
           <button
             v-if="can(t, 'delete')"

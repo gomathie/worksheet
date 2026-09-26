@@ -407,3 +407,28 @@ Follow-up: "check all pop ups related to qap or classification. add by 'Spvsr. B
 **Testing Performed:**
 - Ran `npm run db:migrate:local` successfully.
 - Checked full type definitions with `npx tsc --noEmit -p tsconfig.app.json ; npx tsc --noEmit -p tsconfig.server.json`, which completed successfully with `code 0`.
+
+### Feature: Task Age Alerts
+**Date:** September 26, 2026
+
+**User Request:**
+"when Someone is having a task for more than 2 days, they should receive a pop up telling them it it will affect their payment when not done.
+after 3 days, they should receive a pop up sayign their task has been scheduled for deletion or to be reassigned and will affect their finances or payment."
+
+**Implementation Details:**
+1. **Frontend Component (`src/components/TaskAgeAlert.vue`)**:
+   - Created a new Vue component that globally checks if a user has any open/pending tasks (`todo` or `in_progress`) assigned to them.
+   - Calculated the age of tasks in full 24-hour days relative to `created_at`.
+   - If a task is older than 3 days (`> 3`), displays a high-priority red alert about deletion/reassignment and payment consequences.
+   - Else if a task is older than 2 days (`> 2`), displays a medium-priority amber alert warning them it will affect their payment.
+   - The popup lists the affected tasks and allows the user to dismiss the warning.
+   - Dismissals are saved to `localStorage` per calendar day (`auth.user.today`) so the user isn't nagged repeatedly on every page load within the same day.
+   - **Update**: Changed the age calculation to use `updated_at` (falling back to `created_at`) so users can reset the warning by keeping the task active.
+2. **App Entry (`src/App.vue`)**:
+   - Registered and injected `<TaskAgeAlert />` alongside the existing `TaskDeadlineAlert` so it runs globally on all pages for authenticated users.
+3. **Task Views (`src/views/TasksView.vue`, `src/views/TaskDetailView.vue`)**:
+   - Added a new `ping` function that sends a PATCH request to the server with the task's current status. This triggers the server's `UPDATE` query, refreshing the `updated_at` timestamp.
+   - Added a "Working on it" button to in-progress task cards and task details, allowing users to actively prevent overdue warnings without actually altering the task's contents.
+
+**Testing Performed:**
+- Ran `npx tsc --noEmit -p tsconfig.app.json` which completed successfully with `code 0` (no errors).

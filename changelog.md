@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Task Age Alerts
+  - Added a popup warning for tasks pending for more than 2 days, warning users that it will affect their payment.
+  - Added a critical popup for tasks pending for more than 3 days, warning that the task is scheduled for deletion/reassignment and will affect finances/payment.
+  - The alert shows once per day (dismissable) and lists the old tasks.
+  - Added a "Working on it" button to tasks in progress, allowing users to bump the task's `updated_at` timestamp and reset the age warnings without changing the status.
 - Feature: Additional Assignee / Observer for Tasks
   - Tasks can now have an optional secondary person assigned.
   - The secondary person can either be an "Additional Assignee" (responsible for progress) or an "Observer" (can view/follow but not responsible).

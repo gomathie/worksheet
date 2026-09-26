@@ -358,3 +358,59 @@ table.data tr.group-head td {
   border-bottom: 1px solid var(--color-line);
   vertical-align: top;
 }
+
+/* ---------- mobile responsive tables ---------- */
+@media (max-width: 640px) {
+  table.data { display: block; border: none; }
+  table.data thead { display: none; }
+  table.data tbody, table.data tr, table.data td { display: block; width: 100%; }
+  
+  table.data tr {
+    margin-bottom: 12px;
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    background: #fff;
+    padding: 4px 0;
+  }
+  
+  table.data td {
+    border-bottom: 1px solid var(--color-line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    text-align: right; /* Values align right by default in cards */
+  }
+  
+  table.data td:last-child {
+    border-bottom: none;
+  }
+  
+  /* The injected data-label pseudo-element */
+  table.data td::before {
+    content: attr(data-label);
+    font-family: var(--font-display);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-muted);
+    font-weight: 600;
+    text-align: left;
+    margin-right: 12px;
+  }
+  
+  table.data tr.group-head td {
+    background: var(--color-cream);
+    justify-content: flex-start;
+    padding: 8px 12px;
+  }
+  table.data tr.group-head td::before {
+    display: none;
+  }
+  table.data tr.totals {
+    background: var(--color-cream);
+  }
+  
+  /* Reset number columns to align right since we already do that on mobile */
+  table.data .num, table.data th.num { text-align: right; }
+}

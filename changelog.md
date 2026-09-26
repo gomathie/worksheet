@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Mobile UX Improvements (Responsive Tables)
+  - Transformed dense data grids across all 30+ tables into block-level, stacked cards for mobile devices.
+  - Injected an automated DOM observer to automatically label table cells on mobile without requiring template rewrites.
 - Feature: Automated Weekly Digests
   - Created a cron-compatible endpoint (`/api/cron/weekly-digest`) that aggregates each employee's hours and units for the past week.
   - Sends a personalized push/email summary notification to all active employees.

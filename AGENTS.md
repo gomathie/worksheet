@@ -600,3 +600,23 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Testing Performed:**
 - Verified query logic and endpoint routing.
+
+### Feature: Mobile UX Improvements - Responsive Tables
+**Date:** September 26, 2026
+
+**User Request:**
+"check the mobile version and make some suggestions. add the mobile ux suggestion md so other agents can continue if not completed. also record cnahnges and what was implemented"
+
+**Implementation Details:**
+1. **Frontend CSS (`src/style.css`)**:
+   - Added a `@media (max-width: 640px)` media query to transform `table.data` elements from dense horizontal grids into block-level, card-style layouts.
+   - Hid table headers (`thead`) and applied `display: flex; justify-content: space-between;` to table cells (`td`).
+   - Implemented an injected pseudo-element (`td::before { content: attr(data-label); }`) to render the corresponding column header inside the card layout.
+2. **Frontend DOM Observer (`src/main.ts`)**:
+   - Added a global `MutationObserver` (`observeTables`) that automatically attaches `data-label` attributes to all `<td>` elements in `table.data` by reading the text content of their corresponding `<th>` elements.
+   - This prevents needing to manually rewrite all 30+ table templates in the application.
+3. **Documentation (`mobile_ux_suggestions.md`)**:
+   - Authored a Markdown document saved to the project root containing further UI suggestions (FABs, drawers, swipe actions) for future agents to implement.
+
+**Testing Performed:**
+- Evaluated CSS logic and mutation observer script for correctness.

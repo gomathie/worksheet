@@ -249,6 +249,26 @@ const canDownloadPdf = computed(
 // Portrait for as long as this page is open, so Ctrl+P matches the button.
 usePortraitPrint()
 
+import { exportOrSharePdf, canShareFiles } from '../pdf'
+
+const busyPdf = ref(false)
+const canShare = computed(() => canShareFiles())
+
+async function shareOrExportVoucherPdf() {
+  const el = document.getElementById('voucher-printable-doc')
+  if (!el || !voucher.value) return
+  error.value = ''
+  busyPdf.value = true
+  try {
+    const filename = `voucher-${voucher.value.voucher_number}.pdf`
+    await exportOrSharePdf(el, filename, `Expense Voucher ${voucher.value.voucher_number}`)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to export PDF'
+  } finally {
+    busyPdf.value = false
+  }
+}
+
 const downloadPdf = () => window.print()
 </script>
 
@@ -266,9 +286,19 @@ const downloadPdf = () => window.print()
         <button
           v-if="canDownloadPdf"
           class="btn btn-sm btn-solid"
+          :disabled="busyPdf"
+          title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+          @click="shareOrExportVoucherPdf"
+        >
+          {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+        </button>
+        <button
+          v-if="canDownloadPdf"
+          class="btn btn-sm"
+          title="Print using browser print dialog"
           @click="downloadPdf"
         >
-          Download PDF
+          Print
         </button>
         <span v-else class="self-center text-xs text-muted">
           PDF available once approved
@@ -296,7 +326,12 @@ const downloadPdf = () => window.print()
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
     <!-- ================================================ printable document -->
-    <ExpenseVoucherDocument v-if="canDownloadPdf" :voucher="voucher" class="print-only" />
+    <ExpenseVoucherDocument
+      v-if="canDownloadPdf"
+      id="voucher-printable-doc"
+      :voucher="voucher"
+      class="print-only"
+    />
 
     <!-- Every on-screen panel is no-print, so without this a browser-initiated
          print of an unapproved voucher would emit a blank sheet. -->

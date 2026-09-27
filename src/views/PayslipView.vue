@@ -68,6 +68,31 @@ const reimbursements = computed(() =>
   ),
 )
 
+import { exportOrSharePdf, canShareFiles } from '../pdf'
+
+const busyPdf = ref(false)
+const canShare = computed(() => canShareFiles())
+
+async function shareOrExportPayslipPdf() {
+  const el = document.getElementById('payslip-printable-card')
+  if (!el || !slip.value) return
+  error.value = ''
+  busyPdf.value = true
+  try {
+    const safeName = slip.value.employee_name.replace(/\s+/g, '_')
+    const filename = `payslip-${safeName}-${month.value}.pdf`
+    await exportOrSharePdf(
+      el,
+      filename,
+      `Payslip - ${slip.value.employee_name} (${monthLabel.value})`,
+    )
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to export PDF'
+  } finally {
+    busyPdf.value = false
+  }
+}
+
 const printPage = () => window.print()
 </script>
 
@@ -85,15 +110,23 @@ const printPage = () => window.print()
           <option v-for="e in employees" :key="e.id" :value="e.id">{{ e.name }}</option>
         </select>
         <MonthPicker v-model="month" />
-        <button class="btn btn-solid" :disabled="!slip" @click="printPage">
-          Print / Save as PDF
+        <button
+          class="btn btn-solid"
+          :disabled="!slip || busyPdf"
+          title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+          @click="shareOrExportPayslipPdf"
+        >
+          {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+        </button>
+        <button class="btn" :disabled="!slip" @click="printPage">
+          Print
         </button>
       </div>
     </div>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
 
-    <div v-if="slip" class="panel mx-auto max-w-2xl">
+    <div v-if="slip" id="payslip-printable-card" class="panel mx-auto max-w-2xl">
       <header class="mb-6 flex items-start justify-between border-b-2 border-ink pb-4">
         <div>
           <h1 class="display text-3xl">Payslip</h1>

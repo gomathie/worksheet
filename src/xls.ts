@@ -1,11 +1,5 @@
-// Excel export with no dependencies.
-//
-// Emits SpreadsheetML 2003 (.xls), a plain-XML workbook format that Excel,
-// LibreOffice, and Google Sheets all open natively. Unlike a CSV renamed to
-// .xls it carries real cell types, so numbers arrive as numbers and long
-// reference strings are not mangled into scientific notation.
-
 import { neutralizeFormula } from './spreadsheet-safety'
+import { shareOrDownloadFile, triggerDownload } from './pdf'
 
 type Cell = string | number | null | undefined
 
@@ -26,15 +20,6 @@ function cellXml(value: Cell): string {
     return `<Cell><Data ss:Type="Number">${value}</Data></Cell>`
   }
   return `<Cell><Data ss:Type="String">${escapeXml(neutralizeFormula(String(value)))}</Data></Cell>`
-}
-
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 /**
@@ -63,7 +48,7 @@ export function downloadXls(filename: string, rows: Cell[][], sheetName = 'Repor
   </Worksheet>
 </Workbook>`
 
-  triggerDownload(
+  shareOrDownloadFile(
     new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' }),
     filename,
   )

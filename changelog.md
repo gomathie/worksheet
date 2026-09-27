@@ -16,10 +16,14 @@ All notable changes to this project will be documented in this file.
   - Created `PointDeductionsView.vue` with month and employee filtering, stat tiles, and CSV export for audit tracking.
   - Added navigation tabs in `App.vue` and route guards in `router/index.ts`.
   - Added unit test suite in `tests/deductions.test.ts`.
-- Feature: Login as other users
+- Feature: Login as other users & Return to Admin
   - Added a new `login_as_others` right that allows an admin to impersonate other users without their password.
   - Added a "Login as" button on the team list page for admins to switch into another user's session.
   - Added a "Switch User" quick-selection dropdown directly above the Team table for immediate session switching.
+  - Added session tracking of the original admin (`impersonated_by`) in KV storage.
+  - Added persistent top Impersonation Banner (*"Logged in as [Employee] (by [Admin Name])"*) with a one-click **Return to Admin** button across the entire application.
+  - Added **↩ Return to Admin** option in the Account header dropdown menu.
+  - Added `POST /api/auth/exit-impersonation` endpoint to safely restore the admin session and audit the event without needing to re-enter credentials.
 - Feature: Remember Me on Login
   - Added a "Remember me" checkbox to the sign-in form that saves credentials to localStorage for automatic pre-fill on next visit.
 - Feature: Mobile UX Improvements (Responsive Tables)

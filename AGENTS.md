@@ -762,3 +762,54 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 **Testing Performed:**
 - TypeScript type checks passed with exit code 0.
 - Unit tests passed (226 tests).
+
+### Feature: Return to Admin Option on Impersonation
+**Date:** September 28, 2026
+**Branch:** `main`
+
+**User Request:**
+"when you login as another person, there should be an option to click to go back to admin where you came from"
+
+**Implementation Details:**
+1. **Server Session Tracking (`server/auth.ts`, `functions/api/[[route]].ts`)**:
+   - Defined and exported `SessionPayload` interface (`employee_id`, `impersonated_by`) and `currentSession(request, env)` helper.
+   - Updated `handleLoginAs`: when logging in as another user, stores the initiating admin's ID in the new session's `impersonated_by` field in KV storage. If already impersonating, preserves the original admin ID across nested switches.
+   - Added audit logging with action `impersonate_user`.
+2. **Exit Impersonation Endpoint (`functions/api/[[route]].ts`)**:
+   - Created `handleExitImpersonation` endpoint (`POST /api/auth/exit-impersonation`).
+   - Strictly enforces server-side security: ensures current session contains a valid `impersonated_by` ID and verifies the original admin account is active and approved. Regular non-impersonated users cannot forge this call.
+   - Safely deletes the impersonated session from KV, issues a fresh session token for the original admin, audits the exit action (`exit_impersonation`), and sets the session cookie.
+3. **Current User Metadata (`functions/api/[[route]].ts`, `src/types.ts`)**:
+   - Updated `/api/me` route to inspect the session for `impersonated_by`. If present, looks up the admin's name and returns `impersonated_by` and `impersonated_by_name`.
+   - Updated `Me` interface in `src/types.ts`.
+4. **Auth Store (`src/stores/auth.ts`)**:
+   - Added `isImpersonating` computed getter based on `Boolean(auth.user?.impersonated_by)`.
+   - Added `exitImpersonation()` action to invoke the exit endpoint and refresh auth state.
+5. **Global Impersonation Banner & Dropdown Action (`src/App.vue`)**:
+   - Injected a top-level alert banner styled with amber borders and soft background, an active animated indicator, clearly displaying `"Logged in as [Employee Name] (by [Admin Name])"`, accompanied by a prominent **Return to Admin** button.
+   - Added a **↩ Return to Admin** option in the Account dropdown menu for fast access from the header.
+   - Automatically redirects back to `/employees` upon exiting impersonation, seamlessly returning the admin to their management dashboard.
+6. **Form Messaging (`src/views/EmployeesView.vue`)**:
+   - Updated the login confirmation dialog to inform admins that they can switch back at any time.
+7. **Documentation & Unit Tests (`guideline-admin.md`, `changelog.md`, `tests/auth.test.ts`)**:
+   - Updated Admin Guide with details on the Impersonation Banner, Return to Admin actions, and audit trails.
+   - Updated Changelog.
+   - Added comprehensive unit tests in `tests/auth.test.ts` covering session parsing, impersonation payload handling, and permission validation.
+
+**Files Changed:**
+- `server/auth.ts`
+- `functions/api/[[route]].ts`
+- `src/types.ts`
+- `src/stores/auth.ts`
+- `src/App.vue`
+- `src/views/EmployeesView.vue`
+- `tests/auth.test.ts`
+- `guideline-admin.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran frontend type checks (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Ran server type checks (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Ran unit tests (`npm test`): 10 test files, 234 tests passed with 100% success.
+- Ran production build (`npm run build`): built without errors.

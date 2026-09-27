@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
 import type { Employee, PointDeduction } from '../types'
-import { useAuthStore } from '../stores/auth'
 
 const props = defineProps<{
   employee: Employee | null
@@ -13,8 +12,6 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'saved', deduction: PointDeduction): void
 }>()
-
-const auth = useAuthStore()
 
 // State
 const month = ref(new Date().toISOString().slice(0, 7))

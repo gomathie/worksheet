@@ -43,6 +43,7 @@ export const useAuthStore = defineStore('auth', {
     canApproveUsers: (s) =>
       s.user?.role === 'admin' && Boolean(s.user?.rights.approve_users),
     rights: (s): Rights => s.user?.rights ?? NO_RIGHTS,
+    isImpersonating: (s) => Boolean(s.user?.impersonated_by),
   },
   actions: {
     async fetchMe() {
@@ -56,6 +57,10 @@ export const useAuthStore = defineStore('auth', {
     async logout() {
       await api('/api/auth/logout', { method: 'POST' })
       this.user = null
+    },
+    async exitImpersonation() {
+      await api('/api/auth/exit-impersonation', { method: 'POST' })
+      await this.fetchMe()
     },
   },
 })

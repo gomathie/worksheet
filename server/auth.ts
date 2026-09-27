@@ -326,21 +326,40 @@ export function requireRight(user: Employee, right: keyof Rights): void {
 
 // ------------------------------------------------------------------- session
 
-export async function currentUser(
+export interface SessionPayload {
+  employee_id: string
+  impersonated_by?: string
+}
+
+export async function currentSession(
   request: Request,
   env: Env,
-): Promise<Employee | null> {
+): Promise<{ token: string; payload: SessionPayload } | null> {
   const token = getCookie(request, SESSION_COOKIE)
   if (!token) return null
   const raw = await env.SESSIONS.get(`session:${token}`)
   if (!raw) return null
-  const { employee_id } = JSON.parse(raw) as { employee_id: string }
+  try {
+    const payload = JSON.parse(raw) as SessionPayload
+    if (!payload || typeof payload !== 'object' || !payload.employee_id) return null
+    return { token, payload }
+  } catch {
+    return null
+  }
+}
+
+export async function currentUser(
+  request: Request,
+  env: Env,
+): Promise<Employee | null> {
+  const sess = await currentSession(request, env)
+  if (!sess) return null
   // approval_status gates the session as well as the login, so revoking an
   // account mid-session takes effect on the next request.
   const user = await env.DB.prepare(
     "SELECT * FROM employees WHERE id = ? AND active = 1 AND approval_status = 'approved'",
   )
-    .bind(employee_id)
+    .bind(sess.payload.employee_id)
     .first<Employee>()
   return user ?? null
 }

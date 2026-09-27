@@ -182,10 +182,54 @@ async function saveProfile() {
     profileBusy.value = false
   }
 }
+
+const exitBusy = ref(false)
+
+async function returnToAdmin() {
+  if (exitBusy.value) return
+  exitBusy.value = true
+  menuOpen.value = false
+  try {
+    await auth.exitImpersonation()
+    window.location.href = '/employees'
+  } catch (err) {
+    alert(err instanceof Error ? err.message : 'Failed to return to admin account')
+    exitBusy.value = false
+  }
+}
 </script>
 
 <template>
   <div class="mx-auto max-w-[1180px] px-5 pb-16">
+    <!-- Impersonation Banner: visible when an admin has logged in as another employee -->
+    <aside
+      v-if="auth.isImpersonating"
+      class="no-print mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border-2 border-amber bg-amber-soft px-4 py-2.5 text-sm shadow-sm"
+      aria-label="Impersonation mode active"
+    >
+      <div class="flex items-center gap-2.5">
+        <span class="relative flex h-3 w-3 items-center justify-center">
+          <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber opacity-75"></span>
+          <span class="relative inline-flex h-2 w-2 rounded-full bg-amber"></span>
+        </span>
+        <div>
+          <span class="font-semibold text-ink">Logged in as {{ auth.user?.name }}</span>
+          <span v-if="auth.user?.impersonated_by_name" class="ml-1 text-muted">
+            (by {{ auth.user.impersonated_by_name }})
+          </span>
+        </div>
+      </div>
+      <button
+        type="button"
+        class="btn btn-sm btn-solid flex items-center gap-1.5 shadow-sm"
+        :disabled="exitBusy"
+        @click="returnToAdmin"
+      >
+        <span>↩</span>
+        <span>{{ exitBusy ? 'Returning…' : 'Return to Admin' }}</span>
+      </button>
+    </aside>
+
     <header
       class="no-print flex flex-wrap items-end justify-between gap-3 border-b-2 border-ink pt-7 pb-4"
     >
@@ -239,6 +283,16 @@ async function saveProfile() {
             <p class="text-xs tracking-wider text-muted uppercase">
               {{ auth.user.role }}
             </p>
+          </div>
+          <div v-if="auth.isImpersonating" class="border-b border-line pb-1 mb-1">
+            <button
+              class="flex w-full items-center justify-between rounded px-3 py-2 text-left font-medium text-amber hover:bg-amber-soft"
+              :disabled="exitBusy"
+              @click="returnToAdmin"
+            >
+              <span>↩ Return to Admin</span>
+              <span v-if="auth.user?.impersonated_by_name" class="text-xs text-muted">({{ auth.user.impersonated_by_name }})</span>
+            </button>
           </div>
           <button
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"

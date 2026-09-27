@@ -745,3 +745,20 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 **Remaining Considerations:**
 - When deploying to production Cloudflare Pages/D1, run `npm run db:migrate:prod` to apply migration `0035_point_deductions.sql`.
 
+### Enhancement: Quick Switch & Login-As Visibility
+**Date:** September 28, 2026
+**Branch:** `main`
+
+**User Request:**
+"I cannot see where to login as another employee in the app. how to do it?"
+
+**Implementation Details:**
+1. **Frontend UX (`src/views/EmployeesView.vue`)**:
+   - Added a 'Switch User' quick-selection dropdown right at the top of the **Team** panel next to the heading. An admin can select any employee and click **Login as** directly without needing to locate them in the large table.
+   - Added an explicit 'Actions' column header to the Team table.
+   - Styled the per-row **Login as** button with distinct teal branding (`border-teal text-teal hover:bg-teal-soft`) to stand out clearly from other buttons.
+   - Switched from `auth.user?.rights` to the reactive getter `auth.rights.login_as_others` for robust permission evaluation.
+
+**Testing Performed:**
+- TypeScript type checks passed with exit code 0.
+- Unit tests passed (226 tests).

@@ -70,6 +70,19 @@ with **Approve users** activates it. The proposer sets only a name, email,
 username and password — **role, rights and data scope are yours to set after
 approval**. Rejections need a note.
 
+### Switching users ("Login as")
+
+Administrators (and employees granted the **Login as others** right) can temporarily sign in as any employee without knowing their password:
+
+- **Quick Switch**: At the top of the **Team** card on the **Employees** page, select any employee from the **Switch User** dropdown and click **Login as**.
+- **Per-row button**: In the Team table's rightmost **Actions** column, click the teal **Login as** button next to that employee.
+- **Impersonation Banner**: While viewing the app as another person, a prominent amber banner appears at the very top of every screen: *"Logged in as [Employee] (by [Admin Name])"*.
+- **Returning to Admin**: You can return to your admin account at any time in one click without re-entering passwords:
+  - Click the **Return to Admin** button in the top impersonation banner.
+  - Or open the **Account** dropdown in the header and click **↩ Return to Admin**.
+  Both options instantly terminate the impersonation session, restore your admin session, and return you back to the Employees screen.
+- **Audit tracking**: Switching into another user's account and returning to admin both generate secure audit entries (`impersonate_user` and `exit_impersonation`) in the activity log.
+
 ## Work types, points and modules
 
 **Settings → Work types & points.**
@@ -197,6 +210,27 @@ adjustment changes for a locked month are refused.
 
 Unlock if corrections are needed.
 
+## Task management & oversight
+
+The **Tasks** board allows assigning and monitoring work outside of time entries and expenses:
+
+- **Assignees & Observers**: Tasks support a primary assignee plus an optional secondary participant designated as either an **Additional Assignee** (can edit and complete the task) or an **Observer** (view-only follower).
+- **Recurrence**: When creating or editing a task, choose **Recurrence** (Daily, Weekly, Monthly). Once marked *Done*, a new instance of the task automatically generates with an updated due date.
+- **Task Comments**: Each task detail page features a real-time discussion thread. Adding a comment automatically dispatches notifications to the creator and assignees.
+- **Inactivity & Task Age Alerts**: Incomplete tasks trigger automated daily alerts:
+  - Over 2 days old: warns the assignee that uncompleted tasks impact payment.
+  - Over 3 days old: warns that the task is scheduled for deletion/reassignment and will affect compensation.
+  - The **Working on it** button on in-progress cards refreshes the task's timestamp and pauses the aging warning.
+
+## Leave & time-off approvals
+
+The **Leaves (Time Off)** system provides structured multi-day absence tracking:
+
+- Accessible under **Reports → Leaves (Time Off)** (`/time-off`).
+- Employees submit requests specifying category (*Sick, Vacation, Personal, Unpaid*), date range, and reason.
+- Admins and managers review requests in the pending queue to **Approve** or **Reject** with comments.
+- Approved leave automatically deducts from the employee's annual leave allowance if one is configured in **Employees**.
+
 ## Other settings
 
 - **Employee code prefix** — the `ID-2023` in `ID-2023001`. Changing it only affects codes
@@ -218,8 +252,8 @@ people rather than configuring data:
   employees who have a **phone** number set — an admin sets it in the
   Employees tab, or an employee sets their own under Account menu → Edit
   profile. The API key is write-only, same as the SMTP password.
-- **News** — a shortcut to the News page; posting still needs the Send
-  announcements right, and a pop-up specifically is admin-only.
+- **News Announcements & Custom Author** — post updates to the News feed and login pop-ups. You can specify a custom **From whom** author (e.g. "Management", "Operations", or leave blank for "System").
+- **Weekly Digest** — automated periodic summaries can be triggered via `/api/cron/weekly-digest` to email/push weekly hours and unit summaries to all active team members.
 
 ## Activity log
 

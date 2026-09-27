@@ -18,7 +18,7 @@ import {
   SESSION_TTL_SECONDS,
   audit,
   canSeeOwnPay,
-  currentUser,
+  currentSession,
   hashPassword,
   defaultRightsForRole,
   parseDataScope,
@@ -234,14 +234,66 @@ async function handleLoginAs(request: Request, env: Env): Promise<Response> {
 
   if (!target) throw new ApiError(404, 'User not found or inactive')
 
+  const sess = await currentSession(request, env)
+  const impersonatorId = sess?.payload.impersonated_by ?? user.id
+
   const token = randomToken()
   await env.SESSIONS.put(
     `session:${token}`,
-    JSON.stringify({ employee_id: target.id }),
+    JSON.stringify({
+      employee_id: target.id,
+      impersonated_by: impersonatorId,
+    }),
     { expirationTtl: SESSION_TTL_SECONDS },
   )
+
+  await audit(env, user.id, 'impersonate_user', target.id, {
+    impersonated_by: impersonatorId,
+    target_name: target.name,
+  })
+
   return json(
     { id: target.id, name: target.name, role: target.role },
+    200,
+    { 'Set-Cookie': sessionCookie(token, SESSION_TTL_SECONDS) },
+  )
+}
+
+async function handleExitImpersonation(request: Request, env: Env): Promise<Response> {
+  const sess = await currentSession(request, env)
+  if (!sess || !sess.payload.impersonated_by) {
+    throw new ApiError(400, 'Not currently logged in as another employee')
+  }
+
+  const adminId = sess.payload.impersonated_by
+  const admin = await env.DB.prepare(
+    "SELECT * FROM employees WHERE id = ? AND active = 1 AND approval_status = 'approved'",
+  )
+    .bind(adminId)
+    .first<Employee>()
+
+  if (!admin) {
+    throw new ApiError(404, 'Original admin account not found or inactive')
+  }
+
+  // Delete the impersonated session
+  await env.SESSIONS.delete(`session:${sess.token}`)
+
+  // Create new session for admin
+  const token = randomToken()
+  await env.SESSIONS.put(
+    `session:${token}`,
+    JSON.stringify({ employee_id: admin.id }),
+    { expirationTtl: SESSION_TTL_SECONDS },
+  )
+
+  await audit(env, admin.id, 'exit_impersonation', sess.payload.employee_id, {
+    impersonated_employee_id: sess.payload.employee_id,
+    admin_name: admin.name,
+  })
+
+  return json(
+    { id: admin.id, name: admin.name, role: admin.role },
     200,
     { 'Set-Cookie': sessionCookie(token, SESSION_TTL_SECONDS) },
   )
@@ -3372,11 +3424,33 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (path === '/api/auth/login' && method === 'POST') return handleLogin(request, env)
   if (path === '/api/auth/login-as' && method === 'POST') return handleLoginAs(request, env)
+  if (path === '/api/auth/exit-impersonation' && method === 'POST') return handleExitImpersonation(request, env)
   if (path === '/api/auth/logout' && method === 'POST') return handleLogout(request, env)
 
   if (path === '/api/me' && method === 'GET') {
-    const user = await currentUser(request, env)
+    const sess = await currentSession(request, env)
+    if (!sess) return json(null)
+    const user = await env.DB.prepare(
+      "SELECT * FROM employees WHERE id = ? AND active = 1 AND approval_status = 'approved'",
+    )
+      .bind(sess.payload.employee_id)
+      .first<Employee>()
     if (!user) return json(null)
+
+    let impersonated_by: string | null = null
+    let impersonated_by_name: string | null = null
+    if (sess.payload.impersonated_by) {
+      const admin = await env.DB.prepare(
+        "SELECT id, name FROM employees WHERE id = ? AND active = 1 AND approval_status = 'approved'",
+      )
+        .bind(sess.payload.impersonated_by)
+        .first<{ id: string; name: string }>()
+      if (admin) {
+        impersonated_by = admin.id
+        impersonated_by_name = admin.name
+      }
+    }
+
     const { results: myTypes } = await env.DB.prepare(`
       SELECT DISTINCT w2.id, w2.name, w2.position
       FROM employee_work_types ewt
@@ -3416,6 +3490,8 @@ async function route(request: Request, env: Env): Promise<Response> {
             .first<{ n: number }>()
         )?.n ?? 0,
       today: todayInTz(env.TEAM_TZ ?? 'Africa/Accra'),
+      impersonated_by,
+      impersonated_by_name,
     })
   }
 

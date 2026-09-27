@@ -12,9 +12,11 @@ broken.
 
 ## Signing in
 
-Log in with the **username and password** an administrator set for you. Once in,
-the **Account** menu at the top right holds your name and role, **Edit
-profile**, **Change password**, and **Sign out**.
+Log in with the **username and password** an administrator set for you. Tick
+**Remember me** on the sign-in form to store your credentials securely in your local
+browser for automatic pre-fill on your next visit. Once in, the **Account** menu at
+the top right holds your name and role, **Edit profile**, **Change password**, and
+**Sign out**.
 
 **Edit profile** is where you keep your own **name**, **email** and **phone**
 number current — email and phone are what notifications go to (email, and SMS
@@ -60,6 +62,9 @@ logged as **individual cards**, not a single number:
   corrected automatically — type `Boost us` and it saves as `Boost_us`. This
   matters: the two used to count as different cards.
 - Type a brand-new name freely; it joins the suggestion list once you save.
+- **Quality & Pacing Pauses (10+ cards)**: When logging more than 10 QAP or
+  Classification cards in a single session, the system pops up a reminder to pause
+  for 10 minutes so supervisor quality spot-checks can take place before continuing.
 
 ### Telematics installations
 
@@ -122,8 +127,13 @@ as plain text instead.
   tasks are never flagged, and a task with no date can't be late.
 - Finished tasks hide themselves; tick **Show finished** to see them.
 - **Recurring tasks**: You can set tasks to repeat daily, weekly, or monthly. When finished, a new instance is automatically generated.
-- **Additional Assignees**: You can add a secondary "Additional Assignee" or an "Observer" to any task.
-- **Comments**: Every task has a comment section for discussion.
+- **Additional Assignees & Observers**: You can add a secondary participant as either an "Additional Assignee" (responsible for the work) or an "Observer" (following updates).
+- **Checklists**: Tasks support itemized checklists. Add subtasks and check them off as work progresses.
+- **Comments**: Every task has a comment feed for discussion, progress notes, and updates.
+- **Task Age Warnings & "Working on it"**:
+  - Incomplete tasks open for **more than 2 days** trigger a warning that overdue tasks will affect your payment.
+  - Tasks open for **more than 3 days** trigger a critical warning that the task is scheduled for deletion or reassignment.
+  - Tapping **Working on it** on any in-progress task card refreshes its timestamp and pauses the aging warning.
 
 **If someone assigns you a task** you get a notification, and whoever raised it
 is told when you finish. You can move it along but **not change its wording** —
@@ -255,11 +265,11 @@ every voucher charged to it.
 
 ## Absences and leave
 
-**Absences** records days not worked: **Leave, Sick, Holiday, Unpaid, Other**.
+**Absences** records individual days not worked: **Leave, Sick, Holiday, Unpaid, Other**.
 Sick, holiday, unpaid and other are open to everyone; **paid Leave needs the
 leave right**. If you have an annual allowance, used and remaining are shown.
 
-**Time Off Requests:** There is a dedicated **Leaves (Time Off)** page where you can request multi-day absences (Sick, Vacation, Personal, Unpaid). These requests are routed to management for approval.
+**Time Off Requests (Leaves):** Dedicated page under **Reports → Leaves (Time Off)** (`/time-off`) where you can submit multi-day requests for Vacation, Sick leave, Personal days, or Unpaid leave. You can track review status and receive notifications when managers approve or reject your request.
 
 ## Pay, payslip and reports
 
@@ -287,6 +297,10 @@ What you see here depends on your rights.
 - **Point deductions** — If you incur penalties or point deductions from administration (e.g. for task violations or missed deadlines), they will subtract from your effective monthly score and remuneration. You will receive an immediate in-app notification with the reason, deducted points, and updated balance.
 
 **Weekly Digests:** You will automatically receive a weekly summary (in-app and via email/SMS) detailing your total hours and units logged for the past week.
+
+## Mobile experience
+
+When accessing OpenSignal Ledger on a phone or tablet, dense data tables (such as timesheet entries, tasks, expense vouchers, and reports) automatically adapt into structured, touch-friendly card views with clear column labels, making it effortless to log work on the go without horizontal scrolling.
 
 ---
 

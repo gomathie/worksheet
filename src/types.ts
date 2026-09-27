@@ -134,6 +134,9 @@ export interface Me {
   /** False when no receipt-storage bucket is bound; uploads are hidden. */
   attachments_enabled: boolean
   today: string
+  /** Present when current session is an admin impersonating this employee. */
+  impersonated_by?: string | null
+  impersonated_by_name?: string | null
 }
 
 export interface Employee {

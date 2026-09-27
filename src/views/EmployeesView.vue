@@ -213,7 +213,12 @@ async function toggleActive(e: Employee) {
 }
 
 async function loginAs(e: Employee) {
-  if (!confirm(`Log in as ${e.name}? You will be logged out of your current session.`)) return
+  if (
+    !confirm(
+      `Log in as ${e.name}? You can return to your admin account at any time via the banner at the top of the screen.`,
+    )
+  )
+    return
   try {
     busy.value = true
     await api('/api/auth/login-as', { method: 'POST', json: { target_id: e.id } })
@@ -222,6 +227,18 @@ async function loginAs(e: Employee) {
     error.value = err instanceof Error ? err.message : 'Failed to log in as user'
     busy.value = false
   }
+}
+
+const quickLoginTargetId = ref('')
+const otherActiveEmployees = computed(() =>
+  employees.value.filter(
+    (e) => e.active && e.approval_status === 'approved' && e.id !== auth.user?.id,
+  ),
+)
+
+async function quickLogin() {
+  const target = employees.value.find((e) => e.id === quickLoginTargetId.value)
+  if (target) await loginAs(target)
 }
 
 function workSummary(e: Employee): string {
@@ -648,7 +665,36 @@ const managerName = (e: Employee) =>
     </div>
 
     <div class="panel">
-      <h2 class="display mb-4 text-2xl">Team</h2>
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="display text-2xl">Team</h2>
+          <p class="text-xs text-muted">Manage active team members, rights, and employee sessions.</p>
+        </div>
+        <div v-if="auth.rights.login_as_others && otherActiveEmployees.length" class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-teal whitespace-nowrap">Switch User:</label>
+          <select
+            v-model="quickLoginTargetId"
+            class="rounded border border-line bg-paper px-2 py-1 text-xs"
+          >
+            <option value="">Select employee to log in as…</option>
+            <option
+              v-for="e in otherActiveEmployees"
+              :key="e.id"
+              :value="e.id"
+            >
+              {{ e.name }} ({{ e.role }})
+            </option>
+          </select>
+          <button
+            type="button"
+            class="btn btn-sm btn-solid"
+            :disabled="!quickLoginTargetId || busy"
+            @click="quickLogin"
+          >
+            Login as
+          </button>
+        </div>
+      </div>
       <div class="table-wrap">
         <table class="data">
           <thead>
@@ -663,7 +709,7 @@ const managerName = (e: Employee) =>
               <th>Rights</th>
               <th>Login</th>
               <th>Status</th>
-              <th></th>
+              <th class="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -696,17 +742,18 @@ const managerName = (e: Employee) =>
                 {{ e.username && e.has_password ? 'Enabled' : 'No credentials' }}
               </td>
               <td>{{ e.active ? 'Active' : 'Inactive' }}</td>
-              <td class="whitespace-nowrap">
+              <td class="whitespace-nowrap text-right">
                 <button
-                  v-if="auth.user?.rights.login_as_others && e.id !== auth.user.id"
-                  class="btn btn-sm mr-1"
+                  v-if="auth.rights.login_as_others && e.id !== auth.user?.id"
+                  class="btn btn-sm mr-1 font-semibold border-teal text-teal hover:bg-teal-soft"
                   @click="loginAs(e)"
                   :disabled="!e.active || e.approval_status !== 'approved'"
+                  title="Switch session and log in as this employee"
                 >
                   Login as
                 </button>
                 <button
-                  v-if="auth.user?.rights.manage_point_deductions && e.id !== auth.user.id"
+                  v-if="auth.rights.manage_point_deductions && e.id !== auth.user?.id"
                   class="btn btn-sm mr-1 border-amber text-amber hover:bg-amber-soft"
                   @click="openDeductionModal(e)"
                   :disabled="!e.active || e.approval_status !== 'approved'"

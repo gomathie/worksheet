@@ -98,6 +98,7 @@ function decide(action: ExpenseAction, successMessage: string) {
           comments: comments.value || undefined,
           recorded_reference:
             action === 'mark_recorded' ? recordedReference.value || undefined : undefined,
+          kept_reason: action === 'keep_in_app' ? comments.value || undefined : undefined,
         },
       }),
     successMessage,
@@ -228,6 +229,7 @@ const fileSize = (bytes: number | null) =>
 
 // e.g. "manager_approve" -> "Manager approve"
 function actionLabel(action: string): string {
+  if (action === 'keep_in_app') return 'Kept in app'
   const s = action.replace(/_/g, ' ')
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
@@ -238,7 +240,10 @@ function actionLabel(action: string): string {
  * would produce a document indistinguishable from an approved receipt.
  */
 const canDownloadPdf = computed(
-  () => voucher.value?.status === 'approved' || voucher.value?.status === 'recorded',
+  () =>
+    voucher.value?.status === 'approved' ||
+    voucher.value?.status === 'recorded' ||
+    voucher.value?.status === 'kept_in_app',
 )
 
 // Portrait for as long as this page is open, so Ctrl+P matches the button.
@@ -418,6 +423,18 @@ const downloadPdf = () => window.print()
           · reference <span class="mono">{{ voucher.recorded_reference }}</span>
         </template>
       </div>
+
+      <div
+        v-if="voucher.status === 'kept_in_app' || voucher.kept_at"
+        class="mt-4 rounded-lg border border-teal bg-teal-soft p-4 text-sm"
+      >
+        <strong>Kept in app (Internal expense)</strong> — approved to remain in the app rather than sent to external finance records.
+        <div class="mt-2 text-xs text-muted">
+          <span v-if="voucher.kept_at">Decided on <span class="mono">{{ voucher.kept_at.slice(0, 10) }}</span></span>
+          <span v-if="voucher.kept_by_name"> by {{ voucher.kept_by_name }}</span>
+          <span v-if="voucher.kept_reason"> · Reason: <span class="text-ink">{{ voucher.kept_reason }}</span></span>
+        </div>
+      </div>
     </div>
 
     <!-- ======================================================= attachments -->
@@ -560,6 +577,16 @@ const downloadPdf = () => window.print()
           @click="decide('mark_recorded', 'Marked as recorded.')"
         >
           Mark as recorded
+        </button>
+        <button
+          v-if="can('keep_in_app')"
+          class="btn"
+          :class="{ 'btn-solid': voucher.status === 'approved' }"
+          :disabled="busy"
+          title="Keep this voucher in the app as an internal expense"
+          @click="decide('keep_in_app', 'Voucher kept in app as internal expense.')"
+        >
+          {{ voucher.status === 'approved' ? 'Keep in app (internal)' : 'Approve & Keep in app' }}
         </button>
         <button
           v-if="can('return')"

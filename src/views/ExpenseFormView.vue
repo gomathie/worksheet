@@ -47,6 +47,7 @@ const form = ref({
   missing_receipt_reason: '',
   declaration_accepted: false,
   funding_source: 'own_pocket' as FundingSource,
+  keep_in_app: false,
 })
 
 // Only offered to float holders; the API refuses it for anyone else.
@@ -112,6 +113,7 @@ onMounted(async () => {
         missing_receipt_reason: v.missing_receipt_reason ?? '',
         declaration_accepted: Boolean(v.declaration_accepted),
         funding_source: (v.funding_source ?? (v.paid_from_petty_cash ? 'petty_cash' : 'own_pocket')) as FundingSource,
+        keep_in_app: Boolean(v.keep_in_app),
       }
     } else {
       form.value.department_id = auth.user!.department_id
@@ -137,6 +139,7 @@ function payload(submit: boolean) {
     missing_receipt_reason: form.value.missing_receipt_reason || null,
     declaration_accepted: form.value.declaration_accepted,
     funding_source: form.value.funding_source,
+    keep_in_app: form.value.keep_in_app ? 1 : 0,
     submit,
     // Only ever true for own-pocket money, and only after the dialog.
     request_reimbursement: submit && wantsReimbursement.value,
@@ -406,6 +409,22 @@ async function save(submit: boolean) {
           </div>
         </div>
       </fieldset>
+
+      <!-- Keep in app option for administrators / finance / approvers -->
+      <div
+        v-if="auth.isAdmin || auth.rights.approve_expenses || auth.rights.record_expenses"
+        class="panel mt-4"
+      >
+        <label class="flex items-start gap-2 cursor-pointer text-sm">
+          <input v-model="form.keep_in_app" type="checkbox" class="mt-0.5" />
+          <div>
+            <span class="font-medium">Keep in app (Internal expense)</span>
+            <p class="text-xs text-muted">
+              Keep this expense inside the application rather than queuing it to be sent to external finance accounting records upon approval.
+            </p>
+          </div>
+        </label>
+      </div>
 
       <div class="mt-5 flex flex-wrap gap-2">
         <button class="btn btn-solid" :disabled="busy">

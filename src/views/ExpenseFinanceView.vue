@@ -31,7 +31,16 @@ const toRecord = computed(() => vouchers.value.filter((v) => v.status === 'appro
 const sum = (list: ExpenseVoucher[]) => list.reduce((s, v) => s + v.amount, 0).toFixed(2)
 const currency = computed(() => vouchers.value[0]?.currency ?? '')
 
-async function decide(v: ExpenseVoucher, action: 'mark_recorded') {
+async function decide(v: ExpenseVoucher, action: 'mark_recorded' | 'keep_in_app') {
+  let kept_reason: string | undefined = undefined
+  if (action === 'keep_in_app') {
+    const input = window.prompt(
+      `Keep ${v.voucher_number} in app as internal expense?\n\nOptional reason or note:`,
+      '',
+    )
+    if (input === null) return // cancelled
+    kept_reason = input.trim() || undefined
+  }
   error.value = ''
   notice.value = ''
   busy.value = v.id
@@ -40,11 +49,15 @@ async function decide(v: ExpenseVoucher, action: 'mark_recorded') {
       method: 'POST',
       json: {
         action,
-        recorded_reference: references.value[v.id] || undefined,
+        recorded_reference: action === 'mark_recorded' ? references.value[v.id] || undefined : undefined,
+        kept_reason,
       },
     })
     delete references.value[v.id]
-    notice.value = `${v.voucher_number} updated.`
+    notice.value =
+      action === 'keep_in_app'
+        ? `${v.voucher_number} kept in app as internal expense.`
+        : `${v.voucher_number} updated.`
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
@@ -100,6 +113,12 @@ const exportXls = () =>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <h2 class="display text-2xl">Expenses to record</h2>
       <div class="flex flex-wrap gap-2">
+        <RouterLink
+          :to="{ name: 'expense-reports', query: { type: 'kept_in_app' } }"
+          class="btn btn-sm"
+        >
+          Kept in app report
+        </RouterLink>
         <button class="btn btn-sm" :disabled="vouchers.length === 0" @click="exportCsv">
           Export CSV
         </button>
@@ -127,7 +146,7 @@ const exportXls = () =>
     <h3 class="display mb-1 text-xl">Approved — to record</h3>
     <p class="mb-3 text-sm text-muted">
       Approved by an administrator. Enter each into the external finance records,
-      then mark it recorded here.
+      then mark it recorded here, or choose Keep in app if it should remain an internal expense.
     </p>
     <p v-if="toRecord.length === 0" class="panel text-muted">
       Nothing awaiting recording.
@@ -171,14 +190,24 @@ const exportXls = () =>
                   :aria-label="`Finance record reference for ${v.voucher_number}`"
                 />
               </td>
-              <td>
-                <button
-                  class="btn btn-sm btn-solid whitespace-nowrap"
-                  :disabled="busy === v.id"
-                  @click="decide(v, 'mark_recorded')"
-                >
-                  Mark recorded
-                </button>
+              <td class="whitespace-nowrap">
+                <div class="flex items-center gap-1.5">
+                  <button
+                    class="btn btn-sm btn-solid whitespace-nowrap"
+                    :disabled="busy === v.id"
+                    @click="decide(v, 'mark_recorded')"
+                  >
+                    Mark recorded
+                  </button>
+                  <button
+                    class="btn btn-sm whitespace-nowrap"
+                    :disabled="busy === v.id"
+                    title="Keep this voucher in the app without recording externally"
+                    @click="decide(v, 'keep_in_app')"
+                  >
+                    Keep in app
+                  </button>
+                </div>
               </td>
             </tr>
             <tr class="totals">

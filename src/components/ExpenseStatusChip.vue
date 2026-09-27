@@ -16,6 +16,7 @@ const TONE: Record<ExpenseStatus, string> = {
   approved: 'border-teal text-teal',
   rejected: 'border-red text-red',
   recorded: 'border-teal bg-teal-soft text-teal',
+  kept_in_app: 'border-teal bg-teal-soft text-teal',
 }
 
 const label = computed(() => STATUS_LABELS[props.status] ?? props.status)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { api } from '../api'
 import { downloadCsv } from '../csv'
 import { downloadXls } from '../xls'
@@ -9,6 +10,7 @@ import { STATUS_LABELS } from '../../shared/expenses'
 import type { ExpenseDashboard, ExpenseReport } from '../types'
 
 const auth = useAuthStore()
+const route = useRoute()
 
 const month = ref(auth.user!.today.slice(0, 7))
 const dashboard = ref<ExpenseDashboard | null>(null)
@@ -22,9 +24,15 @@ const REPORTS = [
   { type: 'employee', label: 'Employee expenses' },
   { type: 'outstanding', label: 'Outstanding reimbursements' },
   { type: 'approved_vs_rejected', label: 'Approved vs rejected' },
+  { type: 'kept_in_app', label: 'Kept in app (Internal expenses)' },
 ] as const
 
-const reportType = ref<(typeof REPORTS)[number]['type']>('monthly')
+const initialType = route.query.type as string | undefined
+const reportType = ref<(typeof REPORTS)[number]['type']>(
+  initialType && REPORTS.some((r) => r.type === initialType)
+    ? (initialType as (typeof REPORTS)[number]['type'])
+    : 'monthly',
+)
 // Default range: the trailing twelve months, so the first load is not empty.
 const range = ref({ from: '', to: auth.user!.today })
 
@@ -72,6 +80,14 @@ watch(month, async () => {
 watch([reportType, () => range.value.from, () => range.value.to], () => {
   error.value = ''
   loadReport()
+})
+
+const periodKeptTotal = computed(() => {
+  if (!report.value?.rows) return 0
+  return report.value.rows.reduce(
+    (sum, r) => sum + (typeof r.amount === 'number' ? r.amount : 0),
+    0,
+  )
 })
 
 const currency = computed(() => dashboard.value?.currency ?? '')
@@ -136,7 +152,7 @@ const share = (amount: number, buckets: { amount: number }[]) => {
 
     <!-- ========================================================= dashboard -->
     <template v-if="dashboard">
-      <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <div class="panel">
           <p class="field-label">Pending approval</p>
           <p class="mono text-3xl font-semibold text-amber">
@@ -154,6 +170,10 @@ const share = (amount: number, buckets: { amount: number }[]) => {
         <div class="panel">
           <p class="field-label">Recorded</p>
           <p class="mono text-3xl font-semibold text-teal">{{ dashboard.recorded }}</p>
+        </div>
+        <div class="panel">
+          <p class="field-label">Kept in app</p>
+          <p class="mono text-3xl font-semibold text-teal">{{ dashboard.kept_in_app }}</p>
         </div>
       </div>
 
@@ -260,6 +280,54 @@ const share = (amount: number, buckets: { amount: number }[]) => {
         </p>
       </header>
 
+      <!-- Kept in App: Annual Total & Monthly Breakdown -->
+      <div v-if="reportType === 'kept_in_app' && report" class="mb-6 space-y-4">
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="panel border-teal bg-teal-soft/40">
+            <p class="field-label text-teal">Total for the year ({{ report.year }})</p>
+            <p class="mono text-3xl font-bold text-teal">
+              {{ money(report.annual_total ?? 0) }}
+            </p>
+            <p class="mt-1 text-xs text-muted">
+              {{ report.annual_vouchers ?? 0 }} internal voucher{{ (report.annual_vouchers ?? 0) === 1 ? '' : 's' }} kept in app in {{ report.year }}
+            </p>
+          </div>
+          <div class="panel">
+            <p class="field-label">Period total (selected range)</p>
+            <p class="mono text-3xl font-semibold">
+              {{ money(periodKeptTotal) }}
+            </p>
+            <p class="mt-1 text-xs text-muted">
+              {{ report.rows.length }} voucher{{ report.rows.length === 1 ? '' : 's' }} from {{ range.from }} to {{ range.to }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Monthly breakdown table -->
+        <div v-if="report.monthly_summary && report.monthly_summary.length" class="panel">
+          <h4 class="display mb-3 text-lg">Monthly breakdown (Kept in app)</h4>
+          <div class="table-wrap">
+            <table class="data">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th class="num">Vouchers</th>
+                  <th class="num">Total Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in report.monthly_summary" :key="m.month">
+                  <td class="mono font-medium">{{ m.month }}</td>
+                  <td class="num">{{ m.vouchers }}</td>
+                  <td class="num font-semibold text-teal">{{ money(m.amount) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <h4 v-if="reportType === 'kept_in_app'" class="display mb-2 text-lg">Detailed vouchers</h4>
       <div class="table-wrap">
         <table class="data">
           <thead>

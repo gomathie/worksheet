@@ -491,6 +491,11 @@ export interface ExpenseVoucher {
   recorded_by: string | null
   recorded_by_name?: string | null
   recorded_reference: string | null
+  keep_in_app?: number
+  kept_at?: string | null
+  kept_by?: string | null
+  kept_by_name?: string | null
+  kept_reason?: string | null
   reopened_at: string | null
   attachment_count?: number
   /** Near-identical claims by the same employee; 0 unless the API computed it. */
@@ -553,8 +558,12 @@ export interface ExpenseReport {
   type: string
   from: string
   to: string
+  year?: string
   currency: string
   rows: Record<string, string | number | null>[]
+  monthly_summary?: { month: string; vouchers: number; amount: number }[]
+  annual_total?: number
+  annual_vouchers?: number
 }
 
 export interface AppNotification {

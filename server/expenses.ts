@@ -1735,6 +1735,7 @@ const REPORT_TYPES = [
   'employee',
   'outstanding',
   'approved_vs_rejected',
+  'kept_in_app',
 ] as const
 
 type ReportType = (typeof REPORT_TYPES)[number]
@@ -1776,6 +1777,7 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
                     SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
+                    SUM(CASE WHEN v.status = 'kept_in_app' THEN v.amount ELSE 0 END) AS kept_in_app_amount,
                     SUM(CASE WHEN v.status = 'rejected' THEN 1 ELSE 0 END) AS rejected
              ${base} GROUP BY month ORDER BY month`
       break
@@ -1783,7 +1785,8 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
       sql = `SELECT COALESCE(d.name, 'No department') AS department,
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
-                    SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount
+                    SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
+                    SUM(CASE WHEN v.status = 'kept_in_app' THEN v.amount ELSE 0 END) AS kept_in_app_amount
              ${base} GROUP BY department ORDER BY amount DESC`
       break
     case 'employee':
@@ -1792,6 +1795,7 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
                     COUNT(*) AS vouchers,
                     SUM(CASE WHEN v.status <> 'rejected' THEN v.amount ELSE 0 END) AS amount,
                     SUM(CASE WHEN v.status = 'recorded' THEN v.amount ELSE 0 END) AS recorded_amount,
+                    SUM(CASE WHEN v.status = 'kept_in_app' THEN v.amount ELSE 0 END) AS kept_in_app_amount,
                     SUM(CASE WHEN v.status = 'rejected' THEN 1 ELSE 0 END) AS rejected
              ${base} GROUP BY emp.id ORDER BY amount DESC`
       break
@@ -1805,16 +1809,75 @@ export async function expenseReport(request: Request, env: Env): Promise<Respons
       break
     case 'approved_vs_rejected':
       sql = `SELECT substr(v.expense_date, 1, 7) AS month,
-                    SUM(CASE WHEN v.status IN ('approved', 'recorded') THEN 1 ELSE 0 END) AS approved_count,
-                    SUM(CASE WHEN v.status IN ('approved', 'recorded') THEN v.amount ELSE 0 END) AS approved_amount,
+                    SUM(CASE WHEN v.status IN ('approved', 'recorded', 'kept_in_app') THEN 1 ELSE 0 END) AS approved_count,
+                    SUM(CASE WHEN v.status IN ('approved', 'recorded', 'kept_in_app') THEN v.amount ELSE 0 END) AS approved_amount,
                     SUM(CASE WHEN v.status = 'rejected' THEN 1 ELSE 0 END) AS rejected_count,
                     SUM(CASE WHEN v.status = 'rejected' THEN v.amount ELSE 0 END) AS rejected_amount
              ${base} GROUP BY month ORDER BY month`
+      break
+    case 'kept_in_app':
+      sql = `SELECT v.voucher_number,
+                    v.expense_date,
+                    emp.name AS employee,
+                    COALESCE(d.name, '—') AS department,
+                    COALESCE(c.name, '—') AS category,
+                    v.amount,
+                    COALESCE(keeper.name, '—') AS kept_by,
+                    COALESCE(v.kept_reason, '—') AS reason
+             FROM expense_vouchers v
+             JOIN employees emp ON emp.id = v.employee_id
+             LEFT JOIN departments d ON d.id = v.department_id
+             LEFT JOIN expense_categories c ON c.id = v.category_id
+             LEFT JOIN employees keeper ON keeper.id = v.kept_by
+             WHERE v.expense_date >= ? AND v.expense_date <= ? AND v.status = 'kept_in_app'${scope.sql}
+             ORDER BY v.expense_date DESC`
       break
   }
 
   const { results } = await env.DB.prepare(sql)
     .bind(...binds)
     .all()
+
+  if (type === 'kept_in_app') {
+    // Also compute monthly summary and annual total for kept in app
+    const selectedYear = from.slice(0, 4)
+    const yearStart = `${selectedYear}-01-01`
+    const yearEnd = `${selectedYear}-12-31`
+    const yearBinds = [yearStart, yearEnd, ...scope.binds]
+
+    const monthlySql = `SELECT substr(v.expense_date, 1, 7) AS month,
+                               COUNT(*) AS vouchers,
+                               ROUND(SUM(v.amount), 2) AS amount
+                        FROM expense_vouchers v
+                        JOIN employees emp ON emp.id = v.employee_id
+                        WHERE v.expense_date >= ? AND v.expense_date <= ? AND v.status = 'kept_in_app'${scope.sql}
+                        GROUP BY month
+                        ORDER BY month DESC`
+    const { results: monthlyResults } = await env.DB.prepare(monthlySql)
+      .bind(...binds)
+      .all()
+
+    const annualSql = `SELECT COUNT(*) AS total_vouchers,
+                              COALESCE(ROUND(SUM(v.amount), 2), 0) AS annual_total
+                       FROM expense_vouchers v
+                       JOIN employees emp ON emp.id = v.employee_id
+                       WHERE v.expense_date >= ? AND v.expense_date <= ? AND v.status = 'kept_in_app'${scope.sql}`
+    const annualResult = await env.DB.prepare(annualSql)
+      .bind(...yearBinds)
+      .first<{ total_vouchers: number; annual_total: number }>()
+
+    return json({
+      type,
+      from,
+      to,
+      year: selectedYear,
+      currency: settings.currency,
+      rows: results,
+      monthly_summary: monthlyResults as { month: string; vouchers: number; amount: number }[],
+      annual_total: annualResult?.annual_total ?? 0,
+      annual_vouchers: annualResult?.total_vouchers ?? 0,
+    })
+  }
+
   return json({ type, from, to, currency: settings.currency, rows: results })
 }

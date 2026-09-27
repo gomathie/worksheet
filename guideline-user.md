@@ -216,14 +216,15 @@ the claim is withdrawn with it**.
 
 ```
 Draft → Submitted → Manager Review → Being Screened → Awaiting Admin Approval
-      → Approved → Recorded
+      → Approved → Recorded (or Kept in App)
 ```
 
 - **Manager Review** only applies if you have a _Reports to_ manager set;
   otherwise it goes straight to screening.
 - **Being Screened** is a check before it reaches an approver.
 - **Approved** means authorised. **Recorded** means entered in the external
-  accounts.
+  accounts. An approved voucher can also be **Kept in App** as an internal expense,
+  remaining settled in the app without being sent to external ledger records.
 - A voucher can be **returned for more information** at any review stage — it
   comes back to draft with a comment saying what's needed.
 - Rejections always carry a reason.

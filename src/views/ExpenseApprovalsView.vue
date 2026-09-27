@@ -69,6 +69,7 @@ type Decision =
   | 'admin_approve'
   | 'admin_reject'
   | 'return'
+  | 'keep_in_app'
 
 const PAST_TENSE: Record<Decision, string> = {
   manager_approve: 'approved',
@@ -76,6 +77,7 @@ const PAST_TENSE: Record<Decision, string> = {
   manager_reject: 'rejected',
   admin_reject: 'rejected',
   return: 'returned',
+  keep_in_app: 'approved and kept in app',
 }
 
 async function decide(v: ExpenseVoucher, action: Decision) {
@@ -95,7 +97,11 @@ async function decide(v: ExpenseVoucher, action: Decision) {
   try {
     await api(`/api/expenses/${v.id}/decision`, {
       method: 'POST',
-      json: { action, comments: comment || undefined },
+      json: {
+        action,
+        comments: comment || undefined,
+        kept_reason: action === 'keep_in_app' ? comment || undefined : undefined,
+      },
     })
     delete comments.value[v.id]
     notice.value = `${v.voucher_number} ${PAST_TENSE[action]}.`
@@ -542,6 +548,14 @@ const currency = computed(
               @click="decide(v, 'admin_approve')"
             >
               Approve
+            </button>
+            <button
+              class="btn"
+              :disabled="busy === v.id"
+              title="Approve but keep in the app instead of sending to external finance"
+              @click="decide(v, 'keep_in_app')"
+            >
+              Approve & Keep in app
             </button>
             <button class="btn" :disabled="busy === v.id" @click="decide(v, 'return')">
               Request more info

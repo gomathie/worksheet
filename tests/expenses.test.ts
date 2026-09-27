@@ -766,3 +766,47 @@ describe('screening stage', () => {
     expect(consumesPettyCash('screening')).toBe(true)
   })
 })
+
+describe('keep_in_app functionality', () => {
+  it('maps keep_in_app action to kept_in_app status', () => {
+    expect(statusAfter('keep_in_app', DEFAULT_WORKFLOW, true)).toBe('kept_in_app')
+  })
+
+  it('allows approver to keep in app at admin_approval stage', () => {
+    const actions = allowedActions({ status: 'admin_approval', reopened: false }, approver)
+    expect(actions).toContain('keep_in_app')
+  })
+
+  it('allows recorder to keep in app at approved stage', () => {
+    const actions = allowedActions({ status: 'approved', reopened: false }, recorder)
+    expect(actions).toContain('keep_in_app')
+  })
+
+  it('disallows non-recorder and non-approver from keeping in app', () => {
+    expect(allowedActions({ status: 'approved', reopened: false }, employee)).not.toContain('keep_in_app')
+    expect(allowedActions({ status: 'admin_approval', reopened: false }, employee)).not.toContain('keep_in_app')
+  })
+
+  it('allows admin to reopen a kept_in_app voucher', () => {
+    const actions = allowedActions({ status: 'kept_in_app', reopened: false }, admin)
+    expect(actions).toContain('reopen')
+  })
+
+  it('includes kept_in_app in petty cash consuming statuses', () => {
+    expect(PETTY_CASH_CONSUMING_STATUSES).toContain('kept_in_app')
+    expect(consumesPettyCash('kept_in_app')).toBe(true)
+  })
+
+  it('summarizes kept_in_app vouchers into counts and total_amount', () => {
+    const vouchers: VoucherLike[] = [
+      { id: '1', employee_id: 'e1', expense_date: '2026-07-10', amount: 50, status: 'kept_in_app' },
+      { id: '2', employee_id: 'e1', expense_date: '2026-07-11', amount: 75, status: 'approved' },
+      { id: '3', employee_id: 'e1', expense_date: '2026-07-12', amount: 20, status: 'rejected' },
+    ]
+    const summary = summarize(vouchers, '2026-07')
+    expect(summary.kept_in_app).toBe(1)
+    expect(summary.counts.kept_in_app).toBe(1)
+    expect(summary.total_amount).toBe(125) // 50 + 75, excluding 20 rejected
+  })
+})
+

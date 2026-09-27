@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Keep Expenses in App (Internal Expenses) & Kept in App Report
+  - Added `keep_in_app`, `kept_at`, `kept_by`, and `kept_reason` fields to `expense_vouchers` (Migration 0036).
+  - Added support for keeping approved vouchers inside the app instead of sending them to external accounting records:
+    - Approvers can choose **Approve & Keep in app** during the final approval stage (`admin_approval`).
+    - Finance recorders can choose **Keep in app** with an optional justification note from the *Expenses to record* queue (`ExpenseFinanceView.vue`).
+    - Added **Keep in app** checkbox on expense creation/editing for administrators.
+    - Updated voucher details with an internal expense audit banner and decision buttons.
+  - Added dedicated **Kept in app (Internal expenses)** report under Expense Reports:
+    - Calculates annual total expenditure kept in app for the calendar year and total voucher count.
+    - Displays detailed monthly breakdown of voucher counts and amounts.
+    - Detailed voucher table with voucher number, date, employee, department, category, amount, kept by, and justification reason.
+    - One-click CSV, Excel, and PDF exports.
+    - Added direct "Kept in app report" link from the recording queue and 5th summary card on the expense dashboard.
+  - Added unit test suite in `tests/expenses.test.ts`.
 - Feature: Points Deduction & Admin Penalty System
   - Added a new `point_deductions` table (Migration 0035) with append-only triggers for full immutability and audit compliance.
   - Added `manage_point_deductions` right to permissions system (implied for admins, grantable individually to non-admins).

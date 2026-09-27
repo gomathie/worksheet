@@ -126,6 +126,19 @@ must explicitly **reopen** one before it can change, which also clears its
 recorded reference — so the entry in your external records will no longer match.
 Reopening asks you to confirm for that reason.
 
+**Internal Expenses ("Keep in App"):** Not all approved expenses need to be forwarded to an external accounting or ERP system. The app allows keeping expenses internally:
+- Approvers can choose **Approve & Keep in app** during the final approval stage.
+- Finance recorders can choose **Keep in app** with an optional justification note directly from the *Expenses to record* queue.
+- Administrators can also check **Keep in app** when initially drafting an expense voucher.
+- Kept-in-app expenses are fully settled and auditable, but do not populate external recording queues.
+- Administrators can reopen a kept-in-app voucher if revisions are required.
+
+**Kept in App Report:** Accessible from the *Expenses to record* queue or under **Reports → Expense Reports** (select *Kept in app (Internal expenses)*):
+- **Annual Total:** Displays the grand total expenditure kept in app for the calendar year and total voucher count.
+- **Monthly Breakdown:** Detailed monthly breakdown table showing voucher counts and total amounts for each month.
+- **Detailed Vouchers:** Complete listing of individual vouchers including voucher number, expense date, employee, category, amount, who decided to keep it in the app, and reason notes.
+- **Exporting:** Supports export to CSV, Excel, and PDF print formatting.
+
 **Monthly audit pack** (*Expenses → Pack*): one button produces a cover sheet
 listing every settled voucher for a month with a total, then each voucher on its
 own page. Only **approved** and **recorded** vouchers are included — anything

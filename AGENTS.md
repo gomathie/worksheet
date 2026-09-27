@@ -813,3 +813,87 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 - Ran server type checks (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
 - Ran unit tests (`npm test`): 10 test files, 234 tests passed with 100% success.
 - Ran production build (`npm run build`): built without errors.
+
+### Feature: Keep Expenses in App (Internal Expenses) & Kept in App Report
+**Date:** September 28, 2026
+**Branch:** `main`
+
+**User Request:**
+"also provide option not to send expenses some expenses to be recorded in external system. some of them should be like its be left. so instead of send to be recorded after approval, there should be an another of to keep in the app. and there should be a report for all that is kept in the app,per month, and total for the year."
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0036_expense_keep_in_app.sql`)**:
+   - Added `keep_in_app INTEGER NOT NULL DEFAULT 0`, `kept_at TEXT`, `kept_by TEXT REFERENCES employees(id)`, and `kept_reason TEXT` to `expense_vouchers`.
+   - Created index `idx_expense_vouchers_keep_in_app` on `(keep_in_app, expense_date)`.
+   - Applied migration locally (`npm run db:migrate:local`).
+2. **Backend Engine & State Machine (`shared/expenses.ts`, `server/expenses.ts`, `server/env.ts`)**:
+   - Added `'kept_in_app'` to `EXPENSE_STATUSES`, `STATUS_LABELS`, and `PETTY_CASH_CONSUMING_STATUSES`.
+   - Added `'keep_in_app'` to `ExpenseAction`.
+   - Updated `allowedActions`:
+     - At final approval (`admin_approval` / `finance_review`): approver can choose `'admin_approve'`, `'keep_in_app'`, `'admin_reject'`, or `'return'`.
+     - At recording queue (`approved`): finance recorder can choose `'mark_recorded'` or `'keep_in_app'`.
+     - Kept-in-app vouchers are frozen and can be reopened by administrators.
+   - Updated `statusAfter`: `'keep_in_app'` transitions to `'kept_in_app'`.
+   - Updated `decideVoucher`:
+     - Handled `'keep_in_app'` decision, updating `status = 'kept_in_app'`, `keep_in_app = 1`, `kept_at = now`, `kept_by = user.id`, `kept_reason = reason`.
+     - Recorded audit trail entry and approval log.
+     - Reset `kept_*` fields when reopened.
+     - Kept-in-app vouchers notify the employee, but are excluded from the external accounting queue (`queue=record`).
+   - Extended `summarize()` to include `kept_in_app` count.
+3. **Dedicated Kept in App Report (`server/expenses.ts`)**:
+   - Added `'kept_in_app'` to `REPORT_TYPES`.
+   - Implemented `expenseReport` query for `kept_in_app`:
+     - Queries detailed vouchers with employee, department, category, amount, kept by, and justification reason.
+     - Calculates monthly breakdown (`monthly_summary`) with per-month voucher counts and total amounts.
+     - Calculates annual total expenditure (`annual_total`) and voucher count (`annual_vouchers`) for the calendar year.
+   - Updated other reports (`monthly`, `department`, `employee`) to include `kept_in_app_amount` columns.
+4. **Frontend UI Components & Views**:
+   - `src/types.ts`: Updated `ExpenseVoucher`, `ExpenseSummary`, and `ExpenseReport` interfaces.
+   - `src/components/ExpenseStatusChip.vue`: Added visual styling for `kept_in_app`.
+   - `src/views/ExpenseFinanceView.vue`:
+     - Added **Keep in app** action button with prompt for optional reason note.
+     - Added direct **Kept in app report** button in the header.
+   - `src/views/ExpenseDetailView.vue`:
+     - Added **Approve & Keep in app** and **Keep in app (internal)** action buttons.
+     - Added audit notice banner for kept-in-app internal expenses with date, decider, and reason.
+     - Enabled PDF downloading for kept-in-app vouchers.
+   - `src/views/ExpenseApprovalsView.vue`:
+     - Added **Approve & Keep in app** button to the approver queue.
+   - `src/views/ExpenseFormView.vue`:
+     - Added **Keep in app (Internal expense)** checkbox for admins and approvers.
+   - `src/views/ExpenseReportsView.vue`:
+     - Added `kept_in_app` to reports list and respected route query parameters.
+     - Added 5th summary card on dashboard for "Kept in app".
+     - Built dedicated Annual Total KPI cards, Monthly Breakdown table, and detailed voucher table with full CSV/Excel export.
+5. **Documentation & Tests**:
+   - Updated `guideline-admin.md` and `guideline-user.md`.
+   - Updated `changelog.md`.
+   - Added comprehensive unit test suite in `tests/expenses.test.ts` covering transitions, permissions, petty cash consumption, and report aggregations.
+
+**Files Changed:**
+- `migrations/0036_expense_keep_in_app.sql`
+- `server/env.ts`
+- `shared/expenses.ts`
+- `server/expenses.ts`
+- `src/types.ts`
+- `src/components/ExpenseStatusChip.vue`
+- `src/views/ExpenseFinanceView.vue`
+- `src/views/ExpenseDetailView.vue`
+- `src/views/ExpenseApprovalsView.vue`
+- `src/views/ExpenseFormView.vue`
+- `src/views/ExpenseReportsView.vue`
+- `tests/expenses.test.ts`
+- `guideline-admin.md`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran database migrations locally (`npm run db:migrate:local`): exit code 0.
+- Ran vitest unit test suite (`npm test`): 10 test files, 241 passed (100% success).
+- Ran frontend type checks (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Ran backend type checks (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Ran production build (`npm run build`): compiled successfully with code 0.
+
+**Remaining Considerations:**
+- None. All requirements for keeping expenses in the app and generating monthly/annual reports are implemented, tested, and fully documented.

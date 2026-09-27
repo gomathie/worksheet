@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Points Deduction & Admin Penalty System
+  - Added a new `point_deductions` table (Migration 0035) with append-only triggers for full immutability and audit compliance.
+  - Added `manage_point_deductions` right to permissions system (implied for admins, grantable individually to non-admins).
+  - Built point deductions server module (`server/deductions.ts`) providing balance queries, deduction recording with idempotency keys, duplicate prevention, and balance validation (cannot go below 0).
+  - Supported "Let It Go" pardon recording for documenting disciplinary decisions without deducting points.
+  - Integrated deductions into the monthly report calculation (`monthlyReport`), adjusting net points, remuneration, and totals for both admin and non-admin viewers.
+  - Created `PointDeductionModal.vue` allowing authorized admins to view live balances, choose presets, specify reasons/task refs, confirm, and deduct points.
+  - Added "Deduct" button directly on employee rows in `EmployeesView.vue`.
+  - Created `PointDeductionsView.vue` with month and employee filtering, stat tiles, and CSV export for audit tracking.
+  - Added navigation tabs in `App.vue` and route guards in `router/index.ts`.
+  - Added unit test suite in `tests/deductions.test.ts`.
 - Feature: Login as other users
   - Added a new `login_as_others` right that allows an admin to impersonate other users without their password.
   - Added a "Login as" button on the team list page for admins to switch into another user's session.

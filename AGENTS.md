@@ -675,3 +675,73 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Testing Performed:**
 - TypeScript type checks passed. Vite dev server hot-reloaded automatically.
+
+### Feature: Points Deduction & Admin Penalty System
+**Date:** September 28, 2026
+**Branch:** `main`
+
+**User Request:**
+"Users and employees currently earn points from cards, tasks, or work they successfully submit. Add a system that allows authorized admins to deduct points when a user/employee fails to complete a task, violates a requirement, receives repeated warnings, or otherwise needs a points penalty. The system must be secure, auditable, easy for admins to use, and clearly communicate deductions to the affected user."
+
+**Implementation Details:**
+1. **Database Schema (`migrations/0035_point_deductions.sql`)**:
+   - Created `point_deductions` table storing `id`, `employee_id`, `admin_id`, `amount`, `reason`, `task_id`, `warning_ref`, `previous_balance`, `new_balance`, `month`, `decision` (`deducted` or `let_it_go`), `idempotency_key`, and `created_at`.
+   - Created database indexes on `(employee_id, month)`, `admin_id`, `month`, and unique index on `idempotency_key`.
+   - Added append-only database triggers (`BEFORE UPDATE` and `BEFORE DELETE` aborting) to prevent tampering with deduction records.
+2. **Permissions Architecture (`server/auth.ts`, `src/types.ts`, `src/stores/auth.ts`, `functions/api/[[route]].ts`)**:
+   - Added `manage_point_deductions` boolean to backend and frontend `Rights` interfaces.
+   - Implied automatically for `admin` role, and explicitly grantable to non-admin employees in user administration.
+   - Preserved across serialization in `rightsToJson` and normalized in `parseRights`.
+3. **Server Module & API (`server/deductions.ts`, `functions/api/[[route]].ts`)**:
+   - Built `earnedPointsForMonth` and `totalDeductionsForMonth` helpers to calculate on-the-fly balances.
+   - Implemented `createDeduction` (`POST /api/point-deductions`):
+     - Validates authorization (`manage_point_deductions`), positive amount for penalties, target employee existence and active status.
+     - Enforces balance constraint: balance cannot become negative (`amount <= currentBalance`).
+     - Supports `let_it_go` decision with zero point deduction for documenting pardons.
+     - Implements idempotency key deduplication.
+     - Triggers server `audit()` log and `notifyUser()` with details (reason, amount, previous and updated balance).
+   - Implemented `listDeductions` (`GET /api/point-deductions`): privileged admins see all records with filters (month, employee_id), standard users can only view their own records.
+   - Implemented `getEmployeeBalance` (`GET /api/point-deductions/balance/:employeeId`): returns current month earned, deducted, and net balance.
+4. **Monthly Report & Dashboard Integration (`functions/api/[[route]].ts`, `src/types.ts`)**:
+   - Modified `monthlyReport` endpoint to query deductions for the month.
+   - For admins: updates each person's `points`, `deductions`, `remuneration` (calculated from effective net points), and summary totals.
+   - For non-admins: updates `my_summary` with effective points/remuneration and deduction amount.
+5. **Frontend UI Components & Views (`src/components/PointDeductionModal.vue`, `src/views/EmployeesView.vue`, `src/views/PointDeductionsView.vue`, `src/router/index.ts`, `src/App.vue`)**:
+   - Created `PointDeductionModal.vue`: live balance lookup, quick presets (-5, -10, -20, -50, All), live post-deduction balance preview, justification textarea, optional task/warning references, confirmation checkbox, and duplicate submission prevention.
+   - Updated `EmployeesView.vue`: added "Manage point deductions" right checkbox and "Deduct" button on employee rows.
+   - Created `PointDeductionsView.vue`: dedicated audit log table with filter by month, employee, and decision type, metric summary cards, and CSV export.
+   - Updated `App.vue` and `router/index.ts`: added `/point-deductions` route with permission guards and tab link under the Admin sub-navigation strip.
+6. **Documentation & Guidelines (`changelog.md`, `guideline-admin.md`, `guideline-user.md`, `AGENTS.md`)**:
+   - Updated admin guidelines with rights table entries and an end-to-end section explaining how deductions, pardons, balance protections, and audit logs work.
+   - Updated user guidelines explaining that point deductions appear in notifications and adjust effective monthly scores.
+   - Updated changelog and agent work log.
+
+**Files Changed:**
+- `migrations/0035_point_deductions.sql`
+- `server/env.ts`
+- `server/auth.ts`
+- `server/deductions.ts`
+- `functions/api/[[route]].ts`
+- `src/types.ts`
+- `src/stores/auth.ts`
+- `src/components/PointDeductionModal.vue`
+- `src/views/EmployeesView.vue`
+- `src/views/PointDeductionsView.vue`
+- `src/router/index.ts`
+- `src/App.vue`
+- `tests/deductions.test.ts`
+- `changelog.md`
+- `guideline-admin.md`
+- `guideline-user.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Local D1 migration applied successfully (`npm run db:migrate:local`).
+- Frontend type check (`npx tsc --noEmit -p tsconfig.app.json`) completed with exit code 0.
+- Backend type check (`npx tsc --noEmit -p tsconfig.server.json`) completed with exit code 0.
+- Unit test suite (`npm test`) executed 9 test suites and 226 tests with 100% passing.
+- Production build (`npm run build`) completed successfully with exit code 0.
+
+**Remaining Considerations:**
+- When deploying to production Cloudflare Pages/D1, run `npm run db:migrate:prod` to apply migration `0035_point_deductions.sql`.
+

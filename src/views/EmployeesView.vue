@@ -4,6 +4,7 @@ import { api } from '../api'
 import { DATA_SCOPE_LABELS, type DataScope } from '../types'
 import type { Department, Employee, WorkTypeInfo } from '../types'
 import { useAuthStore } from '../stores/auth'
+import PointDeductionModal from '../components/PointDeductionModal.vue'
 
 const auth = useAuthStore()
 
@@ -18,6 +19,18 @@ const editingId = ref<string | null>(null)
 // greet an admin with on every visit to a page that's mostly for browsing
 // the team list.
 const showForm = ref(false)
+
+const deductionModalOpen = ref(false)
+const deductionEmployee = ref<Employee | null>(null)
+
+function openDeductionModal(e: Employee) {
+  deductionEmployee.value = e
+  deductionModalOpen.value = true
+}
+
+function onDeductionSaved() {
+  load()
+}
 
 const activeTypes = computed(() =>
   workTypes.value.filter((w) => w.active === undefined || w.active),
@@ -53,6 +66,8 @@ const blankRights = () => ({
   manage_tasks: false,
   delete_tasks: false,
   send_announcements: false,
+  login_as_others: false,
+  manage_point_deductions: false,
 })
 
 const form = ref({
@@ -251,6 +266,7 @@ function rightsSummary(e: Employee): string {
     ['delete_tasks', 'Delete tasks'],
     ['send_announcements', 'Send announcements'],
     ['login_as_others', 'Login as others'],
+    ['manage_point_deductions', 'Point deductions'],
   ]
   // approve_* are deliberately absent: both require the admin role, so for a
   // non-admin they would claim an authority the API refuses to honour.
@@ -487,6 +503,10 @@ const managerName = (e: Employee) =>
               <input v-model="form.rights.login_as_others" type="checkbox" />
               Login as other users
             </label>
+            <label class="flex items-center gap-2">
+              <input v-model="form.rights.manage_point_deductions" type="checkbox" />
+              Manage point deductions (penalize/deduct points)
+            </label>
           </div>
           <p class="mt-1 text-xs text-muted">
             A non-admin with this right can propose an account. It stays pending
@@ -685,6 +705,14 @@ const managerName = (e: Employee) =>
                 >
                   Login as
                 </button>
+                <button
+                  v-if="auth.user?.rights.manage_point_deductions && e.id !== auth.user.id"
+                  class="btn btn-sm mr-1 border-amber text-amber hover:bg-amber-soft"
+                  @click="openDeductionModal(e)"
+                  :disabled="!e.active || e.approval_status !== 'approved'"
+                >
+                  Deduct
+                </button>
                 <button class="btn btn-sm mr-1" @click="startEdit(e)">Edit</button>
                 <button
                   class="btn btn-sm"
@@ -699,5 +727,12 @@ const managerName = (e: Employee) =>
         </table>
       </div>
     </div>
+
+    <PointDeductionModal
+      :open="deductionModalOpen"
+      :employee="deductionEmployee"
+      @close="deductionModalOpen = false"
+      @saved="onDeductionSaved"
+    />
   </div>
 </template>

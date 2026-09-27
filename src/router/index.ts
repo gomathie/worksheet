@@ -190,6 +190,12 @@ const router = createRouter({
       meta: { auth: true, right: 'view_reports' },
     },
     {
+      path: '/point-deductions',
+      name: 'point-deductions',
+      component: () => import('../views/PointDeductionsView.vue'),
+      meta: { auth: true, right: 'manage_point_deductions' },
+    },
+    {
       path: '/activity',
       name: 'activity',
       component: () => import('../views/AuditView.vue'),

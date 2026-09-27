@@ -245,3 +245,19 @@ export interface EntryRow {
   created_at: string
   updated_at: string
 }
+
+export interface PointDeductionRow {
+  id: string
+  employee_id: string
+  admin_id: string
+  amount: number
+  reason: string
+  task_id: string | null
+  warning_ref: string | null
+  previous_balance: number
+  new_balance: number
+  month: string
+  decision: string // 'deducted' | 'let_it_go'
+  idempotency_key: string | null
+  created_at: string
+}

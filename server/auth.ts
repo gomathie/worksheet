@@ -126,6 +126,8 @@ export interface Rights {
   send_announcements: boolean
   // Allows an admin to log in as another user
   login_as_others: boolean
+  // Deduct points from employees — admin-implied, grantable individually.
+  manage_point_deductions: boolean
 }
 
 /** Whose records a person may see. Stored on employees.data_scope. */
@@ -192,6 +194,7 @@ export const DEFAULT_RIGHTS: Rights = {
   delete_tasks: false,
   send_announcements: false,
   login_as_others: false,
+  manage_point_deductions: false,
 }
 
 const ALL_RIGHTS: Rights = {
@@ -215,6 +218,7 @@ const ALL_RIGHTS: Rights = {
   delete_tasks: true,
   send_announcements: true,
   login_as_others: true,
+  manage_point_deductions: true,
   // Not granted here — see the carve-out in parseRights.
   approve_expenses: false,
   approve_users: false,
@@ -302,6 +306,7 @@ export function parseRights(employee: Employee): Rights {
       delete_tasks: Boolean(raw.delete_tasks),
       send_announcements: Boolean(raw.send_announcements),
       login_as_others: Boolean(raw.login_as_others),
+      manage_point_deductions: Boolean(raw.manage_point_deductions),
     }
   } catch {
     return { ...DEFAULT_RIGHTS }

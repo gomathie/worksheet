@@ -122,6 +122,11 @@ import {
   updateLeave,
 } from '../../server/leaves'
 import { sendWeeklyDigest } from '../../server/cron'
+import {
+  createDeduction,
+  listDeductions,
+  getEmployeeBalance,
+} from '../../server/deductions'
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/
@@ -213,7 +218,8 @@ async function handleLogout(request: Request, env: Env): Promise<Response> {
 
 async function handleLoginAs(request: Request, env: Env): Promise<Response> {
   const user = await requireUser(request, env)
-  if (!user.rights.login_as_others) {
+  const rights = parseRights(user)
+  if (!rights.login_as_others) {
     throw new ApiError(403, 'Permission denied')
   }
 
@@ -1015,6 +1021,8 @@ function rightsToJson(raw: Partial<Rights> | undefined, fallback: Rights): strin
     approve_users: Boolean(raw?.approve_users ?? fallback.approve_users),
     use_petty_cash: Boolean(raw?.use_petty_cash ?? fallback.use_petty_cash),
     send_announcements: Boolean(raw?.send_announcements ?? fallback.send_announcements),
+    login_as_others: Boolean(raw?.login_as_others ?? fallback.login_as_others),
+    manage_point_deductions: Boolean(raw?.manage_point_deductions ?? fallback.manage_point_deductions),
   })
 }
 
@@ -3114,7 +3122,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits, doneTasksRes] =
+  const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits, doneTasksRes, deductionsRes] =
     await Promise.all([
       loadSettings(env),
       env.DB.prepare(entrySql)
@@ -3135,6 +3143,11 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       )
         .bind(taskQueryLower, taskQueryUpper)
         .all<{ assignee_id: string | null; completed_at: string }>(),
+      env.DB.prepare(
+        "SELECT employee_id, amount FROM point_deductions WHERE month = ? AND decision = 'deducted'",
+      )
+        .bind(month)
+        .all<{ employee_id: string; amount: number }>(),
     ])
   const settings = { ...liveSettings, point_value: rates.point_value, currency: rates.currency }
 
@@ -3155,6 +3168,10 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   for (const a of adjRes.results) {
     const map = a.type === 'bonus' ? bonusBy : reimbBy
     map.set(a.employee_id, round2((map.get(a.employee_id) ?? 0) + a.amount))
+  }
+  const deductionsBy = new Map<string, number>()
+  for (const d of deductionsRes.results) {
+    deductionsBy.set(d.employee_id, round2((deductionsBy.get(d.employee_id) ?? 0) + d.amount))
   }
   const paymentBy = new Map(payRes.results.map((p) => [p.employee_id, p]))
 
@@ -3223,17 +3240,26 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       const bonus = bonusBy.get(p.employee_id) ?? 0
       const reimbursements = reimbBy.get(p.employee_id) ?? 0
       const payment = paymentBy.get(p.employee_id)
+      const deductions = deductionsBy.get(p.employee_id) ?? 0
+      const effectivePoints = Math.max(0, round2(p.points - deductions))
+      const remuneration = computeRemuneration(effectivePoints, settings)
       return {
         ...p,
+        points: effectivePoints,
+        deductions,
+        remuneration,
         bonus,
         reimbursements,
-        total_due: round2(p.remuneration + bonus + reimbursements),
+        total_due: round2(remuneration + bonus + reimbursements),
         paid: Boolean(payment?.paid_at),
         confirmed: Boolean(payment?.confirmed_at),
       }
     })
     const bonusTotal = round2(per_person.reduce((s, p) => s + p.bonus, 0))
     const reimbTotal = round2(per_person.reduce((s, p) => s + p.reimbursements, 0))
+    const deductTotal = round2(per_person.reduce((s, p) => s + (p.deductions ?? 0), 0))
+    const pointsTotal = round2(per_person.reduce((s, p) => s + p.points, 0))
+    const remunTotal = round2(per_person.reduce((s, p) => s + p.remuneration, 0))
     return json({
       ...report,
       scope: 'full',
@@ -3243,9 +3269,12 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
       per_person,
       totals: {
         ...report.totals,
+        points: pointsTotal,
+        deductions: deductTotal,
+        remuneration: remunTotal,
         bonus: bonusTotal,
         reimbursements: reimbTotal,
-        total_due: round2(report.totals.remuneration + bonusTotal + reimbTotal),
+        total_due: round2(remunTotal + bonusTotal + reimbTotal),
       },
       settings,
       daily_detail,
@@ -3264,17 +3293,21 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
   const myBonus = bonusBy.get(user.id) ?? 0
   const myReimb = reimbBy.get(user.id) ?? 0
   const myPayment = paymentBy.get(user.id)
+  const myDeductions = deductionsBy.get(user.id) ?? 0
+  const mineEffectivePoints = Math.max(0, round2((mine?.points ?? 0) - myDeductions))
+  const mineRemuneration = computeRemuneration(mineEffectivePoints, settings)
   const my_summary = canSeeOwnPay(rights)
     ? {
-        remuneration: mine?.remuneration ?? 0,
+        remuneration: mineRemuneration,
         bonus: myBonus,
         reimbursements: myReimb,
-        total_due: round2((mine?.remuneration ?? 0) + myBonus + myReimb),
+        total_due: round2(mineRemuneration + myBonus + myReimb),
+        deductions: myDeductions,
         paid: Boolean(myPayment?.paid_at),
         confirmed: Boolean(myPayment?.confirmed_at),
       }
     : rights.view_points
-      ? { points: mine?.points ?? 0 }
+      ? { points: mineEffectivePoints, deductions: myDeductions }
       : undefined
 
   // Work-type scoping: non-admins only see work types they are personally
@@ -3650,6 +3683,18 @@ async function route(request: Request, env: Env): Promise<Response> {
   const leaveMatch = /^\/api\/leaves\/([\w-]+)$/.exec(path)
   if (leaveMatch && method === 'PATCH') {
     return updateLeave(request, env, leaveMatch[1])
+  }
+
+  // -------------------------------------------------------- point deductions
+  if (path === '/api/point-deductions' && method === 'POST') {
+    return createDeduction(request, env)
+  }
+  if (path === '/api/point-deductions' && method === 'GET') {
+    return listDeductions(request, env)
+  }
+  const deductBalanceMatch = /^\/api\/point-deductions\/balance\/([\w-]+)$/.exec(path)
+  if (deductBalanceMatch && method === 'GET') {
+    return getEmployeeBalance(request, env, deductBalanceMatch[1])
   }
 
   // ------------------------------------------------------------------ cron

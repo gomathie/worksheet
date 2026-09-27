@@ -54,6 +54,8 @@ just hidden in the interface. This scope also dictates what employees see on the
 | Manage tasks | Assign tasks to others and see the whole board. The holder gets an assignee picker **on each task card**, so reassigning never means opening the task first. They can also add secondary assignees or observers. |
 | Delete tasks | Delete a task that has been assigned to someone else |
 | Send announcements | Post to News. You can specify an **Author Name** (e.g., "Management") so the announcement is sent from a specific entity rather than defaulting to "System". |
+| Login as others | Impersonate another user without knowing their password |
+| **Manage point deductions** | Deduct points from employee balances as disciplinary penalties or record formal pardons ("Let it go"). Implied by admin role, grantable individually to non-admins |
 
 **Two rights the admin role does not carry automatically: `Approve expenses` and
 `Approve users`.** An approver is an administrator who has *also* been ticked for
@@ -227,6 +229,17 @@ The **expense** audit trail is separate and stronger — it is **append-only,
 enforced by the database itself**. Edits and deletions of that log are rejected
 by SQLite, not merely avoided in code, so a voucher's history cannot be quietly
 rewritten.
+
+## Point deductions & penalties
+
+Authorized administrators (and users granted `Manage point deductions`) can deduct points from an employee's score when they violate requirements, fail tasks, or receive disciplinary action:
+
+- **Deducting from Employees tab**: Next to each employee in the team list, click **Deduct** to open the deduction modal.
+- **Balance protection**: The modal displays the employee's current earned points, existing deductions, and live available balance. You cannot deduct more points than the available balance (balance cannot drop below zero).
+- **"Let It Go" (Pardon)**: If management reviews an infraction and decides to pardon it, you can select *Let It Go*. This records the explanation and incident in the audit trail with 0 points deducted.
+- **Audit trail & CSV Export**: **Admin → Point Deductions** provides a complete log of all penalties and pardons with filters by month, employee, and decision type, plus CSV download.
+- **Immediate employee notification**: Submitting a deduction automatically sends an in-app notification to the affected user with the deducted amount, justification, and new balance.
+- **Monthly report reflection**: Net points, totals, and monthly earnings automatically incorporate deductions.
 
 ---
 

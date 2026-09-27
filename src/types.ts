@@ -43,6 +43,8 @@ export interface Rights {
   send_announcements: boolean
   /** Allow an admin to log in as another user. */
   login_as_others: boolean
+  /** Deduct points from an employee's balance. */
+  manage_point_deductions: boolean
 }
 
 export interface NewsItem {
@@ -195,6 +197,7 @@ export interface ReportPerson {
   hours: number
   units: Record<string, number>
   points?: number
+  deductions?: number
   remuneration?: number
   bonus?: number
   reimbursements?: number
@@ -214,6 +217,7 @@ export interface ReportPayload {
     units: Record<string, number>
     days_worked: number
     points?: number
+    deductions?: number
     remuneration?: number
     bonus?: number
     reimbursements?: number
@@ -233,9 +237,10 @@ export interface ReportPayload {
         total_due: number
         paid: boolean
         confirmed: boolean
+        deductions?: number
         points?: undefined
       }
-    | { points: number; remuneration?: undefined }
+    | { points: number; deductions?: number; remuneration?: undefined }
   /** The viewer's own attendance: one row per elapsed day of the month, so
    * a day with neither a time entry nor a completed task reads as "no work
    * done" rather than silently not appearing. Days later than today are
@@ -634,4 +639,21 @@ export interface Leave {
   created_at: string
   reviewed_by: string | null
   reviewed_at: string | null
+}
+
+export interface PointDeduction {
+  id: string
+  employee_id: string
+  employee_name?: string
+  admin_id: string
+  admin_name?: string
+  amount: number
+  reason: string
+  task_id: string | null
+  warning_ref: string | null
+  previous_balance: number
+  new_balance: number
+  month: string
+  decision: 'deducted' | 'let_it_go'
+  created_at: string
 }

@@ -39,7 +39,7 @@ const financeActive = computed(() =>
   ].includes(String(route.name)),
 )
 const adminActive = computed(() =>
-  ['employees', 'settings', 'notifications'].includes(String(route.name)),
+  ['employees', 'settings', 'notifications', 'point-deductions'].includes(String(route.name)),
 )
 // Where the "Reports" pill itself points — Trends and Absences are always
 // visible so they're a safe fallback for anyone without the Reports right.
@@ -399,8 +399,8 @@ async function saveProfile() {
         >Finance</RouterLink
       >
       <RouterLink
-        v-if="auth.isAdmin"
-        :to="{ name: 'employees' }"
+        v-if="auth.isAdmin || auth.rights.manage_point_deductions"
+        :to="{ name: auth.isAdmin ? 'employees' : 'point-deductions' }"
         class="btn"
         :class="{ 'btn-solid': adminActive }"
         >Admin</RouterLink
@@ -517,17 +517,24 @@ async function saveProfile() {
     </div>
 
     <div
-      v-if="auth.user && adminActive && auth.isAdmin"
+      v-if="auth.user && adminActive && (auth.isAdmin || auth.rights.manage_point_deductions)"
       ref="adminNavEl"
       class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
-      <RouterLink :to="{ name: 'employees' }" class="btn btn-sm" active-class="btn-solid"
+      <RouterLink v-if="auth.isAdmin" :to="{ name: 'employees' }" class="btn btn-sm" active-class="btn-solid"
         >Employees</RouterLink
       >
-      <RouterLink :to="{ name: 'settings' }" class="btn btn-sm" active-class="btn-solid"
+      <RouterLink
+        v-if="auth.isAdmin || auth.rights.manage_point_deductions"
+        :to="{ name: 'point-deductions' }"
+        class="btn btn-sm"
+        active-class="btn-solid"
+        >Point Deductions</RouterLink
+      >
+      <RouterLink v-if="auth.isAdmin" :to="{ name: 'settings' }" class="btn btn-sm" active-class="btn-solid"
         >Settings</RouterLink
       >
-      <RouterLink :to="{ name: 'notifications' }" class="btn btn-sm" active-class="btn-solid"
+      <RouterLink v-if="auth.isAdmin" :to="{ name: 'notifications' }" class="btn btn-sm" active-class="btn-solid"
         >Notifications</RouterLink
       >
     </div>

@@ -284,6 +284,7 @@ What you see here depends on your rights.
 - **Card Audit** — who classified or QAP'd a given card. Admin Guide has more.
 - **Installations** — telematics installation activity by device type and
   action, including which devices get replaced most. Admin Guide has more.
+- **Point deductions** — If you incur penalties or point deductions from administration (e.g. for task violations or missed deadlines), they will subtract from your effective monthly score and remuneration. You will receive an immediate in-app notification with the reason, deducted points, and updated balance.
 
 **Weekly Digests:** You will automatically receive a weekly summary (in-app and via email/SMS) detailing your total hours and units logged for the past week.
 

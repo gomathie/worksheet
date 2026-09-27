@@ -24,6 +24,8 @@ const NO_RIGHTS: Rights = {
   manage_tasks: false,
   delete_tasks: false,
   send_announcements: false,
+  login_as_others: false,
+  manage_point_deductions: false,
 }
 
 export const useAuthStore = defineStore('auth', {

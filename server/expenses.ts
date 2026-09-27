@@ -152,6 +152,7 @@ const ACTION_PHRASES: Record<ExpenseAction, string> = {
   admin_reject: 'reject this voucher',
   return: 'return this voucher for more information',
   mark_recorded: 'mark this voucher as recorded',
+  keep_in_app: 'keep this voucher in the app (internal only)',
   reopen: 'reopen this voucher',
   add_attachment: 'attach a receipt to this voucher',
   remove_attachment: 'remove a receipt from this voucher',
@@ -419,12 +420,14 @@ const SELECT_VOUCHER = `
          d.name    AS department_name,
          c.name    AS category_name,
          recorder.name AS recorded_by_name,
+         keeper.name   AS kept_by_name,
          (SELECT COUNT(*) FROM expense_attachments a WHERE a.voucher_id = v.id) AS attachment_count
   FROM expense_vouchers v
   JOIN employees emp ON emp.id = v.employee_id
   LEFT JOIN departments d ON d.id = v.department_id
   LEFT JOIN expense_categories c ON c.id = v.category_id
   LEFT JOIN employees recorder ON recorder.id = v.recorded_by
+  LEFT JOIN employees keeper ON keeper.id = v.kept_by
 `
 
 /**
@@ -650,6 +653,7 @@ interface VoucherBody {
   declaration_accepted?: boolean
   paid_from_petty_cash?: boolean
   funding_source?: string
+  keep_in_app?: boolean | number
   /** Save and submit in one step. */
   submit?: boolean
   /**
@@ -683,6 +687,7 @@ function normalizeBody(body: VoucherBody, currency: string) {
       (body.missing_receipt_reason ?? '')?.toString().trim().slice(0, 500) || null,
     declaration_accepted: body.declaration_accepted ? 1 : 0,
     paid_from_petty_cash: funding === 'petty_cash' ? 1 : 0,
+    keep_in_app: body.keep_in_app ? 1 : 0,
   }
 }
 
@@ -789,8 +794,8 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
        (id, voucher_number, employee_id, department_id, expense_date, submission_date,
         category_id, description, vendor, amount, currency, payment_method,
         receipt_available, missing_receipt_reason, declaration_accepted,
-        declaration_text, status, created_by, paid_from_petty_cash, funding_source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        declaration_text, status, created_by, paid_from_petty_cash, funding_source, keep_in_app)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -813,6 +818,7 @@ export async function createVoucher(request: Request, env: Env): Promise<Respons
       user.id,
       fields.paid_from_petty_cash,
       fields.funding_source,
+      fields.keep_in_app,
     )
     .run()
 
@@ -903,7 +909,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
        expense_date = ?, category_id = ?, description = ?, vendor = ?, amount = ?,
        currency = ?, payment_method = ?, receipt_available = ?,
        missing_receipt_reason = ?, declaration_accepted = ?, declaration_text = ?,
-       paid_from_petty_cash = ?, funding_source = ?, department_id = ?, updated_at = datetime('now')
+       paid_from_petty_cash = ?, funding_source = ?, department_id = ?, keep_in_app = ?, updated_at = datetime('now')
      WHERE id = ?`,
   )
     .bind(
@@ -921,6 +927,7 @@ export async function patchVoucher(request: Request, env: Env, id: string): Prom
       fields.paid_from_petty_cash,
       fields.funding_source,
       departmentId,
+      fields.keep_in_app,
       id,
     )
     .run()
@@ -1221,6 +1228,7 @@ interface DecisionBody {
   action?: ExpenseAction
   comments?: string
   recorded_reference?: string
+  kept_reason?: string
 }
 
 /**
@@ -1245,6 +1253,7 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     'admin_reject',
     'return',
     'mark_recorded',
+    'keep_in_app',
     'reopen',
   ]
   if (!action || !DECISIONS.includes(action)) {
@@ -1274,9 +1283,13 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
       ? 'approver'
       : action === 'mark_recorded'
         ? 'recorder'
-        : action === 'request_approval'
-          ? 'screener'
-          : 'manager'
+        : action === 'keep_in_app'
+          ? voucher.status === 'admin_approval'
+            ? 'approver'
+            : 'recorder'
+          : action === 'request_approval'
+            ? 'screener'
+            : 'manager'
 
   const now = new Date().toISOString()
 
@@ -1287,9 +1300,16 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     )
       .bind(next, now, user.id, reference, id)
       .run()
+  } else if (action === 'keep_in_app') {
+    const reason = (body.kept_reason ?? comments ?? '').trim().slice(0, 500) || null
+    await env.DB.prepare(
+      "UPDATE expense_vouchers SET status = ?, keep_in_app = 1, kept_at = ?, kept_by = ?, kept_reason = ?, updated_at = datetime('now') WHERE id = ?",
+    )
+      .bind(next, now, user.id, reason, id)
+      .run()
   } else if (action === 'reopen') {
     await env.DB.prepare(
-      "UPDATE expense_vouchers SET status = ?, reopened_at = ?, recorded_at = NULL, recorded_by = NULL, recorded_reference = NULL, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE expense_vouchers SET status = ?, reopened_at = ?, recorded_at = NULL, recorded_by = NULL, recorded_reference = NULL, kept_at = NULL, kept_by = NULL, kept_reason = NULL, updated_at = datetime('now') WHERE id = ?",
     )
       .bind(next, now, id)
       .run()
@@ -1306,13 +1326,15 @@ export async function decideVoucher(request: Request, env: Env, id: string): Pro
     const decision =
       action === 'mark_recorded'
         ? 'recorded'
-        : action === 'request_approval'
-          ? 'escalated'
-          : action === 'return' || action === 'reopen'
-          ? 'returned'
-          : action.endsWith('reject')
-            ? 'rejected'
-            : 'approved'
+        : action === 'keep_in_app'
+          ? 'kept_in_app'
+          : action === 'request_approval'
+            ? 'escalated'
+            : action === 'return' || action === 'reopen'
+            ? 'returned'
+            : action.endsWith('reject')
+              ? 'rejected'
+              : 'approved'
     await env.DB.prepare(
       `INSERT INTO expense_approvals (id, voucher_id, approver_id, role, decision, comments)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1408,6 +1430,15 @@ async function announceDecision(
         kind: 'expense_recorded',
         title: `Expense voucher ${d.number} recorded`,
         body: `${d.number} for ${money} has been recorded in the external finance records.${tail}`,
+        voucherId: d.voucherId,
+      })
+      break
+    case 'keep_in_app':
+      await notifyUser(env, {
+        employeeId: d.ownerId,
+        kind: 'expense_approved',
+        title: `Expense voucher ${d.number} approved (kept in app)`,
+        body: `${d.number} for ${money} has been approved and retained internally in the app.${tail}`,
         voucherId: d.voucherId,
       })
       break

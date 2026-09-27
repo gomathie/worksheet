@@ -19,6 +19,7 @@ export const EXPENSE_STATUSES = [
   'approved',
   'rejected',
   'recorded',
+  'kept_in_app',
 ] as const
 
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number]
@@ -83,6 +84,7 @@ export const STATUS_LABELS: Record<ExpenseStatus, string> = {
   approved: 'Approved',
   rejected: 'Rejected',
   recorded: 'Recorded',
+  kept_in_app: 'Kept in App',
 }
 
 /** Statuses that still need somebody to act. Drives the "pending" counters. */
@@ -190,6 +192,7 @@ export type ExpenseAction =
   | 'admin_reject'
   | 'return'
   | 'mark_recorded'
+  | 'keep_in_app'
   | 'reopen'
   | 'add_attachment'
   | 'remove_attachment'
@@ -256,7 +259,7 @@ export function allowedActions(
 ): ExpenseAction[] {
   const actions: ExpenseAction[] = []
   const { status } = state
-  const decided = status === 'approved' || status === 'recorded'
+  const decided = status === 'approved' || status === 'recorded' || status === 'kept_in_app'
 
   // --- owner-side
   if (status === 'draft' && (actor.is_owner ? actor.can_create : actor.is_admin)) {
@@ -282,16 +285,16 @@ export function allowedActions(
     actions.push('request_approval', 'return')
   }
 
-  // --- recording: books the approved expense, never approves it. Only ever
-  // possible once an approver has approved, which is the sole route into the
-  // 'approved' state.
+  // --- recording: books the approved expense into external accounting,
+  // OR marks it to be retained internally in the app without external booking.
   if (status === 'approved' && isRecorder(actor)) {
-    actions.push('mark_recorded')
+    actions.push('mark_recorded', 'keep_in_app')
   }
 
-  // --- final approval
+  // --- final approval: approver can approve for external recording, or
+  // approve directly to keep in the app without sending to the recording queue.
   if (canApprove(actor, status)) {
-    actions.push('admin_approve', 'admin_reject', 'return')
+    actions.push('admin_approve', 'keep_in_app', 'admin_reject', 'return')
   }
 
   // --- administrator override
@@ -335,6 +338,8 @@ export function statusAfter(
       return 'draft'
     case 'mark_recorded':
       return 'recorded'
+    case 'keep_in_app':
+      return 'kept_in_app'
     default:
       return null
   }
@@ -561,6 +566,7 @@ export const PETTY_CASH_CONSUMING_STATUSES: ExpenseStatus[] = [
   'admin_approval',
   'approved',
   'recorded',
+  'kept_in_app',
 ]
 
 export function consumesPettyCash(status: ExpenseStatus): boolean {
@@ -642,6 +648,7 @@ export interface ExpenseSummary {
   approved: number
   rejected: number
   recorded: number
+  kept_in_app: number
   total_this_month: number
   by_category: Bucket[]
   by_employee: Bucket[]
@@ -689,6 +696,7 @@ export function summarize(vouchers: VoucherLike[], month: string): ExpenseSummar
     approved: counts.approved,
     rejected: counts.rejected,
     recorded: counts.recorded,
+    kept_in_app: counts.kept_in_app,
     total_this_month: round2(thisMonth.reduce((s, v) => s + v.amount, 0)),
     by_category: bucketBy(
       billable,

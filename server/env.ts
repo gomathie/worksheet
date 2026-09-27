@@ -92,6 +92,10 @@ export interface ExpenseVoucherRow {
   recorded_at: string | null
   recorded_by: string | null
   recorded_reference: string | null
+  keep_in_app: number
+  kept_at: string | null
+  kept_by: string | null
+  kept_reason: string | null
   reopened_at: string | null
   created_at: string
   updated_at: string

@@ -38,8 +38,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 // Automatically inject data-labels onto data tables for responsive mobile cards
 const observeTables = () => {
   document.querySelectorAll('table.data').forEach(table => {
-    if (table.hasAttribute('data-labeled')) return
-    table.setAttribute('data-labeled', 'true')
     const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent?.trim() || '')
     table.querySelectorAll('tbody tr').forEach(tr => {
       // Don't apply to total or group head rows

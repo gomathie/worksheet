@@ -164,3 +164,19 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 - Ran local D1 migrations; no pending migrations remained.
 - Ran full Vitest suite successfully: 11 test files, 248 tests passed.
 - Started the local Wrangler Pages server successfully at `http://127.0.0.1:8788`.
+
+### Bug Fix: Mobile Viewport Overflow
+**Date:** September 28, 2026
+
+**User Request:**
+"check the mobile view. some items extend out of the screen"
+
+**Implementation Details:**
+- Added shared width and shrink constraints so panels, controls, media, and nested flex/grid content stay within the mobile viewport.
+- Updated mobile table cards to wrap long values and action groups instead of widening the page.
+- Adjusted the masthead and month picker for narrow screens.
+- Fixed responsive table labeling for rows inserted after the initial render.
+
+**Testing Performed:**
+- Ran the production build and full Vitest suite successfully.
+- Checked mobile layout overflow at 320px, 375px, and 430px viewport widths.

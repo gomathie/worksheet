@@ -24,6 +24,20 @@ html {
   color: var(--color-ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body,
+#app {
+  min-width: 0;
+  max-width: 100%;
+}
+
+img,
+svg,
+canvas {
+  max-width: 100%;
 }
 
 /* ---------- editorial building blocks ---------- */
@@ -40,6 +54,14 @@ html {
   border: 1px solid var(--color-line);
   border-radius: 10px;
   padding: 22px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Flex and grid children default to min-width:auto, which lets long text,
+   controls, and tables force a narrow page wider than the viewport. */
+:where(.flex, .grid) > * {
+  min-width: 0;
 }
 
 /* Buttons are deliberately quieter than the display type around them. The
@@ -67,6 +89,7 @@ html {
   min-height: 34px;
   padding: 7px 14px;
   border-radius: 8px;
+  max-width: 100%;
   cursor: pointer;
   transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease,
     transform 0.06s ease;
@@ -162,6 +185,8 @@ html {
 
 .field-input {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--color-line);
   border-radius: 8px;
   background: #fff;
@@ -361,9 +386,16 @@ table.data tr.group-head td {
 
 /* ---------- mobile responsive tables ---------- */
 @media (max-width: 640px) {
-  table.data { display: block; border: none; }
+  .panel { padding: 16px; }
+
+  table.data { display: block; min-width: 0; max-width: 100%; border: none; }
   table.data thead { display: none; }
-  table.data tbody, table.data tr, table.data td { display: block; width: 100%; }
+  table.data tbody, table.data tr, table.data td {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
   
   table.data tr {
     margin-bottom: 12px;
@@ -378,9 +410,15 @@ table.data tr.group-head td {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     padding: 8px 12px;
     text-align: right; /* Values align right by default in cards */
+    white-space: normal !important;
+    overflow-wrap: anywhere;
   }
+
+  table.data td > * { min-width: 0; max-width: 100%; }
+  table.data td > .flex { flex-wrap: wrap; justify-content: flex-end; }
   
   table.data td:last-child {
     border-bottom: none;
@@ -396,7 +434,9 @@ table.data tr.group-head td {
     color: var(--color-muted);
     font-weight: 600;
     text-align: left;
-    margin-right: 12px;
+    flex: 0 1 42%;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   
   table.data tr.group-head td {

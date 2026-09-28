@@ -237,7 +237,7 @@ async function returnToAdmin() {
            guard bounces it straight back, so it is harmless there. -->
       <RouterLink
         :to="{ name: 'entries' }"
-        class="flex items-center gap-3 hover:opacity-80"
+        class="flex min-w-0 items-center gap-3 hover:opacity-80"
         aria-label="OpenSignal Ledger — go to time entry"
       >
         <div
@@ -245,9 +245,9 @@ async function returnToAdmin() {
         >
           LG
         </div>
-        <div>
-          <h1 class="display text-3xl leading-none">OPENSIGNAL Ledger</h1>
-          <p class="mt-0.5 text-xs tracking-[0.12em] text-muted uppercase">
+        <div class="min-w-0">
+          <h1 class="display text-2xl leading-none sm:text-3xl">OPENSIGNAL Ledger</h1>
+          <p class="mt-0.5 text-[11px] tracking-[0.08em] text-muted uppercase sm:text-xs sm:tracking-[0.12em]">
             Team Timesheet &amp; Tracker
           </p>
         </div>

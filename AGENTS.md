@@ -1033,3 +1033,39 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 
 **Remaining Considerations:**
 - If internal errors still appear in production, run remote D1 migrations with `npm run db:migrate:prod`; the local database is already current.
+
+### Bug Fix: Mobile Viewport Overflow
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+"check the mobile view. some items extend out of the screen"
+
+**Implementation Details:**
+1. **Shared responsive styles (`src/style.css`)**:
+   - Added viewport-safe maximum widths and shrink behavior for panels, controls, media, and flex/grid children.
+   - Updated mobile table cards so long labels, values, and action groups wrap within the card instead of extending the page.
+   - Reduced panel padding on phone widths to preserve usable content space.
+2. **Mobile header and controls (`src/App.vue`, `src/components/MonthPicker.vue`)**:
+   - Reduced masthead text at phone widths and allowed its content to shrink safely.
+   - Made the native month input occupy a full row on small screens.
+3. **Responsive table labels (`src/main.ts`)**:
+   - Removed the one-time table guard so asynchronously rendered rows receive `data-label` attributes for the mobile card layout.
+4. **Documentation (`mobile_ux_suggestions.md`)**:
+   - Recorded the completed mobile overflow hardening work.
+
+**Files Changed:**
+- `src/style.css`
+- `src/App.vue`
+- `src/components/MonthPicker.vue`
+- `src/main.ts`
+- `mobile_ux_suggestions.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran the production build and full Vitest suite successfully.
+- Checked mobile layout overflow at 320px, 375px, and 430px viewport widths.
+
+**Remaining Considerations:**
+- Dense action toolbars still wrap onto multiple lines by design; a future compact action menu could reduce their vertical height.

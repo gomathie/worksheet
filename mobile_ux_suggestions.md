@@ -12,11 +12,13 @@ Based on a review of the mobile screenshots and current implementation, the appl
 - Implement a **Slide-out Drawer** (hamburger menu) for all navigation links.
 - Alternatively, for the most used routes (e.g., Time Entry, Tasks, Dashboard, Alerts), implement a **Bottom Navigation Bar** that stays fixed to the bottom of the screen.
 
-### 3. Optimize Action Button Layouts (PENDING)
+### 3. Prevent Mobile Content Overflow (COMPLETED)
 **The Issue:** On the Monthly Report page, multiple action buttons ("Summary CSV", "Daily CSV", "Print/Save", "Lock Month") wrap onto multiple lines, creating a cluttered top header and taking up valuable vertical space.
 **The Fix:** 
-- Stack these buttons vertically as full-width (`w-full`) buttons on mobile so they are easier to tap.
-- Better yet, keep the primary action prominent and tuck secondary actions behind a single "More Options" (⋮) dropdown or a bottom-sheet menu.
+- Added shared shrink constraints for panels, form controls, buttons, and flex/grid children so long content cannot force the page beyond the viewport.
+- Made mobile table-card labels and values wrap safely, including action groups and values previously marked as non-wrapping.
+- Made the month input use a full row on small screens and reduced the masthead type at phone widths.
+- Updated the table label observer so asynchronously loaded rows also receive their mobile labels.
 
 ### 4. Use Floating Action Buttons (FABs) (PENDING)
 **The Issue:** On the Tasks and Time Entry pages, the large "New Task" or "Log Time" forms sit at the top of the page. On a phone, this pushes the actual list of tasks/entries completely below the fold.

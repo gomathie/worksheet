@@ -355,6 +355,7 @@ export async function listDeductions(
   const { results } = await env.DB.prepare(sql)
     .bind(...binds)
     .all<PointDeductionRow & { employee_name: string; admin_name: string }>()
+    .catch(() => ({ results: [] }))
 
   return json(
     results.map((r) => ({

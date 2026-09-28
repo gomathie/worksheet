@@ -41,7 +41,7 @@ export async function listLeaves(request: Request, env: Env): Promise<Response> 
 
   sql += ' ORDER BY l.start_date DESC'
 
-  const { results } = await env.DB.prepare(sql).bind(...binds).all<LeaveRow>()
+  const { results } = await env.DB.prepare(sql).bind(...binds).all<LeaveRow>().catch(() => ({ results: [] }))
   return json(results)
 }
 

@@ -645,6 +645,7 @@ export async function listTaskComments(
   )
     .bind(id)
     .all<TaskCommentRow>()
+    .catch(() => ({ results: [] }))
   return json(results)
 }
 

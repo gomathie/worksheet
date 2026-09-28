@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
+import ResponsiveActionMenu from '../components/ResponsiveActionMenu.vue'
 import ExpenseVoucherDocument from '../components/ExpenseVoucherDocument.vue'
 import { STATUS_LABELS } from '../../shared/expenses'
 import { usePortraitPrint } from '../usePortraitPrint'
@@ -107,22 +108,24 @@ async function shareOrExportPackPdf() {
       <h2 class="display text-2xl">Monthly audit pack</h2>
       <div class="flex flex-wrap items-center gap-3">
         <MonthPicker v-model="month" />
-        <button
-          class="btn btn-solid"
-          :disabled="!pack || pack.count === 0 || busyPdf"
-          title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
-          @click="shareOrExportPackPdf"
-        >
-          {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
-        </button>
-        <button
-          class="btn btn-sm"
-          :disabled="!pack || pack.count === 0"
-          @click="printPack"
-        >
-          Print
-        </button>
-        <RouterLink :to="{ name: 'expense-reports' }" class="btn btn-sm">Back</RouterLink>
+        <ResponsiveActionMenu label="Pack actions">
+          <button
+            class="btn btn-solid"
+            :disabled="!pack || pack.count === 0 || busyPdf"
+            title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+            @click="shareOrExportPackPdf"
+          >
+            {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+          </button>
+          <button
+            class="btn btn-sm"
+            :disabled="!pack || pack.count === 0"
+            @click="printPack"
+          >
+            Print
+          </button>
+          <RouterLink :to="{ name: 'expense-reports' }" class="btn btn-sm">Back</RouterLink>
+        </ResponsiveActionMenu>
       </div>
     </div>
 

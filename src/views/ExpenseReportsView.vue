@@ -5,6 +5,7 @@ import { api } from '../api'
 import { downloadCsv } from '../csv'
 import { downloadXls } from '../xls'
 import MonthPicker from '../components/MonthPicker.vue'
+import ResponsiveActionMenu from '../components/ResponsiveActionMenu.vue'
 import { useAuthStore } from '../stores/auth'
 import { STATUS_LABELS } from '../../shared/expenses'
 import type { ExpenseDashboard, ExpenseReport } from '../types'
@@ -283,7 +284,7 @@ const share = (amount: number, buckets: { amount: number }[]) => {
             <input id="r-to" v-model="range.to" type="date" class="field-input mono !w-auto" />
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <ResponsiveActionMenu label="Export actions">
           <button class="btn btn-sm" :disabled="!report?.rows.length" @click="exportCsv">
             CSV
           </button>
@@ -299,7 +300,7 @@ const share = (amount: number, buckets: { amount: number }[]) => {
             {{ busyPdf ? 'Generating…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
           </button>
           <button class="btn btn-sm" @click="printPage">Print</button>
-        </div>
+        </ResponsiveActionMenu>
       </div>
 
       <header class="mb-4 border-b-2 border-ink pb-3">

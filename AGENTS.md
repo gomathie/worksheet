@@ -1068,4 +1068,43 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 - Checked mobile layout overflow at 320px, 375px, and 430px viewport widths.
 
 **Remaining Considerations:**
-- Dense action toolbars still wrap onto multiple lines by design; a future compact action menu could reduce their vertical height.
+- Addressed in the subsequent "Responsive Report Action Menus" work log entry.
+
+### Feature: Responsive Report Action Menus
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+"lets do this - Dense action toolbars still wrap onto multiple lines by design; a future compact action menu could reduce their vertical height."
+
+**Implementation Details:**
+1. **Reusable action menu (`src/components/ResponsiveActionMenu.vue`, `src/style.css`)**:
+   - Added a shared responsive action container that displays one compact menu trigger on phones and the original inline toolbar on larger screens.
+   - Added outside-click and Escape-key closing, disabled-action handling, and viewport-safe menu sizing.
+2. **Report toolbars (`src/views/ReportView.vue`, `src/views/ExpenseReportsView.vue`, `src/views/ExpensePackView.vue`)**:
+   - Grouped Monthly Report export, PDF, print, and month-lock commands under **Report actions** on mobile.
+   - Grouped Expense Report export and print commands under **Export actions** on mobile.
+   - Grouped Audit Pack PDF, print, and back commands under **Pack actions** on mobile.
+   - Preserved the existing inline buttons at desktop widths.
+3. **Documentation (`mobile_ux_suggestions.md`, `guideline-user.md`)**:
+   - Documented the completed responsive action-menu behavior.
+
+**Files Changed:**
+- `src/components/ResponsiveActionMenu.vue`
+- `src/style.css`
+- `src/views/ReportView.vue`
+- `src/views/ExpenseReportsView.vue`
+- `src/views/ExpensePackView.vue`
+- `mobile_ux_suggestions.md`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran the production build successfully.
+- Ran the full Vitest suite: 11 test files and 248 tests passed.
+- Verified all three menus at a 320px viewport: expected actions rendered, Escape closed each menu, and document width remained 320px.
+- Verified at 1024px that the menu trigger is hidden and the original inline toolbar remains visible.
+
+**Remaining Considerations:**
+- The compact menu is intentionally limited to dense report/export toolbars; transactional form and task actions remain directly visible.

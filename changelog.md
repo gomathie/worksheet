@@ -180,3 +180,20 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 **Testing Performed:**
 - Ran the production build and full Vitest suite successfully.
 - Checked mobile layout overflow at 320px, 375px, and 430px viewport widths.
+
+### Feature: Responsive Report Action Menus
+**Date:** September 28, 2026
+
+**User Request:**
+"lets do this - Dense action toolbars still wrap onto multiple lines by design; a future compact action menu could reduce their vertical height."
+
+**Implementation Details:**
+- Added a reusable responsive action menu with outside-click and Escape-key closing.
+- Collapsed Monthly Report, Expense Report, and Audit Pack command toolbars into one compact mobile control.
+- Preserved the existing inline action buttons on larger screens.
+- Updated the mobile UX notes and user guide.
+
+**Testing Performed:**
+- Production build completed successfully.
+- Full Vitest suite passed: 11 files and 248 tests.
+- Browser checks passed at 320px and 1024px for menu contents, closing behavior, responsive visibility, and horizontal overflow.

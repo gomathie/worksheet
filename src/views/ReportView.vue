@@ -5,6 +5,7 @@ import { downloadCsv } from '../csv'
 import { formatDayHeading, groupByDay } from '../dates'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
+import ResponsiveActionMenu from '../components/ResponsiveActionMenu.vue'
 import type { ReportPayload } from '../types'
 
 const auth = useAuthStore()
@@ -193,32 +194,34 @@ const rateNote = computed(() => {
       <h2 class="display text-2xl">Monthly report</h2>
       <div class="flex flex-wrap items-center gap-3">
         <MonthPicker v-model="month" />
-        <button class="btn" :disabled="!report" @click="exportSummaryCsv">
-          Summary CSV
-        </button>
-        <button class="btn" :disabled="!report" @click="exportDailyCsv">
-          Daily CSV
-        </button>
-        <button
-          class="btn btn-solid"
-          :disabled="!report || busyPdf"
-          title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
-          @click="shareOrExportReportPdf"
-        >
-          {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
-        </button>
-        <button class="btn" :disabled="!report" @click="printPage">
-          Print
-        </button>
-        <button
-          v-if="auth.isAdmin && report"
-          class="btn"
-          :class="report.locked ? 'btn-danger' : ''"
-          :disabled="busy"
-          @click="toggleLock"
-        >
-          {{ report.locked ? 'Unlock month' : 'Lock month' }}
-        </button>
+        <ResponsiveActionMenu label="Report actions">
+          <button class="btn" :disabled="!report" @click="exportSummaryCsv">
+            Summary CSV
+          </button>
+          <button class="btn" :disabled="!report" @click="exportDailyCsv">
+            Daily CSV
+          </button>
+          <button
+            class="btn btn-solid"
+            :disabled="!report || busyPdf"
+            title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+            @click="shareOrExportReportPdf"
+          >
+            {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+          </button>
+          <button class="btn" :disabled="!report" @click="printPage">
+            Print
+          </button>
+          <button
+            v-if="auth.isAdmin && report"
+            class="btn"
+            :class="report.locked ? 'btn-danger' : ''"
+            :disabled="busy"
+            @click="toggleLock"
+          >
+            {{ report.locked ? 'Unlock month' : 'Lock month' }}
+          </button>
+        </ResponsiveActionMenu>
       </div>
     </div>
 

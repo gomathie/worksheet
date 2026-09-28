@@ -893,10 +893,85 @@ interface ResolvedRates {
   overridesByEmployee: Map<string, Record<string, number>>
 }
 
+function currentMonth(env: Env): string {
+  return todayInTz(env.TEAM_TZ ?? 'Africa/Accra').slice(0, 7)
+}
+
+function isMonthEnded(env: Env, month: string): boolean {
+  return month < currentMonth(env)
+}
+
+async function isMonthExplicitlyUnlocked(env: Env, month: string): Promise<boolean> {
+  try {
+    const row = await env.DB.prepare('SELECT month FROM month_unlocks WHERE month = ?')
+      .bind(month)
+      .first<{ month: string }>()
+    return Boolean(row)
+  } catch {
+    return false
+  }
+}
+
+/** Capture the current rates as the JSON snapshot stored when locking a month. */
+async function buildRateSnapshot(env: Env): Promise<string> {
+  const [wtRes, overrides] = await Promise.all([
+    env.DB.prepare('SELECT id, name, points_per_unit FROM work_types ORDER BY position, created_at').all<{
+      id: string
+      name: string
+      points_per_unit: number
+    }>(),
+    allRateOverrides(env),
+  ])
+  return JSON.stringify({
+    work_types: wtRes.results,
+    overrides: Object.fromEntries(overrides),
+  })
+}
+
 async function getMonthLock(env: Env, month: string): Promise<MonthLockRow | null> {
-  return env.DB.prepare('SELECT * FROM month_locks WHERE month = ?')
+  // If an administrator explicitly unlocked this month, it is not locked.
+  if (await isMonthExplicitlyUnlocked(env, month)) {
+    return null
+  }
+
+  let lock = await env.DB.prepare('SELECT * FROM month_locks WHERE month = ?')
     .bind(month)
     .first<MonthLockRow>()
+
+  if (lock) {
+    return lock
+  }
+
+  // When a month ends (month < currentMonth), lock it by default!
+  if (isMonthEnded(env, month)) {
+    try {
+      const settings = await loadSettings(env)
+      const ratesJson = await buildRateSnapshot(env)
+      await env.DB.prepare(
+        'INSERT OR IGNORE INTO month_locks (month, locked_by, point_value, currency, rates_json) VALUES (?, ?, ?, ?, ?)',
+      )
+        .bind(month, 'system', settings.point_value, settings.currency, ratesJson)
+        .run()
+      lock = await env.DB.prepare('SELECT * FROM month_locks WHERE month = ?')
+        .bind(month)
+        .first<MonthLockRow>()
+      if (lock) return lock
+    } catch {
+      // In-memory fallback if write cannot complete
+      const settings = await loadSettings(env)
+      const ratesJson = await buildRateSnapshot(env)
+      return {
+        month,
+        locked_at: new Date().toISOString(),
+        locked_by: 'system',
+        point_value: settings.point_value,
+        currency: settings.currency,
+        rates_json: ratesJson,
+      }
+    }
+  }
+
+  return null
 }
 
 /** Reject a mutation whose month has been locked. */
@@ -945,22 +1020,6 @@ async function ratesForMonth(env: Env, month: string): Promise<ResolvedRates> {
     })),
     overridesByEmployee: overrides,
   }
-}
-
-/** Capture the current rates as the JSON snapshot stored when locking a month. */
-async function buildRateSnapshot(env: Env): Promise<string> {
-  const [wtRes, overrides] = await Promise.all([
-    env.DB.prepare('SELECT id, name, points_per_unit FROM work_types ORDER BY position, created_at').all<{
-      id: string
-      name: string
-      points_per_unit: number
-    }>(),
-    allRateOverrides(env),
-  ])
-  return JSON.stringify({
-    work_types: wtRes.results,
-    overrides: Object.fromEntries(overrides),
-  })
 }
 
 // ----------------------------------------------------------- employee routes
@@ -3094,10 +3153,16 @@ async function lockMonth(request: Request, env: Env): Promise<Response> {
   if (await getMonthLock(env, month)) {
     throw new ApiError(409, `${month} is already locked`)
   }
+  // Clear any unlock exemption if this month was previously unlocked
+  try {
+    await env.DB.prepare('DELETE FROM month_unlocks WHERE month = ?').bind(month).run()
+  } catch {
+    // Ignore if table does not exist
+  }
   const settings = await loadSettings(env)
   const ratesJson = await buildRateSnapshot(env)
   await env.DB.prepare(
-    'INSERT INTO month_locks (month, locked_by, point_value, currency, rates_json) VALUES (?, ?, ?, ?, ?)',
+    'INSERT OR REPLACE INTO month_locks (month, locked_by, point_value, currency, rates_json) VALUES (?, ?, ?, ?, ?)',
   )
     .bind(month, admin.id, settings.point_value, settings.currency, ratesJson)
     .run()
@@ -3109,6 +3174,17 @@ async function unlockMonth(request: Request, env: Env, month: string): Promise<R
   const admin = await requireAdmin(request, env)
   assertMonth(month)
   await env.DB.prepare('DELETE FROM month_locks WHERE month = ?').bind(month).run()
+  if (isMonthEnded(env, month)) {
+    try {
+      await env.DB.prepare(
+        'INSERT OR REPLACE INTO month_unlocks (month, unlocked_by, unlocked_at) VALUES (?, ?, datetime(\'now\'))',
+      )
+        .bind(month, admin.id)
+        .run()
+    } catch (e) {
+      console.error('Failed to record month unlock exemption:', e)
+    }
+  }
   await audit(env, admin.id, 'unlock_month', month)
   return json({ ok: true })
 }
@@ -3412,10 +3488,6 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
 }
 
 // -------------------------------------------------------------------- router
-
-function currentMonth(env: Env): string {
-  return todayInTz(env.TEAM_TZ ?? 'Africa/Accra').slice(0, 7)
-}
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)

@@ -33,6 +33,10 @@ const monthLabel = computed(() => {
   })
 })
 
+import { exportOrSharePdf, canShareFiles } from '../pdf'
+
+const isPastMonth = computed(() => month.value < (auth.user?.today.slice(0, 7) ?? ''))
+
 const generatedOn = new Date().toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
@@ -43,6 +47,28 @@ const money = (n: number) =>
   `${report.value?.settings.currency ?? '$'}${n.toFixed(2)}`
 
 const printPage = () => window.print()
+
+const busyPdf = ref(false)
+const canShare = computed(() => canShareFiles())
+
+async function shareOrExportReportPdf() {
+  const el = document.getElementById('report-printable-doc')
+  if (!el || !report.value) return
+  error.value = ''
+  busyPdf.value = true
+  try {
+    const filename = `monthly-report-${month.value}.pdf`
+    await exportOrSharePdf(el, filename, `Monthly Report - ${monthLabel.value}`, {
+      landscape: true,
+      orientation: 'landscape',
+      format: 'a4',
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to export PDF'
+  } finally {
+    busyPdf.value = false
+  }
+}
 
 const busy = ref(false)
 
@@ -175,8 +201,16 @@ const rateNote = computed(() => {
         <button class="btn" :disabled="!report" @click="exportDailyCsv">
           Daily CSV
         </button>
-        <button class="btn btn-solid" @click="printPage">
-          Print / Save as PDF
+        <button
+          class="btn btn-solid"
+          :disabled="!report || busyPdf"
+          title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+          @click="shareOrExportReportPdf"
+        >
+          {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+        </button>
+        <button class="btn" :disabled="!report" @click="printPage">
+          Print
         </button>
         <button
           v-if="auth.isAdmin && report"
@@ -194,13 +228,19 @@ const rateNote = computed(() => {
       v-if="report && report.locked"
       class="no-print mb-6 rounded-lg border border-teal bg-teal-soft px-4 py-2 text-sm"
     >
-      🔒 This month is locked. Its rates are frozen and entries, bonuses, and
-      reimbursements can't be changed until it's unlocked.
+      🔒 This month is locked{{ isPastMonth ? ' by default (month ended)' : '' }}. Its rates are frozen and entries, bonuses, and
+      reimbursements can't be changed until an administrator unlocks it.
+    </p>
+    <p
+      v-else-if="report && !report.locked && isPastMonth && auth.isAdmin"
+      class="no-print mb-6 rounded-lg border border-amber bg-amber-soft px-4 py-2 text-sm text-amber"
+    >
+      ⚠️ This past month has been unlocked for changes. When you are done making updates, click "Lock month" above to lock it back.
     </p>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
 
-    <div v-if="report" class="panel">
+    <div v-if="report" id="report-printable-doc" class="panel">
       <header class="mb-6 border-b-2 border-ink pb-4">
         <h1 class="display text-3xl">Ledger — Monthly Report</h1>
         <p class="mt-1 text-sm text-muted">

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Direct Mobile / PWA Document & PDF Sharing
+  - Implemented client-side PDF generation engine (`src/pdf.ts`) using dynamically imported `html2pdf.js` to avoid bundle bloat and ensure fast initial loads.
+  - Implemented native Web Share API (`navigator.share({ files: [...] })`) with desktop download fallback (`shareOrDownloadFile`, `exportOrSharePdf`).
+  - Mobile phones, tablets, and standalone PWAs can now share PDFs, CSVs, and Excel spreadsheets directly to WhatsApp, Telegram, Gmail, Google Drive, or Slack.
+  - Added dedicated **Share / Send PDF** action buttons across:
+    - Payslip (`PayslipView.vue`)
+    - Expense Voucher (`ExpenseDetailView.vue`)
+    - Monthly Report (`ReportView.vue`)
+    - Expense Reports (`ExpenseReportsView.vue`)
+    - Expense Audit Pack (`ExpensePackView.vue`)
+  - Off-screen cloning ensures full standard A4 width (portrait or landscape) and clean styling with interactive buttons hidden regardless of mobile screen width.
+  - Updated CSV (`src/csv.ts`) and XLS (`src/xls.ts`) downloaders to support direct mobile sharing.
+  - Added comprehensive test coverage in `tests/pdf-and-locks.test.ts`.
+- Feature: Default Month-End Auto-Locking & Admin Re-Lock Workflow
+  - Added `month_unlocks` table (Migration 0037) to record administrator unlock exemptions for past months.
+  - Automated month-end locking: whenever a calendar month ends (`month < currentMonth`), the system treats it as locked by default. Its rate snapshot is frozen, and mutations to entries, adjustments, and bonuses are blocked server-side (`assertMonthUnlocked`).
+  - Administrators can review ended months in `ReportView.vue` and click **Unlock month** to record an exemption and make necessary corrections.
+  - Added amber reminder banner in `ReportView.vue` when an ended month is currently unlocked, reminding administrators to lock it back once modifications are complete.
+  - Clicking **Lock month** removes the unlock exemption and re-freezes the rate snapshot in `month_locks`.
+- Fix: Task API Resilience & Internal Error Prevention
+  - Hardened `server/tasks.ts` (`listTasks`, `getTask`, `withActions`, `taskLike`) with defensive schema fallbacks and null-safe record filtering.
+  - Prevents 500 "Internal error" backend exceptions on `/api/tasks` if optional columns (such as secondary assignees or broadcast flags) are queried against varying database schema versions.
 - Feature: Keep Expenses in App (Internal Expenses) & Kept in App Report
   - Added `keep_in_app`, `kept_at`, `kept_by`, and `kept_reason` fields to `expense_vouchers` (Migration 0036).
   - Added support for keeping approved vouchers inside the app instead of sending them to external accounting records:

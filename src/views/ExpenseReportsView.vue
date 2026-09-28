@@ -118,6 +118,8 @@ function exportRows() {
   ]
 }
 
+import { exportOrSharePdf, canShareFiles } from '../pdf'
+
 const activeLabel = computed(
   () => REPORTS.find((r) => r.type === reportType.value)?.label ?? 'Report',
 )
@@ -125,6 +127,28 @@ const stamp = () => `${reportType.value}-${range.value.from}-to-${range.value.to
 const exportCsv = () => downloadCsv(`expenses-${stamp()}.csv`, exportRows())
 const exportXls = () => downloadXls(`expenses-${stamp()}.xls`, exportRows(), activeLabel.value)
 const printPage = () => window.print()
+
+const busyPdf = ref(false)
+const canShare = computed(() => canShareFiles())
+
+async function shareOrExportExpenseReportPdf() {
+  const el = document.getElementById('expense-report-printable')
+  if (!el || !report.value?.rows.length) return
+  error.value = ''
+  busyPdf.value = true
+  try {
+    const filename = `expenses-${stamp()}.pdf`
+    await exportOrSharePdf(el, filename, `Expense Report - ${activeLabel.value}`, {
+      landscape: true,
+      orientation: 'landscape',
+      format: 'a4',
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to export PDF'
+  } finally {
+    busyPdf.value = false
+  }
+}
 
 /** Bar width relative to the biggest bucket, for the breakdown lists. */
 const share = (amount: number, buckets: { amount: number }[]) => {
@@ -236,7 +260,7 @@ const share = (amount: number, buckets: { amount: number }[]) => {
     </template>
 
     <!-- ============================================================ reports -->
-    <div class="panel">
+    <div id="expense-report-printable" class="panel">
       <div class="no-print mb-4 flex flex-wrap items-end justify-between gap-3">
         <div class="flex flex-wrap items-end gap-3">
           <div>
@@ -268,7 +292,15 @@ const share = (amount: number, buckets: { amount: number }[]) => {
           <button class="btn btn-sm" :disabled="!report?.rows.length" @click="exportXls">
             Excel
           </button>
-          <button class="btn btn-sm" @click="printPage">PDF</button>
+          <button
+            class="btn btn-sm btn-solid"
+            :disabled="!report?.rows.length || busyPdf"
+            title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+            @click="shareOrExportExpenseReportPdf"
+          >
+            {{ busyPdf ? 'Generating…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+          </button>
+          <button class="btn btn-sm" @click="printPage">Print</button>
         </div>
       </div>
 

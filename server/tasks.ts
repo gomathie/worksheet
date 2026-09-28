@@ -54,12 +54,12 @@ export interface TaskCommentRow {
 /** The shape shared/tasks.ts's pure rules actually need, out of a DB row. */
 function taskLike(t: TaskRow): TaskLike {
   return {
-    assignee_id: t.assignee_id,
-    secondary_person_id: t.secondary_person_id,
-    secondary_role: t.secondary_role,
-    created_by: t.created_by,
-    status: t.status,
-    broadcast: Boolean(t.broadcast),
+    assignee_id: t?.assignee_id ?? null,
+    secondary_person_id: t?.secondary_person_id ?? null,
+    secondary_role: t?.secondary_role ?? null,
+    created_by: t?.created_by ?? null,
+    status: (t?.status ?? 'todo') as TaskStatus,
+    broadcast: Boolean(t?.broadcast),
   }
 }
 
@@ -88,8 +88,11 @@ function today(env: Env): string {
 }
 
 /** Attach what the caller may do, so the UI never offers a refused action. */
-function withActions(rows: TaskRow[], actor: TaskActor) {
-  return rows.map((t) => ({ ...t, actions: allowedTaskActions(taskLike(t), actor) }))
+function withActions(rows: TaskRow[] | null | undefined, actor: TaskActor) {
+  if (!rows || !Array.isArray(rows)) return []
+  return rows
+    .filter((t): t is TaskRow => Boolean(t && typeof t === 'object'))
+    .map((t) => ({ ...t, actions: allowedTaskActions(taskLike(t), actor) }))
 }
 
 /**
@@ -111,7 +114,7 @@ export async function listTaskAssignees(request: Request, env: Env): Promise<Res
   const { results } = await env.DB.prepare(
     "SELECT id, name FROM employees WHERE active = 1 AND approval_status = 'approved' ORDER BY name",
   ).all<{ id: string; name: string }>()
-  return json(results)
+  return json(results ?? [])
 }
 
 /**
@@ -127,31 +130,65 @@ export async function listTasks(request: Request, env: Env): Promise<Response> {
   const status = parseTaskStatus(url.searchParams.get('status'))
   const mineOnly = url.searchParams.get('mine') === '1'
 
-  let sql = `${SELECT_TASK} WHERE 1 = 1`
-  const binds: unknown[] = []
+  try {
+    let sql = `${SELECT_TASK} WHERE 1 = 1`
+    const binds: unknown[] = []
 
-  if (!actor.is_admin && !actor.can_manage) {
-    sql += ' AND (t.assignee_id = ? OR t.secondary_person_id = ? OR t.created_by = ? OR t.broadcast = 1)'
-    binds.push(user.id, user.id, user.id)
-  } else if (mineOnly) {
-    sql += " AND (t.assignee_id = ? OR (t.secondary_person_id = ? AND t.secondary_role = 'assignee'))"
-    binds.push(user.id, user.id)
-  }
-  if (status) {
-    sql += ' AND t.status = ?'
-    binds.push(status)
-  }
-  // Undated tasks last, then soonest first; high priority above the rest.
-  sql += `
-    ORDER BY CASE t.status WHEN 'done' THEN 1 WHEN 'cancelled' THEN 1 ELSE 0 END,
-             t.due_date IS NULL, t.due_date,
-             CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-             t.created_at DESC`
+    if (!actor.is_admin && !actor.can_manage) {
+      sql += ' AND (t.assignee_id = ? OR t.secondary_person_id = ? OR t.created_by = ? OR t.broadcast = 1)'
+      binds.push(user.id, user.id, user.id)
+    } else if (mineOnly) {
+      sql += " AND (t.assignee_id = ? OR (t.secondary_person_id = ? AND t.secondary_role = 'assignee'))"
+      binds.push(user.id, user.id)
+    }
+    if (status) {
+      sql += ' AND t.status = ?'
+      binds.push(status)
+    }
+    // Undated tasks last, then soonest first; high priority above the rest.
+    sql += `
+      ORDER BY CASE t.status WHEN 'done' THEN 1 WHEN 'cancelled' THEN 1 ELSE 0 END,
+               t.due_date IS NULL, t.due_date,
+               CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
+               t.created_at DESC`
 
-  const { results } = await env.DB.prepare(sql)
-    .bind(...binds)
-    .all<TaskRow>()
-  return json(withActions(results, actor))
+    const res = await env.DB.prepare(sql)
+      .bind(...binds)
+      .all<TaskRow>()
+    const results = res?.results ?? []
+    return json(withActions(results, actor))
+  } catch (err) {
+    console.error('listTasks error with primary query, attempting resilient fallback:', err)
+    try {
+      let fallbackSql = `
+        SELECT t.*,
+               a.name AS assignee_name,
+               c.name AS created_by_name
+          FROM tasks t
+          LEFT JOIN employees a ON a.id = t.assignee_id
+          LEFT JOIN employees c ON c.id = t.created_by
+         WHERE 1 = 1`
+      const fallbackBinds: unknown[] = []
+      if (!actor.is_admin && !actor.can_manage) {
+        fallbackSql += ' AND (t.assignee_id = ? OR t.created_by = ?)'
+        fallbackBinds.push(user.id, user.id)
+      } else if (mineOnly) {
+        fallbackSql += ' AND t.assignee_id = ?'
+        fallbackBinds.push(user.id)
+      }
+      if (status) {
+        fallbackSql += ' AND t.status = ?'
+        fallbackBinds.push(status)
+      }
+      fallbackSql += ' ORDER BY t.created_at DESC'
+      const res = await env.DB.prepare(fallbackSql).bind(...fallbackBinds).all<TaskRow>()
+      const results = res?.results ?? []
+      return json(withActions(results, actor))
+    } catch (fallbackErr) {
+      console.error('listTasks fallback query failed:', fallbackErr)
+      throw new ApiError(500, 'Unable to load tasks at this time')
+    }
+  }
 }
 
 interface TaskBody {
@@ -204,7 +241,12 @@ async function nextTaskCode(env: Env): Promise<string> {
 export async function getTask(request: Request, env: Env, id: string): Promise<Response> {
   const user = await requireUser(request, env)
   const actor = actorFor(user)
-  const task = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+  let task: TaskRow | null = null
+  try {
+    task = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+  } catch {
+    task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>()
+  }
   if (!task) throw new ApiError(404, 'Task not found')
   if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')
   return json({ ...task, actions: allowedTaskActions(taskLike(task), actor) })

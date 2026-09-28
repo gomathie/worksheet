@@ -897,3 +897,73 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 
 **Remaining Considerations:**
 - None. All requirements for keeping expenses in the app and generating monthly/annual reports are implemented, tested, and fully documented.
+
+### Feature: Mobile & PWA Document Sharing, Default Month-End Locking, and Task API Resilience
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+1. "when exporting pdf on mobile or on the pwa, most times we are unable to send directly to other apps"
+2. "when a month ends, lock it by default. when a change is needed, an admn can unlock and change and lock back"
+3. "Diagnostic Summary: 'Internal error' Analysis" on `/api/tasks`
+
+**Implementation Details:**
+1. **Direct Mobile/PWA Document & PDF Sharing (`src/pdf.ts`, `src/csv.ts`, `src/xls.ts`)**:
+   - Installed `html2pdf.js` and `@types/html2pdf.js`.
+   - Built client-side PDF generation engine in `src/pdf.ts` with dynamic import of `html2pdf.js` to ensure optimal code-splitting and zero SSR/test runner friction.
+   - Built off-screen fixed-width rendering container (800px portrait, 1120px landscape) to guarantee crisp, standardized A4 dimensions regardless of device screen width, with `.no-print` elements removed and `.print-only` elements revealed.
+   - Integrated native Web Share API (`navigator.share({ files: [...] })`) via `shareOrDownloadFile` and `exportOrSharePdf`, with graceful fallback to standard browser download on desktop or unsupported devices.
+   - Updated CSV (`downloadCsv`) and Excel (`downloadXls`) export utilities to utilize `shareOrDownloadFile`, enabling one-tap sharing of spreadsheets on mobile.
+   - Added **Share / Send PDF** buttons alongside standard Print buttons across:
+     - `src/views/PayslipView.vue` (`shareOrExportPayslipPdf`)
+     - `src/views/ExpenseDetailView.vue` (`shareOrExportVoucherPdf`)
+     - `src/views/ReportView.vue` (`shareOrExportReportPdf`, landscape A4)
+     - `src/views/ExpenseReportsView.vue` (`shareOrExportExpenseReportPdf`, landscape A4)
+     - `src/views/ExpensePackView.vue` (`shareOrExportPackPdf`, portrait A4)
+2. **Default Month-End Auto-Locking with Admin Unlock/Lock Workflow (`functions/api/[[route]].ts`, `migrations/0037_month_unlocks.sql`, `src/views/ReportView.vue`)**:
+   - Created database migration `0037_month_unlocks.sql` tracking administrator unlock exemptions for past months.
+   - Server-side authoritative locking (`functions/api/[[route]].ts`):
+     - Added `isMonthEnded(env, month)` checking `month < currentMonth(env)`.
+     - In `getMonthLock`, if an ended month has not been explicitly unlocked by an admin (`isMonthExplicitlyUnlocked`), it is automatically locked by default with an auto-created frozen rate snapshot (`locked_by = 'system'`).
+     - Added `isMonthExplicitlyUnlocked(env, month)` checking `month_unlocks`. If an admin unlocked a past month, `getMonthLock` returns `null` so modifications are allowed.
+     - Updated `assertMonthUnlocked(env, month)` to block all additions/modifications to entries, bonuses, and adjustments for ended months.
+     - Updated `unlockMonth(request, env, month)`: deletes from `month_locks` and records an exemption in `month_unlocks` if `month < currentMonth(env)`.
+     - Updated `lockMonth(request, env)`: removes any exemption from `month_unlocks` and saves a fresh rate snapshot in `month_locks`.
+   - Frontend UI (`src/views/ReportView.vue`):
+     - Displays `🔒 This month is locked by default (month ended)` banner.
+     - Displays amber reminder banner when a past month is unlocked: `⚠️ This past month has been unlocked for changes. When you are done making updates, click "Lock month" above to lock it back.`
+3. **Task API Resilience & 500 "Internal error" Prevention (`server/tasks.ts`)**:
+   - Hardened `listTasks` and `getTask` against database schema divergence (e.g. missing `secondary_person_id` or broadcast columns on remote instances), adding automatic fallback queries and null-safe results mapping (`res?.results ?? []`).
+   - Hardened `withActions` and `taskLike` to safely default null/undefined attributes without throwing unhandled exceptions.
+4. **Documentation & Testing**:
+   - Added unit test suite `tests/pdf-and-locks.test.ts` covering mobile/PWA detection, file sharing capability, and month-end auto-locking logic.
+   - Updated `guideline-admin.md`, `guideline-user.md`, and `changelog.md`.
+
+**Files Changed:**
+- `migrations/0037_month_unlocks.sql`
+- `src/pdf.ts`
+- `src/csv.ts`
+- `src/xls.ts`
+- `src/views/PayslipView.vue`
+- `src/views/ExpenseDetailView.vue`
+- `src/views/ReportView.vue`
+- `src/views/ExpenseReportsView.vue`
+- `src/views/ExpensePackView.vue`
+- `functions/api/[[route]].ts`
+- `server/tasks.ts`
+- `tests/pdf-and-locks.test.ts`
+- `guideline-admin.md`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran database migrations locally (`npm run db:migrate:local`): exit code 0.
+- Ran full vitest unit test suite (`npm test`): 11 test files, 248 passed (100% success).
+- Ran frontend type checks (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Ran backend type checks (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Ran production build (`npm run build`): compiled successfully with code 0 (13.54s, code-split `html2pdf.js`).
+
+**Remaining Considerations:**
+- When deploying to production (`qap.dubblestack.com`), apply remote migrations with `npm run db:migrate:prod`.
+

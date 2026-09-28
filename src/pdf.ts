@@ -1,11 +1,12 @@
-import html2pdf from 'html2pdf.js'
-
 export function isMobileOrPwa(): boolean {
-  if (typeof window === 'undefined') return false
-  const isStandalone =
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)
+  const nav = typeof navigator !== 'undefined' ? navigator : null
+  const win = typeof window !== 'undefined' ? window : null
+  const isStandalone = Boolean(
+    win?.matchMedia?.('(display-mode: standalone)')?.matches ||
+      (win?.navigator as unknown as { standalone?: boolean })?.standalone === true,
+  )
+  const userAgent = nav?.userAgent ?? ''
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent)
   return isStandalone || isMobile
 }
 
@@ -121,6 +122,12 @@ export async function generatePdfBlob(
         format: 'a4' as const,
         orientation,
       },
+    }
+
+    // Dynamically load html2pdf so it is only loaded on demand and does not break SSR/test runners
+    const html2pdfModule = await import('html2pdf.js')
+    const html2pdf = (html2pdfModule.default || html2pdfModule) as unknown as () => {
+      set: (opt: unknown) => { from: (el: HTMLElement) => { outputPdf: (type: string) => Promise<Blob> } }
     }
 
     // Generate real PDF blob via html2pdf

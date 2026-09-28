@@ -277,6 +277,23 @@ enforced by the database itself**. Edits and deletions of that log are rejected
 by SQLite, not merely avoided in code, so a voucher's history cannot be quietly
 rewritten.
 
+## Month-end locking & default auto-lock
+
+Rates and figures for completed work must stay reliable over time. The app enforces strict month locking:
+
+- **Automatic default lock at month end**: When a calendar month ends (i.e. strictly prior to the current month), it is **locked by default**. Its rates are frozen and further additions or modifications to entries, adjustments, and reimbursements are blocked on both the server and client.
+- **Unlocking past months for edits**: If an administrator needs to make retrospective adjustments, load the month in **Monthly report** and click **Unlock month**. An exemption is recorded allowing administrators to edit figures and rates. An amber reminder banner appears warning that the past month is currently unlocked.
+- **Locking back**: Once updates are finished, click **Lock month** to re-freeze the month's snapshot.
+- **Current month locking**: Ongoing months remain unlocked by default until an administrator chooses to freeze them early.
+
+## Document export & mobile/PWA sharing
+
+The application supports direct client-side document compilation and sharing:
+
+- **Direct sharing on mobile & PWA**: When using the application on mobile phones, tablets, or installed as a standalone PWA, clicking **Share / Send PDF** (or exporting CSV/Excel) opens the native operating system share sheet (`navigator.share`). Users can send files directly to WhatsApp, Telegram, Gmail, Google Drive, Slack, or other installed apps without relying on broken mobile browser print dialogs.
+- **Desktop fallback**: On desktop browsers, the same buttons trigger instant crisp file downloads.
+- **Full A4 formatting**: Regardless of the phone's viewport width, PDFs are compiled using an off-screen container matching standard A4 dimensions (portrait or landscape as appropriate) with UI buttons and controls cleanly omitted.
+
 ## Point deductions & penalties
 
 Authorized administrators (and users granted `Manage point deductions`) can deduct points from an employee's score when they violate requirements, fail tasks, or receive disciplinary action:

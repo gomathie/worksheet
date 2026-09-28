@@ -283,14 +283,14 @@ What you see here depends on your rights.
   a returned one comes back to you with a note saying what's needed, shown
   beside the claim, and you can update or withdraw it from there.
 - **Payslip** — your own printable statement: work done, base pay, itemised
-  bonuses and reimbursements, total due.
+  bonuses and reimbursements, total due. On mobile or installed as a PWA, you can use **Share / Send PDF** to send your payslip directly to WhatsApp, Telegram, Email, or Drive.
 - **Dashboard** — the team's output for the month. You can select **Custom Date Ranges** instead of just strict months. Money shown here is **only
   ever your own**. It also shows **your days worked**: a day counts once you
   either logged time or completed a task on it, and **Your days this month**
   marks every day so far — worked days in teal, days with **no work done**
   greyed out. Days still to come aren't shown, and logging twice in a day is
   still one day.
-- **Monthly Report** — the fuller per-person report.
+- **Monthly Report** — the fuller per-person report. Months that have ended are automatically locked by default to keep figures reliable. If adjustments are required for a past month, an administrator must unlock it.
 - **Trends** — your figures over the last 3, 6 or 12 months.
 - **Card Audit** — who classified or QAP'd a given card. Admin Guide has more.
 - **Installations** — telematics installation activity by device type and
@@ -299,9 +299,11 @@ What you see here depends on your rights.
 
 **Weekly Digests:** You will automatically receive a weekly summary (in-app and via email/SMS) detailing your total hours and units logged for the past week.
 
-## Mobile experience
+## Mobile experience & document sharing
 
-When accessing OpenSignal Ledger on a phone or tablet, dense data tables (such as timesheet entries, tasks, expense vouchers, and reports) automatically adapt into structured, touch-friendly card views with clear column labels, making it effortless to log work on the go without horizontal scrolling.
+When accessing OpenSignal Ledger on a phone, tablet, or as a standalone PWA:
+- **Card-adaptive layouts**: Dense data tables (such as timesheet entries, tasks, expense vouchers, and reports) automatically adapt into structured, touch-friendly card views with clear column labels, making it effortless to log work on the go without horizontal scrolling.
+- **Direct PDF & spreadsheet sharing**: Wherever you see **Share / Send PDF**, CSV, or Excel exports (such as Payslips, Expense Vouchers, and Monthly Reports), tapping the button opens your mobile device's native share menu. You can send the document straight to WhatsApp, Telegram, Gmail, or your company chat.
 
 ---
 

@@ -1,5 +1,5 @@
 import { neutralizeFormula } from './spreadsheet-safety'
-import { shareOrDownloadFile, triggerDownload } from './pdf'
+import { shareOrDownloadFile } from './pdf'
 
 type Cell = string | number | null | undefined
 

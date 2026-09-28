@@ -72,11 +72,35 @@ const generatedOn = computed(() =>
     : '',
 )
 
+import { exportOrSharePdf, canShareFiles } from '../pdf'
+
 // Vouchers are portrait; the global stylesheet's landscape is for the
 // monthly report and would split each voucher across two sheets.
 usePortraitPrint()
 
 const printPack = () => window.print()
+
+const busyPdf = ref(false)
+const canShare = computed(() => canShareFiles())
+
+async function shareOrExportPackPdf() {
+  const el = document.getElementById('expense-pack-printable')
+  if (!el || !pack.value || pack.value.count === 0) return
+  error.value = ''
+  busyPdf.value = true
+  try {
+    const filename = `expense-audit-pack-${month.value}.pdf`
+    await exportOrSharePdf(el, filename, `Audit Pack - ${monthLabel.value}`, {
+      landscape: false,
+      orientation: 'portrait',
+      format: 'a4',
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to export PDF'
+  } finally {
+    busyPdf.value = false
+  }
+}
 </script>
 
 <template>
@@ -87,10 +111,18 @@ const printPack = () => window.print()
         <MonthPicker v-model="month" />
         <button
           class="btn btn-solid"
+          :disabled="!pack || pack.count === 0 || busyPdf"
+          title="Export or send PDF directly to other apps (WhatsApp, Email, Drive, etc.)"
+          @click="shareOrExportPackPdf"
+        >
+          {{ busyPdf ? 'Generating PDF…' : canShare ? 'Share / Send PDF' : 'Download PDF' }}
+        </button>
+        <button
+          class="btn btn-sm"
           :disabled="!pack || pack.count === 0"
           @click="printPack"
         >
-          Download PDF
+          Print
         </button>
         <RouterLink :to="{ name: 'expense-reports' }" class="btn btn-sm">Back</RouterLink>
       </div>
@@ -107,7 +139,7 @@ const printPack = () => window.print()
       vouchers go into the pack.
     </p>
 
-    <template v-if="pack && pack.count">
+    <div v-if="pack && pack.count" id="expense-pack-printable">
       <p class="panel no-print mb-6 border-teal bg-teal-soft text-sm">
         {{ pack.count }} voucher(s), {{ money(pack.total) }} in total. Each prints
         on its own page after the cover sheet.
@@ -176,6 +208,6 @@ const printPack = () => window.print()
         :voucher="v"
         class="pack-page mt-8"
       />
-    </template>
+    </div>
   </div>
 </template>

@@ -45,7 +45,7 @@ async function signIn() {
       localStorage.removeItem(REMEMBER_KEY)
     }
 
-    router.push({ name: 'entries' })
+    router.push({ name: 'dashboard' })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
   } finally {

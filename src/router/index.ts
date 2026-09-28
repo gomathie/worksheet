@@ -226,7 +226,7 @@ router.beforeEach(async (to) => {
   if (anyRight && !anyRight.some((r) => auth.rights[r])) {
     return { name: 'entries' }
   }
-  if (to.name === 'login' && auth.user) return { name: 'entries' }
+  if (to.name === 'login' && auth.user) return { name: 'dashboard' }
   return true
 })
 

@@ -116,3 +116,19 @@ All notable changes to this project will be documented in this file.
 - Feature: Work-Type Scoped Dashboard and Reports (Branch: `feature/work-type-scoped-dashboard`)
   - Server-side filtering to strip out work-type data a user is not assigned to (for non-admin users).
   - Client-side filtering in Dashboard and Report views as a UI-level safety net to hide unassigned columns and metrics.
+
+### Feature: Default Dashboard Redirect After Login
+**Date:** September 28, 2026
+
+**User Request:**
+"when someone logs in, let the Dasboard be the first thing to view"
+
+**Implementation Details:**
+1. **Frontend Navigation (src/views/LoginView.vue)**:
+   - Changed the post-login `router.push()` destination from `entries` to `dashboard`.
+2. **Router Configuration (src/router/index.ts)**:
+   - Updated the fallback redirect logic for already authenticated users visiting the `/login` route directly. It now redirects to `dashboard` instead of `entries`.
+   - Maintained safety: If a user lacks the `view_dashboard` right, the router's existing `beforeEach` hook intercepts the navigation and gracefully falls back to the `entries` page, preventing unauthorized access loops.
+
+**Testing Performed:**
+- Ran full frontend and backend type checks (`npx tsc --noEmit -p tsconfig.app.json` and `npx tsc --noEmit -p tsconfig.server.json`), which both completed successfully with `code 0`.

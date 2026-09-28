@@ -1108,3 +1108,40 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 
 **Remaining Considerations:**
 - The compact menu is intentionally limited to dense report/export toolbars; transactional form and task actions remain directly visible.
+
+### Fix: Vertical Mobile Card and Entry Inputs
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+"the cards responsive inputs are horizontal. they should be vertical. the live qap inputs and others should be vertical"
+
+**Implementation Details:**
+1. **Responsive data cards (`src/style.css`)**:
+   - Extended the card-style table breakpoint through 767px to align with the application's desktop breakpoint.
+   - Changed card cells from horizontal label/value rows to vertical stacks with left-aligned labels and values.
+   - Kept controls and action groups within the card width without forcing compact status chips or buttons to full width.
+2. **Time entry form (`src/views/EntriesView.vue`)**:
+   - Changed the phone/tablet form to one column for employee, date, time, hours, and direct-count work-type inputs.
+   - Kept QAP, Classification, and installation card fields vertical through tablet widths, including their individual mobile labels.
+   - Preserved the existing multi-column layout at the desktop breakpoint.
+3. **Documentation (`mobile_ux_suggestions.md`, `guideline-user.md`)**:
+   - Documented the vertical phone/tablet form and responsive-card behavior.
+
+**Files Changed:**
+- `src/style.css`
+- `src/views/EntriesView.vue`
+- `mobile_ux_suggestions.md`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran the production build successfully.
+- Ran the full Vitest suite: 11 test files and 248 tests passed.
+- Used the live local app to select the seeded card-based employee and add a QAP card at 375px and 767px.
+- Confirmed the main time inputs and QAP card inputs had non-overlapping vertical coordinates at both widths, with document widths matching their viewports.
+- Confirmed responsive table cells use a column layout and the desktop time fields remain horizontal at 1024px.
+
+**Remaining Considerations:**
+- Desktop layouts remain multi-column to avoid unnecessary scrolling on wide screens.

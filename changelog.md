@@ -197,3 +197,21 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 - Production build completed successfully.
 - Full Vitest suite passed: 11 files and 248 tests.
 - Browser checks passed at 320px and 1024px for menu contents, closing behavior, responsive visibility, and horizontal overflow.
+
+### Fix: Vertical Mobile Card and Entry Inputs
+**Date:** September 28, 2026
+
+**User Request:**
+"the cards responsive inputs are horizontal. they should be vertical. the live qap inputs and others should be vertical"
+
+**Implementation Details:**
+- Changed responsive data-card cells to stack labels above values instead of displaying them side by side.
+- Stacked Time Start, Time End, Hours, and direct-count fields vertically on phone and tablet layouts.
+- Kept QAP, Classification, and installation card inputs one field per row through the tablet breakpoint.
+- Preserved the compact multi-column layout on desktop screens.
+
+**Testing Performed:**
+- Production build completed successfully.
+- Full Vitest suite passed: 11 files and 248 tests.
+- Browser geometry checks passed at 375px and 767px, including a newly added QAP card; no horizontal overflow was detected.
+- Verified the desktop time fields remain horizontal at 1024px.

@@ -20,6 +20,7 @@ Based on a review of the mobile screenshots and current implementation, the appl
 - Made the month input use a full row on small screens and reduced the masthead type at phone widths.
 - Updated the table label observer so asynchronously loaded rows also receive their mobile labels.
 - Collapsed dense report/export toolbars into compact **Actions** menus on phones while preserving the inline desktop toolbars.
+- Stacked responsive table-card labels above their values and kept time-entry, QAP/Classification, and installation inputs vertical through tablet widths.
 
 ### 4. Use Floating Action Buttons (FABs) (PENDING)
 **The Issue:** On the Tasks and Time Entry pages, the large "New Task" or "Log Time" forms sit at the top of the page. On a phone, this pushes the actual list of tasks/entries completely below the fold.

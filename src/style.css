@@ -437,7 +437,7 @@ table.data tr.group-head td {
 }
 
 /* ---------- mobile responsive tables ---------- */
-@media (max-width: 640px) {
+@media (max-width: 767px) {
   .panel { padding: 16px; }
 
   table.data { display: block; min-width: 0; max-width: 100%; border: none; }
@@ -460,17 +460,19 @@ table.data tr.group-head td {
   table.data td {
     border-bottom: 1px solid var(--color-line);
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
     padding: 8px 12px;
-    text-align: right; /* Values align right by default in cards */
+    text-align: left;
     white-space: normal !important;
     overflow-wrap: anywhere;
   }
 
   table.data td > * { min-width: 0; max-width: 100%; }
-  table.data td > .flex { flex-wrap: wrap; justify-content: flex-end; }
+  table.data td > .field-input,
+  table.data td > .flex { width: 100%; }
+  table.data td > .flex { flex-wrap: wrap; justify-content: flex-start; }
   
   table.data td:last-child {
     border-bottom: none;
@@ -486,7 +488,6 @@ table.data tr.group-head td {
     color: var(--color-muted);
     font-weight: 600;
     text-align: left;
-    flex: 0 1 42%;
     min-width: 0;
     overflow-wrap: anywhere;
   }
@@ -503,6 +504,5 @@ table.data tr.group-head td {
     background: var(--color-cream);
   }
   
-  /* Reset number columns to align right since we already do that on mobile */
-  table.data .num, table.data th.num { text-align: right; }
+  table.data .num, table.data th.num { text-align: left; }
 }

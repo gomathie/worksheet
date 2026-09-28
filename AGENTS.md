@@ -1145,3 +1145,37 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 
 **Remaining Considerations:**
 - Desktop layouts remain multi-column to avoid unnecessary scrolling on wide screens.
+
+### Fix: Production D1 Schema Synchronization
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+Reported a Sentry production error: `D1_ERROR: no such table: task_comments` from `POST /api/tasks/:id/comments`.
+
+**Implementation Details:**
+1. **Incident diagnosis:**
+   - Confirmed that `migrations/0031_task_comments.sql` and the task-comment API implementation were already present in the repository.
+   - Queried the production D1 migration ledger and found nine unapplied migrations, from `0029_news_author.sql` through `0037_month_unlocks.sql`.
+2. **Production remediation:**
+   - Reviewed the pending migrations for destructive statements and ordering conflicts; all were additive.
+   - Applied all nine migrations to the remote `ledger-db` database using the existing `db:migrate:prod` script.
+   - This created `task_comments` and synchronized the production schema for the other deployed features represented by those migrations.
+3. **Deployment hardening (`package.json`, `README.md`):**
+   - Updated `npm run deploy` to apply production D1 migrations before building and publishing.
+   - Documented that Cloudflare's GitHub auto-deploy build does not run migrations and therefore needs a protected migration step before releases containing schema changes.
+
+**Files Changed:**
+- `package.json`
+- `README.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Confirmed Wrangler reports `No migrations to apply` for remote `ledger-db` after remediation.
+- Ran a read-only production schema query and confirmed `task_comments`, `leaves`, `point_deductions`, and `month_unlocks` exist.
+- The schema query completed successfully without writing rows.
+- Ran the production build successfully after updating the deployment command.
+
+**Remaining Considerations:**
+- Cloudflare GitHub auto-deploys still require an external protected migration step because their configured `npm run build` command intentionally does not mutate production data.

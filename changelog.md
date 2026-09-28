@@ -215,3 +215,21 @@ px tsc --noEmit -p tsconfig.server.json), which completed successfully with code
 - Full Vitest suite passed: 11 files and 248 tests.
 - Browser geometry checks passed at 375px and 767px, including a newly added QAP card; no horizontal overflow was detected.
 - Verified the desktop time fields remain horizontal at 1024px.
+
+### Fix: Production D1 Schema Synchronization
+**Date:** September 28, 2026
+
+**User Request:**
+Reported a Sentry production error: `D1_ERROR: no such table: task_comments` when posting a task comment.
+
+**Implementation Details:**
+- Confirmed that production was nine migrations behind the repository schema.
+- Reviewed and applied migrations `0029_news_author.sql` through `0037_month_unlocks.sql` to the remote `ledger-db` D1 database.
+- Restored the missing `task_comments` table required by the deployed task-comment API and synchronized the other already-deployed features with their database schema.
+- Updated the manual production deploy command to apply pending D1 migrations before building and publishing.
+- Clarified the migration requirement for both manual and GitHub/Cloudflare auto-deployments.
+
+**Verification:**
+- Wrangler reported that no remote migrations remain pending.
+- A read-only production query confirmed that `task_comments`, `leaves`, `point_deductions`, and `month_unlocks` now exist.
+- Confirmed the project still builds successfully after the deployment-script update.

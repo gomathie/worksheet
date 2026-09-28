@@ -10,7 +10,7 @@
     "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply ledger-db --local",
     "db:migrate:prod": "wrangler d1 migrations apply ledger-db --remote",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name ledger"
+    "deploy": "npm run db:migrate:prod && npm run build && wrangler pages deploy dist --project-name ledger"
   },
   "dependencies": {
     "@sentry/cloudflare": "^10.73.0",

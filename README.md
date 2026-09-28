@@ -514,13 +514,20 @@ One-time setup — requires a logged-in wrangler (`npx wrangler login`) or `CLOU
 npx wrangler d1 create ledger-db            # paste database_id into wrangler.toml
 npx wrangler kv namespace create SESSIONS   # paste id into wrangler.toml
 npm run db:migrate:prod
-npm run deploy                              # builds + wrangler pages deploy
+npm run deploy                              # migrates, builds, and deploys
 ```
+
+Run `npm run deploy` for each manual production release. It applies pending D1 migrations before
+publishing the matching application code.
 
 **Auto-deploy from GitHub:** Cloudflare dashboard → Workers & Pages → ledger → Settings → Builds →
 connect the repo; production branch `main`, build command `npm run build`, output directory `dist`.
 Pushing to `main` then builds and deploys automatically. The committed `wrangler.toml` carries the
 bindings (`DB`, `SESSIONS`) and the `TEAM_TZ` var.
+
+Cloudflare's `npm run build` auto-deploy does not apply D1 migrations. Before merging a release that
+adds a migration, run `npm run db:migrate:prod`, or add that command as a protected pre-deployment
+step in the release pipeline.
 
 ## Error tracking (Sentry)
 

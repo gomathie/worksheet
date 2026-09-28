@@ -932,9 +932,14 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
    - Frontend UI (`src/views/ReportView.vue`):
      - Displays `🔒 This month is locked by default (month ended)` banner.
      - Displays amber reminder banner when a past month is unlocked: `⚠️ This past month has been unlocked for changes. When you are done making updates, click "Lock month" above to lock it back.`
-3. **Task API Resilience & 500 "Internal error" Prevention (`server/tasks.ts`)**:
-   - Hardened `listTasks` and `getTask` against database schema divergence (e.g. missing `secondary_person_id` or broadcast columns on remote instances), adding automatic fallback queries and null-safe results mapping (`res?.results ?? []`).
-   - Hardened `withActions` and `taskLike` to safely default null/undefined attributes without throwing unhandled exceptions.
+3. **Task API & UI Resilience ("Internal error" Prevention)**:
+   - Server-side ([`server/tasks.ts`](file:///c:/Users/gomat/Downloads/DEV%20PROJECTS/worksheet/server/tasks.ts)):
+     - Hardened `listTasks`, `getTask`, `createTask`, and `patchTask` against database schema divergence (e.g. missing `secondary_person_id`, `recurrence`, or `checklist` columns on remote instances), adding automatic fallback queries and null-safe results mapping (`res?.results ?? []`).
+     - Hardened `withActions` and `taskLike` to safely default null/undefined attributes without throwing unhandled exceptions.
+   - Frontend UI ([`src/views/TasksView.vue`](file:///c:/Users/gomat/Downloads/DEV%20PROJECTS/worksheet/src/views/TasksView.vue)):
+     - Added try-catch and payload logging for task creation and updates to easily debug payload structures in browser DevTools.
+     - Translated generic 500 "Internal error" messages into clear, actionable advice: *"Unable to load tasks from the server at this time. Please click Retry below."*
+     - Added a dedicated **Retry** button right inside the error banner (`p.panel.mb-6.border-red.bg-red-soft.text-red`) enabling single-click re-fetching without a full page reload.
 4. **Documentation & Testing**:
    - Added unit test suite `tests/pdf-and-locks.test.ts` covering mobile/PWA detection, file sharing capability, and month-end auto-locking logic.
    - Updated `guideline-admin.md`, `guideline-user.md`, and `changelog.md`.
@@ -949,6 +954,7 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 - `src/views/ReportView.vue`
 - `src/views/ExpenseReportsView.vue`
 - `src/views/ExpensePackView.vue`
+- `src/views/TasksView.vue`
 - `functions/api/[[route]].ts`
 - `server/tasks.ts`
 - `tests/pdf-and-locks.test.ts`

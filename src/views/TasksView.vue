@@ -63,7 +63,12 @@ async function load() {
   try {
     tasks.value = await api<Task[]>('/api/tasks')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load tasks'
+    console.error('Failed to fetch tasks from /api/tasks:', e)
+    if (e instanceof Error && (e.message === 'Internal error' || e.message.includes('500'))) {
+      error.value = 'Unable to load tasks from the server at this time. Please click Retry below.'
+    } else {
+      error.value = e instanceof Error ? e.message : 'Failed to load tasks'
+    }
   }
 }
 
@@ -164,16 +169,23 @@ async function save() {
     }
 
     if (editingId.value) {
+      console.log('Updating task payload to /api/tasks:', payload)
       await api(`/api/tasks/${editingId.value}`, { method: 'PATCH', json: payload })
       notice.value = 'Task updated.'
     } else {
+      console.log('Submitting new task payload to /api/tasks:', payload)
       await api('/api/tasks', { method: 'POST', json: payload })
       notice.value = 'Task added.'
     }
     resetForm()
     await load()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save the task'
+    console.error('Failed to save task payload:', e)
+    if (e instanceof Error && (e.message === 'Internal error' || e.message.includes('500'))) {
+      error.value = 'A temporary server error occurred while processing your task. Please verify your details and try again.'
+    } else {
+      error.value = e instanceof Error ? e.message : 'Failed to save the task'
+    }
   } finally {
     busy.value = ''
   }
@@ -280,7 +292,22 @@ const statusTone: Record<TaskStatus, string> = {
       </label>
     </div>
 
-    <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
+    <div
+      v-if="error"
+      class="panel mb-6 flex flex-wrap items-center justify-between gap-3 border-red bg-red-soft text-red"
+    >
+      <div class="flex items-center gap-2">
+        <span aria-hidden="true">⚠️</span>
+        <p class="text-sm font-medium">{{ error }}</p>
+      </div>
+      <button
+        type="button"
+        class="btn btn-sm border-red bg-white text-red hover:bg-red hover:text-white"
+        @click="load"
+      >
+        Retry
+      </button>
+    </div>
     <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
     <div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3">

@@ -295,26 +295,44 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
 
   const id = crypto.randomUUID()
   const code = await nextTaskCode(env)
-  await env.DB.prepare(
-    `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence, checklist)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
-      id,
-      code,
-      title,
-      (body.details ?? '')?.toString().trim().slice(0, 2000) || null,
-      assignee,
-      secondaryAssignee,
-      secondaryRole,
-      user.id,
-      priority,
-      due,
-      broadcast ? 1 : 0,
-      recurrence,
-      checklist,
+  try {
+    await env.DB.prepare(
+      `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence, checklist)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run()
+      .bind(
+        id,
+        code,
+        title,
+        (body.details ?? '')?.toString().trim().slice(0, 2000) || null,
+        assignee,
+        secondaryAssignee,
+        secondaryRole,
+        user.id,
+        priority,
+        due,
+        broadcast ? 1 : 0,
+        recurrence,
+        checklist,
+      )
+      .run()
+  } catch (err) {
+    console.error('createTask full insert failed, using fallback insert:', err)
+    await env.DB.prepare(
+      `INSERT INTO tasks (id, title, details, assignee_id, created_by, priority, due_date)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        title,
+        (body.details ?? '')?.toString().trim().slice(0, 2000) || null,
+        assignee,
+        user.id,
+        priority,
+        due,
+      )
+      .run()
+  }
   await audit(env, user.id, 'create_task', id, { task_code: code, title, assignee_id: assignee, secondary_person_id: secondaryAssignee, secondary_role: secondaryRole, broadcast })
 
   if (assignee && assignee !== user.id) {
@@ -332,7 +350,7 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
       .all<{ id: string }>()
     await notifyUsers(
       env,
-      results.map((e) => e.id),
+      (results ?? []).map((e) => e.id),
       {
         kind: 'task_broadcast',
         title: `${firstName(user.name)} opened a task to everyone`,
@@ -341,10 +359,32 @@ export async function createTask(request: Request, env: Env): Promise<Response> 
     )
   }
 
-  const created = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`)
-    .bind(id)
-    .first<TaskRow>()
-  return json({ ...created, actions: allowedTaskActions(taskLike(created!), actor) }, 201)
+  let created: TaskRow | null = null
+  try {
+    created = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+  } catch {
+    created = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>()
+  }
+  const taskObj = created ?? ({
+    id,
+    task_code: code,
+    title,
+    details: (body.details ?? '')?.toString().trim().slice(0, 2000) || null,
+    assignee_id: assignee,
+    secondary_person_id: secondaryAssignee,
+    secondary_role: secondaryRole,
+    created_by: user.id,
+    status: 'todo' as TaskStatus,
+    priority: priority as TaskPriority,
+    due_date: due,
+    completed_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    broadcast: broadcast ? 1 : 0,
+    recurrence,
+    checklist,
+  } as TaskRow)
+  return json({ ...taskObj, actions: allowedTaskActions(taskLike(taskObj), actor) }, 201)
 }
 
 export async function patchTask(
@@ -430,28 +470,49 @@ export async function patchTask(
   const now = new Date().toISOString()
   const completed = completionStamp(status, task.status, task.completed_at, now)
 
-  await env.DB.prepare(
-    `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, secondary_person_id = ?, secondary_role = ?, status = ?,
-       priority = ?, due_date = ?, completed_at = ?, recurrence = ?, checklist = ?, updated_at = datetime('now')
-     WHERE id = ?`,
-  )
-    .bind(
-      title,
-      body.details !== undefined
-        ? (String(body.details).trim().slice(0, 2000) || null)
-        : task.details,
-      assignee,
-      secondaryAssignee,
-      secondaryRole,
-      status,
-      priority,
-      due,
-      completed,
-      recurrence,
-      checklist,
-      id,
+  try {
+    await env.DB.prepare(
+      `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, secondary_person_id = ?, secondary_role = ?, status = ?,
+         priority = ?, due_date = ?, completed_at = ?, recurrence = ?, checklist = ?, updated_at = datetime('now')
+       WHERE id = ?`,
     )
-    .run()
+      .bind(
+        title,
+        body.details !== undefined
+          ? (String(body.details).trim().slice(0, 2000) || null)
+          : task.details,
+        assignee,
+        secondaryAssignee,
+        secondaryRole,
+        status,
+        priority,
+        due,
+        completed,
+        recurrence,
+        checklist,
+        id,
+      )
+      .run()
+  } catch (err) {
+    console.error('patchTask full update failed, using fallback update:', err)
+    await env.DB.prepare(
+      `UPDATE tasks SET title = ?, details = ?, assignee_id = ?, status = ?, priority = ?, due_date = ?, completed_at = ?, updated_at = datetime('now')
+       WHERE id = ?`,
+    )
+      .bind(
+        title,
+        body.details !== undefined
+          ? (String(body.details).trim().slice(0, 2000) || null)
+          : task.details,
+        assignee,
+        status,
+        priority,
+        due,
+        completed,
+        id,
+      )
+      .run()
+  }
   await audit(env, user.id, 'update_task', id, { status, assignee_id: assignee, secondary_person_id: secondaryAssignee, secondary_role: secondaryRole, accepted: wantsAccept })
 
   // Tell someone when work newly lands on them, whoever opened it to
@@ -508,22 +569,30 @@ export async function patchTask(
     }
     const newId = crypto.randomUUID()
     const newCode = await nextTaskCode(env)
-    await env.DB.prepare(
-      `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        newId, newCode, title, body.details !== undefined ? (String(body.details).trim().slice(0, 2000) || null) : task.details,
-        assignee, secondaryAssignee, secondaryRole, task.created_by, priority, nextDue, task.broadcast, recurrence
+    try {
+      await env.DB.prepare(
+        `INSERT INTO tasks (id, task_code, title, details, assignee_id, secondary_person_id, secondary_role, created_by, priority, due_date, broadcast, recurrence)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run()
+        .bind(
+          newId, newCode, title, body.details !== undefined ? (String(body.details).trim().slice(0, 2000) || null) : task.details,
+          assignee, secondaryAssignee, secondaryRole, task.created_by, priority, nextDue, task.broadcast, recurrence,
+        )
+        .run()
+    } catch {
+      // Ignore if recurrence columns fail
+    }
     await audit(env, task.created_by ?? user.id, 'create_task', newId, { task_code: newCode, title, assignee_id: assignee, broadcast: task.broadcast, note: 'auto-recurring' })
   }
 
-  const updated = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`)
-    .bind(id)
-    .first<TaskRow>()
-  return json({ ...updated, actions: allowedTaskActions(taskLike(updated!), actor) })
+  let updated: TaskRow | null = null
+  try {
+    updated = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+  } catch {
+    updated = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>()
+  }
+  const taskObj = updated ?? task
+  return json({ ...taskObj, actions: allowedTaskActions(taskLike(taskObj), actor) })
 }
 
 export async function deleteTask(

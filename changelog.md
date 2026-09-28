@@ -24,9 +24,11 @@ All notable changes to this project will be documented in this file.
   - Administrators can review ended months in `ReportView.vue` and click **Unlock month** to record an exemption and make necessary corrections.
   - Added amber reminder banner in `ReportView.vue` when an ended month is currently unlocked, reminding administrators to lock it back once modifications are complete.
   - Clicking **Lock month** removes the unlock exemption and re-freezes the rate snapshot in `month_locks`.
-- Fix: Task API Resilience & Internal Error Prevention
-  - Hardened `server/tasks.ts` (`listTasks`, `getTask`, `withActions`, `taskLike`) with defensive schema fallbacks and null-safe record filtering.
-  - Prevents 500 "Internal error" backend exceptions on `/api/tasks` if optional columns (such as secondary assignees or broadcast flags) are queried against varying database schema versions.
+- Fix: Task API & UI Resilience ("Internal error" Prevention)
+  - Hardened `server/tasks.ts` (`listTasks`, `getTask`, `createTask`, `patchTask`, `withActions`, `taskLike`) with defensive schema fallbacks and null-safe record filtering.
+  - Prevents 500 "Internal error" backend exceptions on `/api/tasks` if optional columns (such as secondary assignees, recurrence, or checklist) are queried against varying database schema versions.
+  - Added DevTools payload logging and friendly error handling in `TasksView.vue`.
+  - Added a dedicated **Retry** button inside the error banner in `TasksView.vue` (`p.panel.mb-6.border-red.bg-red-soft.text-red`) for instant re-fetching without requiring a browser reload.
 - Feature: Keep Expenses in App (Internal Expenses) & Kept in App Report
   - Added `keep_in_app`, `kept_at`, `kept_by`, and `kept_reason` fields to `expense_vouchers` (Migration 0036).
   - Added support for keeping approved vouchers inside the app instead of sending them to external accounting records:

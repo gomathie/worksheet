@@ -431,11 +431,6 @@ async function returnToAdmin() {
            section the current page belongs to gets its own strip of mini tabs
            underneath (outside this row) so a 7-item section like Finance
            doesn't have to fit here too. -->
-      <RouterLink :to="{ name: 'entries' }" class="btn" active-class="btn-solid"
-        >Time Entry</RouterLink
-      >
-      <RouterLink :to="{ name: 'tasks' }" class="btn" active-class="btn-solid">Tasks</RouterLink>
-      <RouterLink :to="{ name: 'news' }" class="btn" active-class="btn-solid">News</RouterLink>
       <RouterLink
         v-if="auth.rights.view_dashboard"
         :to="{ name: 'dashboard' }"
@@ -443,6 +438,11 @@ async function returnToAdmin() {
         active-class="btn-solid"
         >Dashboard</RouterLink
       >
+      <RouterLink :to="{ name: 'tasks' }" class="btn" active-class="btn-solid">Tasks</RouterLink>
+      <RouterLink :to="{ name: 'entries' }" class="btn" active-class="btn-solid"
+        >Time Entry</RouterLink
+      >
+      <RouterLink :to="{ name: 'news' }" class="btn" active-class="btn-solid">News</RouterLink>
       <RouterLink
         :to="{ name: reportsHome }"
         class="btn"

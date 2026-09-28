@@ -148,3 +148,19 @@ All notable changes to this project will be documented in this file.
 **Testing Performed:**
 - Ran full backend type checking (
 px tsc --noEmit -p tsconfig.server.json), which completed successfully with code 0.
+
+### Bug Fix: PDF Export Option Type Error
+**Date:** September 28, 2026
+
+**User Request:**
+"getting some internal errors in the app"
+
+**Implementation Details:**
+- Fixed the PDF export option objects in `ReportView.vue`, `ExpenseReportsView.vue`, and `ExpensePackView.vue` by removing unsupported `landscape` and `format` properties.
+- The PDF helper already uses the supported `orientation` option to select portrait or landscape A4 output.
+
+**Testing Performed:**
+- Ran production build successfully with `npm.cmd run build`.
+- Ran local D1 migrations; no pending migrations remained.
+- Ran full Vitest suite successfully: 11 test files, 248 tests passed.
+- Started the local Wrangler Pages server successfully at `http://127.0.0.1:8788`.

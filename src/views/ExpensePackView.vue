@@ -91,9 +91,7 @@ async function shareOrExportPackPdf() {
   try {
     const filename = `expense-audit-pack-${month.value}.pdf`
     await exportOrSharePdf(el, filename, `Audit Pack - ${monthLabel.value}`, {
-      landscape: false,
       orientation: 'portrait',
-      format: 'a4',
     })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to export PDF'

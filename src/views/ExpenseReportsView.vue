@@ -139,9 +139,7 @@ async function shareOrExportExpenseReportPdf() {
   try {
     const filename = `expenses-${stamp()}.pdf`
     await exportOrSharePdf(el, filename, `Expense Report - ${activeLabel.value}`, {
-      landscape: true,
       orientation: 'landscape',
-      format: 'a4',
     })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to export PDF'

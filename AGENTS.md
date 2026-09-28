@@ -1005,3 +1005,31 @@ Follow-up: "No, keep assigning individual tasks (like QAP), but if they have ANY
 **Testing Performed:**
 - Ran full backend type checking (
 px tsc --noEmit -p tsconfig.server.json), which completed successfully with code 0.
+
+### Bug Fix: PDF Export Option Type Error
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+"getting some internal errors in the app"
+
+**Implementation Details:**
+1. **Frontend PDF Export Calls (`src/views/ReportView.vue`, `src/views/ExpenseReportsView.vue`, `src/views/ExpensePackView.vue`)**:
+   - Removed unsupported `landscape` and `format` properties from calls to `exportOrSharePdf`.
+   - Kept the existing supported `orientation` option, which is what `src/pdf.ts` uses to generate portrait or landscape A4 PDFs.
+
+**Files Changed:**
+- `src/views/ReportView.vue`
+- `src/views/ExpenseReportsView.vue`
+- `src/views/ExpensePackView.vue`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran production build (`npm.cmd run build`): completed successfully.
+- Ran local database migrations (`npm.cmd run db:migrate:local`): no pending migrations.
+- Ran full test suite (`npm.cmd test`): 11 test files, 248 tests passed.
+- Started local Wrangler Pages dev server successfully at `http://127.0.0.1:8788`.
+
+**Remaining Considerations:**
+- If internal errors still appear in production, run remote D1 migrations with `npm run db:migrate:prod`; the local database is already current.

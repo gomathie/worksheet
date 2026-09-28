@@ -132,3 +132,19 @@ All notable changes to this project will be documented in this file.
 
 **Testing Performed:**
 - Ran full frontend and backend type checks (`npx tsc --noEmit -p tsconfig.app.json` and `npx tsc --noEmit -p tsconfig.server.json`), which both completed successfully with `code 0`.
+
+### Bug Fix: Dashboard API Resilience (Point Deductions)
+**Date:** September 28, 2026
+
+**User Request:**
+"dashbaord viw too was giving internal error"
+
+**Implementation Details:**
+1. **Server-side Fallbacks (unctions/api/[[route]].ts)**:
+   - The recent addition of the point_deductions database schema caused the monthlyReport API endpoint to crash (Internal Error 500) if the new table hadn't been fully migrated on the current environment.
+   - Added a .catch(() => ({ results: [] })) fallback to the point_deductions SQL query inside the dashboard data resolution Promise.all block.
+   - This ensures the entire dashboard safely loads without deductions rather than crashing the whole page if the table is missing.
+
+**Testing Performed:**
+- Ran full backend type checking (
+px tsc --noEmit -p tsconfig.server.json), which completed successfully with code 0.

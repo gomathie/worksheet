@@ -3275,7 +3275,8 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
         "SELECT employee_id, amount FROM point_deductions WHERE month = ? AND decision = 'deducted'",
       )
         .bind(month)
-        .all<{ employee_id: string; amount: number }>(),
+        .all<{ employee_id: string; amount: number }>()
+        .catch(() => ({ results: [] })),
     ])
   const settings = { ...liveSettings, point_value: rates.point_value, currency: rates.currency }
 

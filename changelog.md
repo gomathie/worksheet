@@ -233,3 +233,21 @@ Reported a Sentry production error: `D1_ERROR: no such table: task_comments` whe
 - Wrangler reported that no remote migrations remain pending.
 - A read-only production query confirmed that `task_comments`, `leaves`, `point_deductions`, and `month_unlocks` now exist.
 - Confirmed the project still builds successfully after the deployment-script update.
+
+### Fix: Mobile Safari Route Chunk Recovery
+**Date:** September 28, 2026
+
+**User Request:**
+Reported a Sentry `TypeError: Load failed` on the production Payments route in Mobile Safari.
+
+**Implementation Details:**
+- Confirmed the Payments page already catches API failures and traced the unhandled error to lazy route-module loading.
+- Added router-level detection for Safari and other browsers' dynamic-import failure messages.
+- When an open tab requests a stale hashed route asset after a deployment, the app now refreshes once to load the current application shell.
+- Added session-scoped loop prevention so a genuine network outage cannot cause repeated reloads.
+
+**Verification:**
+- Added six focused regression tests covering supported browser messages, unrelated errors, one-time recovery, and reset after successful navigation.
+- Focused tests passed and the production build completed successfully.
+- Confirmed production was still serving the older bundle reported by Sentry before deployment.
+- Deployed the fix to Cloudflare Pages and verified the custom production domain serves the new bundle with the recovery guard.

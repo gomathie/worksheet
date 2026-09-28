@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { clearRouteChunkRecovery, recoverRouteChunkLoad } from './chunkRecovery'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -228,6 +229,19 @@ router.beforeEach(async (to) => {
   }
   if (to.name === 'login' && auth.user) return { name: 'dashboard' }
   return true
+})
+
+// A tab left open across a deployment may still request an old hashed route
+// chunk. Reload once to fetch the current app shell, without creating a loop if
+// the failure is an actual network outage.
+router.onError((error, to) => {
+  recoverRouteChunkLoad(error, to.fullPath, window.sessionStorage, (target) => {
+    window.location.assign(target)
+  })
+})
+
+router.afterEach((_to, _from, failure) => {
+  if (!failure) clearRouteChunkRecovery(window.sessionStorage)
 })
 
 export default router

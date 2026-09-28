@@ -1179,3 +1179,38 @@ Reported a Sentry production error: `D1_ERROR: no such table: task_comments` fro
 
 **Remaining Considerations:**
 - Cloudflare GitHub auto-deploys still require an external protected migration step because their configured `npm run build` command intentionally does not mutate production data.
+
+### Fix: Mobile Safari Route Chunk Recovery
+**Date:** September 28, 2026
+**Branch:** main
+
+**User Request:**
+Reported a production Sentry issue on `/payments`: Mobile Safari raised an unhandled `TypeError: Load failed`.
+
+**Implementation Details:**
+1. **Diagnosis (`src/views/PaymentsView.vue`, `src/router/index.ts`, `public/sw.js`):**
+   - Confirmed Payments API loading already catches and displays request errors.
+   - Identified the unhandled error as a lazy route chunk load failure, consistent with an older open tab requesting a hashed asset after a deployment.
+2. **Route recovery (`src/router/chunkRecovery.ts`, `src/router/index.ts`):**
+   - Added detection for dynamic-import errors emitted by Safari, Chromium, and chunk loaders.
+   - Added a router error handler that performs one hard navigation to the requested route so the browser receives the current application shell and asset hashes.
+   - Stored the attempted route in `sessionStorage` and clear it after successful navigation, preventing reload loops during persistent network failures.
+3. **Regression coverage (`tests/router.test.ts`):**
+   - Covered Safari's exact `Load failed` message, common dynamic-import variants, unrelated application errors, one-time navigation, and recovery reset.
+
+**Files Changed:**
+- `src/router/chunkRecovery.ts`
+- `src/router/index.ts`
+- `tests/router.test.ts`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Focused Vitest suite passed: 1 file and 6 tests.
+- Production build completed successfully, including frontend TypeScript checking.
+- A read-only production request confirmed the site was still serving the older `index-CTIKubwk.js` bundle referenced by Sentry before deployment.
+- Deployed successfully to Cloudflare Pages using `npm run deploy`; no D1 migrations were pending.
+- Verified `https://dem.trace365.net/payments` now serves `index-_cXUiL8r.js` and that the live bundle contains the route-recovery guard.
+
+**Remaining Considerations:**
+- The automatic refresh only handles route-module loading failures. API failures continue to use each view's existing inline error state.

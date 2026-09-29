@@ -305,7 +305,7 @@ When accessing OpenSignal Ledger on a phone, tablet, or as a standalone PWA:
 - **Card-adaptive layouts**: Dense data tables (such as timesheet entries, tasks, expense vouchers, and reports) automatically adapt into structured, touch-friendly card views with clear column labels, making it effortless to log work on the go without horizontal scrolling.
 - **Direct PDF & spreadsheet sharing**: Wherever you see **Share / Send PDF**, CSV, or Excel exports (such as Payslips, Expense Vouchers, and Monthly Reports), tapping the button opens your mobile device's native share menu. You can send the document straight to WhatsApp, Telegram, Gmail, or your company chat.
 - **Compact report actions**: On phones, export, print, sharing, and month-lock commands are grouped under **Report actions**, **Export actions**, or **Pack actions**. On larger screens, the same commands remain visible in the toolbar.
-- **Vertical mobile forms**: Time-entry controls and card details such as QAP or Classification card name, audit count, and completion time appear one field per row on phones and tablets. Responsive record cards also place each label above its value.
+- **Compact mobile forms**: Time-entry controls remain one field per row on phones and tablets. QAP and Classification card details use two columns to reduce scrolling, while each label stays above its input. Responsive record cards also place each label above its value.
 
 ---
 

@@ -251,3 +251,18 @@ Reported a Sentry `TypeError: Load failed` on the production Payments route in M
 - Focused tests passed and the production build completed successfully.
 - Confirmed production was still serving the older bundle reported by Sentry before deployment.
 - Deployed the fix to Cloudflare Pages and verified the custom production domain serves the new bundle with the recovery guard.
+
+### Improvement: Two-Column QAP and Classification Inputs
+**Date:** September 29, 2026
+
+**User Request:**
+"on the qap or classification inputs that come in. they are on a one column long line. it can be 2 colums at least"
+
+**Implementation Details:**
+- Changed added QAP and Classification card details from one field per row to a two-column phone and tablet grid.
+- Kept each label above its input and preserved the existing four-column desktop layout.
+- Left installation-card fields in their existing single-column responsive layout.
+
+**Verification:**
+- Production build completed successfully.
+- Browser geometry checks passed at 375px and 767px with two equal columns and no horizontal overflow.

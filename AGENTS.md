@@ -1214,3 +1214,35 @@ Reported a production Sentry issue on `/payments`: Mobile Safari raised an unhan
 
 **Remaining Considerations:**
 - The automatic refresh only handles route-module loading failures. API failures continue to use each view's existing inline error state.
+
+### Improvement: Two-Column QAP and Classification Inputs
+**Date:** September 29, 2026
+**Branch:** main
+
+**User Request:**
+"on the qap or classification inputs that come in. they are on a one column long line. it can be 2 colums at least"
+
+**Implementation Details:**
+1. **Card input layout (`src/views/EntriesView.vue`):**
+   - Changed non-installation card rows to a two-column grid below the desktop breakpoint.
+   - QAP and Classification card name/audit fields share the first row; completion time and the remove action use the second row.
+   - Preserved labels above controls and the existing four-column desktop layout.
+   - Kept installation-card inputs unchanged.
+2. **Documentation (`mobile_ux_suggestions.md`, `guideline-user.md`):**
+   - Updated the responsive-form documentation to describe the compact two-column card layout.
+
+**Files Changed:**
+- `src/views/EntriesView.vue`
+- `mobile_ux_suggestions.md`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Production build completed successfully, including frontend TypeScript checking.
+- Used the local app with a seeded non-direct-count employee assigned to Classification and QAP.
+- At 375px, confirmed two 131.5px columns and a document width of 375px.
+- At 767px, confirmed two 327.5px columns and a document width of 767px.
+
+**Remaining Considerations:**
+- Installation cards intentionally remain one field per row below desktop because their select values and conditional fields need more horizontal space.

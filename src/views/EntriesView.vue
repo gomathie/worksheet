@@ -922,8 +922,7 @@ const dayGroups = computed(() =>
               <option v-for="n in namesFor(wt.id)" :key="n" :value="n" />
             </datalist>
             <!-- One set of column headings for the whole list. Hidden below
-                 md, where the row grid collapses and each field carries its
-                 own. -->
+                 lg, where each field carries its own label. -->
             <div
               v-if="cardsFor(wt.id).length > 0"
               class="mb-1 hidden gap-2 lg:grid lg:grid-cols-[2fr_1fr_1fr_auto]"
@@ -936,7 +935,7 @@ const dayGroups = computed(() =>
             <div
               v-for="(c, i) in cardsFor(wt.id)"
               :key="i"
-              class="mb-2 grid grid-cols-1 gap-3 lg:grid-cols-[2fr_1fr_1fr_auto]"
+              class="mb-2 grid grid-cols-2 gap-3 lg:grid-cols-[2fr_1fr_1fr_auto]"
             >
               <!-- The label wrappers carry `lg:hidden`, not the labels:
                    `.field-label` sets `display: block` from unlayered CSS,
@@ -985,8 +984,8 @@ const dayGroups = computed(() =>
                   class="field-input mono"
                 />
               </div>
-              <!-- Full-width on a one-column phone layout reads as an error
-                   bar, so keep it shrink-wrapped and right-aligned there. -->
+              <!-- Keep the action shrink-wrapped and right-aligned in its
+                   mobile grid cell rather than making it an error-style bar. -->
               <button
                 v-if="!c.id || auth.rights.delete_entries"
                 type="button"

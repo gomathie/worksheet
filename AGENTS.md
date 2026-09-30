@@ -1246,3 +1246,18 @@ Reported a production Sentry issue on `/payments`: Mobile Safari raised an unhan
 
 **Remaining Considerations:**
 - Installation cards intentionally remain one field per row below desktop because their select values and conditional fields need more horizontal space.
+
+### Feature: Default Dashboard Page
+**Date:** October 1, 2026
+
+**User Request:**
+"when app is opened, it should take you to the dashboard page. not time entry"
+
+**Implementation Details:**
+1. **Router Configuration (src/router/index.ts)**:
+   - Swapped the paths for entries and dashboard. dashboard is now the root path / and entries is now /entries.
+   - Navigating directly to / now opens the Dashboard, and the existing route guard ensures users without the iew_dashboard right are gracefully redirected back to /entries.
+
+**Testing Performed:**
+- Ran frontend and backend type checking which both completed successfully with code 0.
+

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: App Default Route to Dashboard
+  - Changed the default root route (/) in src/router/index.ts to map to the Dashboard instead of the Time Entry page.
+  - The router gracefully redirects users to the Time Entry page if they lack Dashboard access rights.
+
 - Feature: Direct Mobile / PWA Document & PDF Sharing
   - Implemented client-side PDF generation engine (`src/pdf.ts`) using dynamically imported `html2pdf.js` to avoid bundle bloat and ensure fast initial loads.
   - Implemented native Web Share API (`navigator.share({ files: [...] })`) with desktop download fallback (`shareOrDownloadFile`, `exportOrSharePdf`).

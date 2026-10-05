@@ -49,13 +49,27 @@ canvas {
   letter-spacing: 0.02em;
 }
 
-.panel {
-  background: var(--color-panel);
-  border: 1px solid var(--color-line);
-  border-radius: 10px;
-  padding: 22px;
-  min-width: 0;
-  max-width: 100%;
+/* In Tailwind v4 cascade layers, plain unlayered CSS always beats layered
+   utility classes, regardless of source order or specificity, including
+   every max-w-*, border-*, and bg-* utility this project combines with
+   panel (dozens of modals and error/success banners). Without
+   @layer components here, the plain .panel rule below always won, which
+   is why a modal max-w-lg cap did not take effect on wide screens, and a
+   border-red bg-red-soft banner did not get its color either (its
+   text-red still worked since .panel never set color, which is what made
+   this easy to miss: the text was right, just not the border or
+   background around it). Layering .panel here puts it on equal footing
+   with Tailwind utilities, so a utility combined with panel on the same
+   element overrides it as expected. */
+@layer components {
+  .panel {
+    background: var(--color-panel);
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    padding: 22px;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 /* Flex and grid children default to min-width:auto, which lets long text,

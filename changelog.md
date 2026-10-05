@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Fix: Popups Too Wide on Desktop (`.panel` Not in a Tailwind Cascade Layer)
+  - The Announcement pop-up, Task Age Alert, Task Deadline Alert, and every other modal built from `panel w-full max-w-*` were ignoring their intended width cap on desktop/wide screens and stretching to nearly the full viewport — invisible on mobile, where the cap and the viewport width were close enough not to matter.
+  - Root cause: `.panel` in `src/style.css` was plain, unlayered CSS, and Tailwind v4 generates all its utility classes (`max-w-lg`, `border-red`, `bg-red-soft`, etc.) inside `@layer utilities`. Per the CSS Cascade Layers spec, unlayered styles always beat layered ones of equal specificity regardless of source order, so `.panel`'s own `max-width: 100%` always won.
+  - Found the same way: a `panel ... border-red bg-red-soft text-red` error/success banner — used in dozens of views — had the identical conflict on its border and background colors (only the `text-red` text color was unaffected, since `.panel` never sets `color`). Confirmed via computed styles that these banners were rendering with a plain white/gray box instead of their intended red/teal/amber tint — a much subtler bug than the popup width one, likely why it went unnoticed.
+  - Fixed by wrapping `.panel` in `@layer components`, putting it on equal cascade footing with Tailwind's utilities so a combined utility class correctly overrides it, as intended, everywhere this pattern is used.
+
 - Feature: "Working on it" Elapsed-Time Log
   - Tapping **Working on it** now posts a comment to the task's activity feed recording how long it's been open in total, e.g. *"Marked as being worked on — 4 hours so far."* or *"...2 days so far."*, computed from when the task was created. New `POST /api/tasks/:id/ping` endpoint behind it, replacing the generic status-PATCH it used to send — same effect on the task-violation clock as before, plus the logged comment.
   - **Task violation penalty confirmed adjustable**: the admin setting already defaulted to 5 and was already freely editable up or down (including to 0 to disable) — reworded its in-app description to say so, and to point at the existing general-purpose Point Deductions tool (Employees tab → **Deduct**) for logging a one-off violation unrelated to a task, e.g. "found a mistake on this QAP card" — that tool already supported a custom reason and a custom point amount per incident; nothing new was needed there.

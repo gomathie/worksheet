@@ -1407,3 +1407,35 @@ Follow-up, after a first pass: "log violation is different from task violation."
 **Remaining Considerations:**
 - None. The elapsed-time ping log is implemented and verified; the points-amount setting was already adjustable; logging a one-off violation already worked through the existing, intentionally task-independent Point Deductions tool.
 
+### Fix: Popups Too Wide on Desktop (and a Hidden Banner-Color Bug Found the Same Way)
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"on web. the pop ups are too wide" — narrowed down via a follow-up question to the Announcement pop-up (News) and the Task age/deadline alert.
+
+**Implementation Details:**
+1. **Diagnosis**: code inspection of `NewsPopup.vue`/`TaskAgeAlert.vue`/`TaskDeadlineAlert.vue` showed reasonable-looking width caps (`panel w-full max-w-lg` / `max-w-md`, 448–512px) — nothing obviously wrong from reading the markup. Rather than guess at a fix, built the actual app (`npm run build`), ran it locally (`wrangler pages dev`), and used Playwright at a 1440×900 desktop viewport to screenshot a real announcement popup: it rendered spanning nearly the full viewport width, not capped at 512px.
+2. **Root cause, found via the compiled CSS, not guessed**: inspected `dist/assets/*.css` directly. `.panel`'s rule (`src/style.css`) is plain, unlayered CSS — not wrapped in a Tailwind `@layer` — while every `max-w-*`/`border-*`/`bg-*` utility Tailwind v4 generates lives inside `@layer utilities`. Per the CSS Cascade Layers spec, **unlayered declarations always beat layered ones of equal specificity, regardless of source order** — so `.panel`'s own `max-width: 100%` always won over a co-applied `max-w-lg`, no matter which class came first in the HTML. This was invisible on mobile (where `100%` and `max-w-lg` resolve to about the same pixel width anyway) and only showed up on wide desktop screens — exactly matching "on web."
+3. **A second, undiscovered bug with the identical cause**: the same unlayered-vs-layered conflict applies to `.panel`'s `border`/`background` shorthand properties against the dozens of `panel ... border-red bg-red-soft text-red` (and teal/amber) error/success banners used throughout the app. Verified via a synthetic test element's computed style before the fix: `border-color` and `background-color` were resolving to the plain panel colors, not red — every one of those banners has been rendering as a plain white box with red *text* (the one property `.panel` never set) instead of a properly colored alert box. Far more subtle than the popup-width bug — a slightly flat-looking banner reads as a design choice, not a bug — which is almost certainly why nobody had reported it.
+4. **Fix (`src/style.css`)**: wrapped the `.panel` rule in `@layer components { ... }`, putting it on equal cascade footing with Tailwind's own utilities layer (which is declared after `components`, so utilities correctly win when both are present on an element). Left the two `.panel` media-query overrides (print, mobile padding) unlayered, since nothing currently combines a conflicting utility with those specific declarations.
+5. **A build hazard worth remembering**: an apostrophe-heavy explanatory comment inside the new `@layer components` block broke the Tailwind v4/Lightning CSS build with `Unterminated string` — the CSS parser appears to tokenize for string literals even inside `/* */` comments. Rewrote the comment without contractions/apostrophes and the build passed.
+
+**Files Changed:**
+- `src/style.css`
+- `AGENTS.md`
+- `changelog.md`
+
+**Testing Performed:**
+- Backend type check (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0 (frontend-only CSS change, but ran the full suite anyway).
+- Unit tests (`npm test`): 12 files, 275 passed — untouched by a pure-CSS change, confirming nothing else regressed.
+- Production build (`npm run build`): failed once (the apostrophe/comment issue above), fixed, then passed.
+- **Live visual verification against `wrangler pages dev` + local D1, before and after the fix**, at a 1440×900 viewport via Playwright:
+  - Before: screenshotted the Announcement popup spanning ~1360px (nearly the full viewport) instead of ~512px.
+  - After: re-screenshotted both the Announcement popup and the Task Age Alert popup — both now render as compact, centered cards at their intended widths.
+  - Confirmed the banner-color fix numerically: a synthetic `panel border-red bg-red-soft` element's computed `border-color`/`background-color` went from the plain panel colors (`rgb(226,223,213)` / `rgb(255,255,255)`) to the correct red ones (`rgb(178,58,46)` / `rgb(248,231,228)`) after the fix.
+  - Cleaned up all test announcements/tasks created during verification; local dev server stopped afterward.
+
+**Remaining Considerations:**
+- Other custom classes in `src/style.css` (`.btn`, `.field-input`, `.display`, etc.) are similarly unlayered and could in principle have the same kind of conflict with a combined utility class — none were reported or found broken this session, so none were touched, keeping this fix scoped to the confirmed, demonstrated bug. Worth a follow-up audit if something else turns up looking subtly off.
+

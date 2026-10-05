@@ -571,9 +571,13 @@ function downloadBackup() {
           />
           <p class="mt-1 text-xs text-muted">
             Points automatically deducted from an employee's balance when an open task
-            (To do or In progress) goes 5 days without being touched. Never pushes a
-            balance below zero. "Working on it", reopening, or any other change to the
-            task resets its 5-day clock.
+            (To do or In progress) goes 5 days without being touched. Defaults to 5 —
+            raise or lower it any time, it applies to the next violation found. Never
+            pushes a balance below zero. "Working on it", reopening, or any other
+            change to the task resets its 5-day clock. For a specific violation you've
+            already noticed (rather than 5-day inactivity), use the "Log violation"
+            button on that task's own page instead — it lets you pick a different
+            amount and reason per incident.
           </p>
         </div>
         <div class="col-span-2">

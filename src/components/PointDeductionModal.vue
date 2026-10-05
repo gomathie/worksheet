@@ -1,11 +1,30 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { api } from '../api'
-import type { Employee, PointDeduction } from '../types'
+import type { PointDeduction } from '../types'
+
+// Only what the modal actually renders/sends — a full Employee (its rights,
+// work types, rate overrides...) satisfies this too, so EmployeesView.vue's
+// existing usage is unaffected, but a lighter caller (e.g. a task's assignee,
+// which is only ever an {id, name} TaskAssignee) doesn't need to fetch one.
+interface DeductionTarget {
+  id: string
+  name: string
+  employee_code?: string | null
+}
 
 const props = defineProps<{
-  employee: Employee | null
+  employee: DeductionTarget | null
   open: boolean
+  /** Pre-fills "Related Task ID" and switches the header to "Log Violation"
+   * wording — set when opened from a task's own page rather than Employees. */
+  taskId?: string
+  /** Pre-fills the points field, e.g. with the admin-configured
+   * task_violation_points default. Still freely editable per instance. */
+  defaultAmount?: number
+  /** Shown under the employee name when opened with task context, e.g. a
+   * task code + title, so it's clear which task this is about. */
+  contextLabel?: string
 }>()
 
 const emit = defineEmits<{
@@ -56,9 +75,9 @@ watch(
   () => [props.open, props.employee?.id, month.value],
   ([isOpen]) => {
     if (isOpen && props.employee) {
-      amount.value = ''
+      amount.value = props.defaultAmount ?? ''
       reason.value = ''
-      taskId.value = ''
+      taskId.value = props.taskId ?? ''
       warningRef.value = ''
       confirmed.value = false
       submitError.value = ''
@@ -131,11 +150,20 @@ async function submit() {
       <div class="mb-4 flex items-center justify-between border-b border-line pb-3">
         <div>
           <h2 class="display text-xl text-teal">
-            {{ decision === 'deducted' ? '⚠️ Deduct Points' : '🕊️ Record Warning / Let It Go' }}
+            {{
+              decision === 'let_it_go'
+                ? '🕊️ Record Warning / Let It Go'
+                : props.taskId !== undefined
+                  ? '⚠️ Log Violation'
+                  : '⚠️ Deduct Points'
+            }}
           </h2>
           <p class="text-xs text-muted">
             Target employee: <strong class="text-ink">{{ employee.name }}</strong>
             <span v-if="employee.employee_code" class="mono text-muted"> ({{ employee.employee_code }})</span>
+          </p>
+          <p v-if="contextLabel" class="text-xs text-muted">
+            Task: <strong class="text-ink">{{ contextLabel }}</strong>
           </p>
         </div>
         <button

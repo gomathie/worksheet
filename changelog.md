@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: "Working on it" Elapsed-Time Log & Manual "Log Violation" on Tasks
+  - **"Working on it" now logs how long the task's been open**: tapping it posts a comment to the task's activity feed like *"Marked as being worked on — 4 hours so far."* or *"...2 days so far."*, computed from when the task was created. New `POST /api/tasks/:id/ping` endpoint behind it, replacing the generic status-PATCH it used to send — same effect on the task-violation clock as before, plus the logged comment.
+  - **Manual "Log Violation"**: a new **Log violation** button on a task's own page (next to Delete, for anyone with **Manage point deductions**) opens the existing Point Deductions form pre-filled with that task's reference and the configured penalty amount — for a specific, already-noticed problem (e.g. "found a mistake on this QAP card") with its own reason and point amount, separate from the automatic 5-day inactivity check.
+  - **Task violation penalty confirmed adjustable**: the admin setting already defaulted to 5 and was already freely editable up or down (including to 0 to disable) — reworded its in-app description to say so and point at the new per-incident button.
+
 - Feature: Reopen Tasks & Automatic Task-Violation Point Deductions
   - **Reopen**: a Done or Cancelled task now has an explicit **Reopen** button (task list and detail page) that moves it back to To do and clears its completion date.
   - **Automatic 5-day penalty**: an open task (To do/In progress) left untouched for 5 days now automatically deducts points from its assignee's balance — no admin action required. The deduction is capped so it never pushes a balance below zero, and is recorded even when capped to 0 so there's always an audit trail.

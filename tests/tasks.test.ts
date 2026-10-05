@@ -10,6 +10,7 @@ import {
   canTask,
   canViewTask,
   completionStamp,
+  formatElapsed,
   isOpen,
   isOverdue,
   isTaskStale,
@@ -330,5 +331,44 @@ describe('broadcast ("Everyone") tasks', () => {
   it('stays visible to everyone once claimed, so the board shows who has it', () => {
     const claimed: TaskLike = { ...open, assignee_id: 'doer' }
     expect(canViewTask(claimed, stranger)).toBe(true)
+  })
+})
+
+describe('formatElapsed', () => {
+  const HOUR = 60 * 60 * 1000
+  const DAY = 24 * HOUR
+
+  it('reads distinctly under an hour rather than "0 hours so far"', () => {
+    expect(formatElapsed(30 * 60 * 1000)).toBe('less than an hour so far')
+  })
+
+  it('uses singular "hour" for exactly one', () => {
+    expect(formatElapsed(1 * HOUR)).toBe('1 hour so far')
+  })
+
+  it('pluralizes hours', () => {
+    expect(formatElapsed(4 * HOUR)).toBe('4 hours so far')
+  })
+
+  it('rounds to the nearest hour', () => {
+    expect(formatElapsed(4.4 * HOUR)).toBe('4 hours so far')
+    expect(formatElapsed(4.6 * HOUR)).toBe('5 hours so far')
+  })
+
+  it('switches to days at 24 hours', () => {
+    expect(formatElapsed(24 * HOUR)).toBe('1 day so far')
+  })
+
+  it('uses singular "day" for exactly one', () => {
+    expect(formatElapsed(1 * DAY)).toBe('1 day so far')
+  })
+
+  it('pluralizes days', () => {
+    expect(formatElapsed(2 * DAY)).toBe('2 days so far')
+  })
+
+  it('does not land on "24 hours" for something that rounds up to a full day', () => {
+    // 23.6h rounds to 24 in the hour branch — must fall through to days instead.
+    expect(formatElapsed(23.6 * HOUR)).toBe('1 day so far')
   })
 })

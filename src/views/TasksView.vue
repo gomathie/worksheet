@@ -246,8 +246,8 @@ async function ping(t: Task) {
   error.value = ''
   busy.value = t.id
   try {
-    await api(`/api/tasks/${t.id}`, { method: 'PATCH', json: { status: t.status } })
-    notice.value = 'Task marked as actively worked on.'
+    const res = await api<{ elapsed: string }>(`/api/tasks/${t.id}/ping`, { method: 'POST' })
+    notice.value = `Marked as actively worked on — ${res.elapsed}.`
     await load()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to ping task'

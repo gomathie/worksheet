@@ -207,3 +207,22 @@ export function isTaskStale(
   const ageMs = nowMs - new Date(iso).getTime()
   return ageMs >= TASK_VIOLATION_DAYS * 24 * 60 * 60 * 1000
 }
+
+/**
+ * "4 hours so far" / "2 days so far" — the human-readable duration logged
+ * when someone taps "Working on it" (server/tasks.ts `pingTask`), measuring
+ * from the task's `created_at` to now. Under an hour reads as its own phrase
+ * rather than "0 hours so far", which would read like nothing happened.
+ */
+export function formatElapsed(ms: number): string {
+  const hours = ms / (1000 * 60 * 60)
+  if (hours < 1) return 'less than an hour so far'
+  const roundedHours = Math.round(hours)
+  if (roundedHours < 24) {
+    return `${roundedHours} hour${roundedHours === 1 ? '' : 's'} so far`
+  }
+  // Re-round from the unrounded hour count so e.g. 23.6h (which rounds to 24
+  // in the branch above) lands on "1 day", not "24 hours".
+  const days = Math.round(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} so far`
+}

@@ -1356,3 +1356,54 @@ Reported a production Sentry issue on `/payments`: Mobile Safari raised an unhan
 - Deploying to production needs `npm run db:migrate:prod` for migration 0038 before the feature does anything there (consistent with the existing "Production D1 Schema Synchronization" lesson in this log — Cloudflare's GitHub auto-deploy build does not run migrations).
 - Because the violation check only runs when a task list is fetched (no cron), an account that never has its tasks listed by anyone (including no admin ever opening the full Tasks board) won't be checked. In practice the Task Age Alert popup alone guarantees every active user's own tasks get checked at least once a day.
 
+### Feature: "Working on it" Elapsed-Time Log & Manual "Log Violation" on Tasks
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"when someonw clicks on Working on it. it should log the time to say for example, 4 hours so far or 2 days so far. by default points deduction should be 5 per violation but admin can add or reduce. also add an option to log violation, reason(eg. found mistake on a qap card.) and should be able to set how many point to deduct based on that."
+
+**Implementation Details:**
+1. **Default-5-but-adjustable (already satisfied, no change needed)**: checked the previous turn's work — `server/settings.ts`'s `DEFAULTS.task_violation_points` is already `5`, and the Settings UI field is a plain unbounded number input, so an admin can already raise or lower it freely (down to 0 to disable). Just reworded the field's helper text to say so explicitly and point at the new "Log violation" button below for one-off incidents.
+2. **"Working on it" now logs elapsed time (`shared/tasks.ts`, `server/tasks.ts`)**:
+   - Added a pure `formatElapsed(ms)` helper — `"4 hours so far"` / `"2 days so far"` / `"less than an hour so far"` for the sub-hour case (`"0 hours so far"` would read like nothing happened). Rounds to the nearest hour, with a day re-round so e.g. 23.6h doesn't land on "24 hours" instead of "1 day".
+   - Gave "Working on it" its own endpoint, `POST /api/tasks/:id/ping` (`pingTask` in `server/tasks.ts`), rather than continuing to overload `patchTask`'s generic `PATCH {status}` — it needed to *also* insert a row into `task_comments` (reusing the existing Task Comments & Activity Feed table from the September 26 work), logging e.g. "Marked as being worked on — 4 hours so far." measured from the task's `created_at`. Still touches `updated_at` the same way, so the task-violation clock from the previous turn's work resets exactly as before.
+   - Updated both call sites (`TasksView.vue`, `TaskDetailView.vue`) to call the new endpoint and show the returned `elapsed` string in their existing notice banners; the detail page also pushes the returned comment straight into its `comments` list so it appears immediately without a reload.
+3. **Manual "Log Violation" (`src/components/PointDeductionModal.vue`, `src/views/TaskDetailView.vue`, `server/deductions.ts`)**:
+   - The existing Point Deductions system (admin penalty feature, Sept 28) already had everything this needed — a required reason, a freely-chosen amount, an optional task reference, balance protection, audit trail, and employee notification. Rather than building a second system, extended the one modal to be usable from a task's own page:
+     - Relaxed `PointDeductionModal`'s `employee` prop from the full `Employee` type to a minimal `{id, name, employee_code?}` shape — a full `Employee` still satisfies it (no change to `EmployeesView.vue`'s existing usage), but a task's assignee (only ever an `{id, name}` `TaskAssignee`) now also does.
+     - Added optional `taskId`, `defaultAmount`, and `contextLabel` props: pre-fill the task reference and the default point amount, switch the header to "⚠️ Log Violation" instead of "⚠️ Deduct Points", and show which task it's about.
+     - Added a **Log violation** button to `TaskDetailView.vue`, gated on `manage_point_deductions` (not `manage_tasks` — penalizing someone is a different power than organizing their work, same split the existing Point Deductions feature already drew) and on the task actually having an assignee who isn't the viewer themself (the deduction API already refuses self-deductions; mirrored that in the UI gate so the button isn't offered somewhere it would just error).
+     - Extended `getEmployeeBalance` (`server/deductions.ts`) to also return `task_violation_points`, so the modal has a sensible default amount to pre-fill without needing `/api/settings` — which deliberately hides money-sensitive fields from a non-admin `manage_point_deductions` holder, but this balance endpoint is already scoped to exactly that audience.
+4. **Docs**: updated `guideline-user.md` (Working on it now logs a comment) and `guideline-admin.md` (the Log Violation button, and the settings field's reworded help text) and `SettingsView.vue`'s own in-app helper text.
+
+**Files Changed:**
+- `shared/tasks.ts`
+- `server/tasks.ts`
+- `server/deductions.ts`
+- `functions/api/[[route]].ts`
+- `src/components/PointDeductionModal.vue`
+- `src/views/TaskDetailView.vue`
+- `src/views/TasksView.vue`
+- `src/views/SettingsView.vue`
+- `tests/tasks.test.ts`
+- `guideline-user.md`
+- `guideline-admin.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Frontend type check (`npx tsc --noEmit -p tsconfig.app.json`, and the stricter `vue-tsc -b` via `npm run build`): exit code 0 — caught and fixed one unused-import error (`PointDeduction` in `TaskDetailView.vue`) this way before calling it done.
+- Backend type check (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Unit tests (`npm test`): 12 files, 275 passed (added 8 new for `formatElapsed`, including the hour/day rounding-boundary case).
+- Production build (`npm run build`): completed successfully.
+- **Live end-to-end verification against `wrangler pages dev` + local D1**:
+  - Backdated a task's `created_at` 4 hours, called `POST /api/tasks/:id/ping`, confirmed the response's `elapsed` read "4 hours so far" and a matching row landed in `task_comments`.
+  - Confirmed `GET /api/point-deductions/balance/:id` now includes `task_violation_points`.
+  - Created a task for a second seeded employee, submitted `POST /api/point-deductions` exactly as the modal would (custom reason "Found mistake on a QAP card", custom amount, the task's id), confirmed the balance moved correctly, the row appeared in `GET /api/point-deductions` with the task reference, and the employee got a notification.
+  - Along the way, caught and fixed a self-inflicted test-data artifact (not a code bug): an earlier cleanup had deleted a seed entry that an earlier test deduction had already counted against, leaving one test account's balance negative. Confirmed this doesn't break anything — `applyTaskViolation`'s existing `Math.max(0, ...)` clamp and the manual modal's existing `amount > balance` validation both already handle a negative balance correctly — and restored the entry so local dev data is sane again.
+  - Cleaned up all test tasks/entries/notifications created during verification; local dev server stopped afterward.
+
+**Remaining Considerations:**
+- None — all three requests were either already satisfied (the default-5-adjustable setting) or implemented and verified end to end.
+

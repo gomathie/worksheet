@@ -14,6 +14,7 @@ import {
   canTask,
   canViewTask,
   completionStamp,
+  formatElapsed,
   isTaskStale,
   parseDueDate,
   parseTaskPriority,
@@ -620,6 +621,65 @@ export async function patchTask(
   }
   const taskObj = updated ?? task
   return json({ ...taskObj, actions: allowedTaskActions(taskLike(taskObj), actor) })
+}
+
+/**
+ * "Working on it" — same effect on `updated_at` as any other PATCH (which is
+ * what resets the task-violation clock in `isTaskStale`), but as its own
+ * endpoint rather than overloading `patchTask` because it also logs a
+ * comment recording how long the task has been open in total, e.g.
+ * "Marked as being worked on — 4 hours so far." — a running record on the
+ * task's own activity feed, not just a one-off toast that disappears.
+ */
+export async function pingTask(
+  request: Request,
+  env: Env,
+  id: string,
+): Promise<Response> {
+  const user = await requireUser(request, env)
+  const actor = actorFor(user)
+  const task = await loadTask(env, id)
+  if (!canTask('set_status', taskLike(task), actor)) {
+    throw new ApiError(403, 'You cannot update this task')
+  }
+
+  await env.DB.prepare("UPDATE tasks SET updated_at = datetime('now') WHERE id = ?")
+    .bind(id)
+    .run()
+
+  const createdIso = task.created_at.includes('T')
+    ? task.created_at
+    : task.created_at.replace(' ', 'T') + 'Z'
+  const elapsed = formatElapsed(Date.now() - new Date(createdIso).getTime())
+
+  const commentId = crypto.randomUUID()
+  const content = `Marked as being worked on — ${elapsed}.`
+  await env.DB.prepare(
+    'INSERT INTO task_comments (id, task_id, employee_id, content) VALUES (?, ?, ?, ?)',
+  )
+    .bind(commentId, id, user.id, content)
+    .run()
+
+  let updated: TaskRow | null = null
+  try {
+    updated = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+  } catch {
+    updated = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>()
+  }
+  const taskObj = updated ?? task
+
+  return json({
+    task: { ...taskObj, actions: allowedTaskActions(taskLike(taskObj), actor) },
+    elapsed,
+    comment: {
+      id: commentId,
+      task_id: id,
+      employee_id: user.id,
+      employee_name: user.name,
+      content,
+      created_at: new Date().toISOString(),
+    },
+  })
 }
 
 export async function deleteTask(

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
+import PointDeductionModal from '../components/PointDeductionModal.vue'
 import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
@@ -22,6 +23,7 @@ const task = ref<Task | null>(null)
 const employees = ref<TaskAssignee[]>([])
 const comments = ref<TaskComment[]>([])
 const error = ref('')
+const notice = ref('')
 const busy = ref(false)
 const commentBusy = ref(false)
 const newComment = ref('')
@@ -35,6 +37,36 @@ const id = computed(() => route.params.id as string)
 const canManage = computed(() => auth.isAdmin || auth.rights.manage_tasks)
 const can = (a: 'edit' | 'delete' | 'set_status' | 'accept') =>
   task.value?.actions.includes(a) ?? false
+
+// Logging a violation deducts points, so it needs manage_point_deductions
+// (same right the Employees tab's Deduct button requires), not manage_tasks
+// — organizing work and penalizing someone for it are different powers. Self
+// is excluded because the deduction API itself refuses it.
+const canLogViolation = computed(
+  () =>
+    (auth.isAdmin || auth.rights.manage_point_deductions) &&
+    Boolean(task.value?.assignee_id) &&
+    task.value?.assignee_id !== auth.user?.id,
+)
+const violationModalOpen = ref(false)
+const violationDefaultAmount = ref<number | undefined>(undefined)
+
+async function openViolationModal() {
+  if (!task.value?.assignee_id) return
+  try {
+    const bal = await api<{ task_violation_points: number }>(
+      `/api/point-deductions/balance/${task.value.assignee_id}`,
+    )
+    violationDefaultAmount.value = bal.task_violation_points
+  } catch {
+    violationDefaultAmount.value = undefined
+  }
+  violationModalOpen.value = true
+}
+
+function onViolationSaved() {
+  notice.value = 'Violation logged and points deducted.'
+}
 
 async function load() {
   error.value = ''
@@ -112,9 +144,16 @@ async function setStatus(status: TaskStatus) {
 async function ping() {
   if (!task.value) return
   error.value = ''
+  notice.value = ''
   busy.value = true
   try {
-    task.value = await api<Task>(`/api/tasks/${id.value}`, { method: 'PATCH', json: { status: task.value.status } })
+    const res = await api<{ task: Task; elapsed: string; comment: TaskComment }>(
+      `/api/tasks/${id.value}/ping`,
+      { method: 'POST' },
+    )
+    task.value = res.task
+    comments.value.push(res.comment)
+    notice.value = `Marked as actively worked on — ${res.elapsed}.`
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to mark task as active'
   } finally {
@@ -198,6 +237,7 @@ async function postComment() {
     </div>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
+    <p v-if="notice" class="panel mb-6 border-teal bg-teal-soft text-teal">{{ notice }}</p>
 
     <div v-if="task" class="panel">
       <div class="mb-1 flex flex-wrap items-center gap-2">
@@ -343,6 +383,15 @@ async function postComment() {
           Reopen
         </button>
         <button
+          v-if="canLogViolation"
+          class="btn btn-sm btn-danger"
+          title="Record a violation and deduct points from the assignee"
+          :disabled="busy"
+          @click="openViolationModal"
+        >
+          Log violation
+        </button>
+        <button
           v-if="can('delete')"
           class="btn btn-sm btn-danger"
           :disabled="busy"
@@ -352,6 +401,17 @@ async function postComment() {
         </button>
       </div>
     </div>
+
+    <PointDeductionModal
+      v-if="task"
+      :employee="{ id: task.assignee_id!, name: task.assignee_name ?? 'Unknown' }"
+      :open="violationModalOpen"
+      :task-id="task.id"
+      :default-amount="violationDefaultAmount"
+      :context-label="`${task.task_code ?? ''}: ${task.title}`"
+      @close="violationModalOpen = false"
+      @saved="onViolationSaved"
+    />
 
     <!-- Comments Section -->
     <div v-if="task" class="panel mt-6">

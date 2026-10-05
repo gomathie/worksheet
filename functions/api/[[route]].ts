@@ -74,6 +74,7 @@ import { decideUser, listPendingUsers, proposeUser } from '../../server/users'
   listTaskAssignees,
   listTasks,
   patchTask,
+  pingTask,
   taskSummary,
   createTaskComment,
   listTaskComments,
@@ -3602,6 +3603,10 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (method === 'GET') return getTask(request, env, taskMatch[1])
     if (method === 'PATCH') return patchTask(request, env, taskMatch[1])
     if (method === 'DELETE') return deleteTask(request, env, taskMatch[1])
+  }
+  const taskPingMatch = /^\/api\/tasks\/([\w-]+)\/ping$/.exec(path)
+  if (taskPingMatch && method === 'POST') {
+    return pingTask(request, env, taskPingMatch[1])
   }
   const taskCommentMatch = /^\/api\/tasks\/([\w-]+)\/comments$/.exec(path)
   if (taskCommentMatch) {

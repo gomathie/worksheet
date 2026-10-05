@@ -147,6 +147,10 @@ as plain text instead.
     staying visibly active on a task protects you from the automatic penalty.
     Reopening a Done/Cancelled task, or any other change to it, resets the same
     clock.
+  - Tapping **Working on it** also posts a comment on the task recording how long
+    it's been open in total — e.g. _"Marked as being worked on — 4 hours so far."_
+    or _"...2 days so far."_ — so there's a running record on the task's own
+    activity feed of when it was checked on and how old it was each time.
 
 **If someone assigns you a task** you get a notification, and whoever raised it
 is told when you finish. You can move it along but **not change its wording** —

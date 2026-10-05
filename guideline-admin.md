@@ -248,6 +248,15 @@ The **Tasks** board allows assigning and monitoring work outside of time entries
   anyone's task list is fetched (the Tasks page, the age-warning pop-up, an
   admin's "everyone" task view), so an idle instance of the app can take a
   little while to catch a newly-stale task — it isn't checked by the minute.
+- **Log violation (manual)**: On a task's own page, anyone holding **Manage
+  point deductions** (admins always do) sees a **Log violation** button next
+  to Delete — for a specific, noticed problem (e.g. *"found a mistake on this
+  QAP card"*) rather than the generic 5-day inactivity check above. It opens
+  the same deduction form as the Employees tab's **Deduct**, pre-filled with
+  this task's reference and the configured penalty amount (still freely
+  editable — type a different number for a more or less serious violation).
+  Not shown for a task with no assignee, or for your own tasks — the
+  deduction API refuses self-deductions.
 
 ## Leave & time-off approvals
 

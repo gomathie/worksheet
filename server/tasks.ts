@@ -100,14 +100,21 @@ function withActions(rows: TaskRow[] | null | undefined, actor: TaskActor) {
 
 /**
  * Lazily sweeps an already-fetched batch of tasks for the automatic
- * point-deduction penalty (shared/tasks.ts `isTaskStale`, server/deductions.ts
- * `applyTaskViolation`). Pages Functions has no cron trigger wired up here,
- * so there is no dedicated scheduled job for this — instead it piggybacks on
- * every `listTasks`/`getTask` call. listTasks returns everyone's tasks to an
- * admin/manage_tasks caller and just the caller's own otherwise, so between
- * the two, violations get caught without anyone needing to visit a specific
- * task. Failures are isolated per task so one bad row never breaks the
- * response that triggered the sweep.
+ * point-deduction penalty (shared/tasks.ts `isTaskStale`/`isTaskViolationDue`,
+ * server/deductions.ts `applyTaskViolation`). Pages Functions has no cron
+ * trigger wired up here, so there is no dedicated scheduled job for this —
+ * instead it piggybacks on every `listTasks`/`getTask` call. listTasks
+ * returns everyone's tasks to an admin/manage_tasks caller and just the
+ * caller's own otherwise, so between the two, violations get caught without
+ * anyone needing to visit a specific task. Failures are isolated per task so
+ * one bad row never breaks the response that triggered the sweep.
+ *
+ * `isTaskStale` here is just the cheap pre-filter (avoids a query for tasks
+ * nowhere near due) — it only checks the *first*-violation threshold. A task
+ * that already had one violation and is still untouched stays well past that
+ * threshold forever (nothing bumps `updated_at` without a touch), so it
+ * keeps passing this filter; `applyTaskViolation` does the real, finer-grained
+ * check against the shorter repeat interval.
  */
 async function processTaskViolations(env: Env, tasks: TaskRow[]): Promise<void> {
   const nowMs = Date.now()

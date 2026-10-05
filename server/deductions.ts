@@ -14,7 +14,12 @@ import {
   type EntryLike,
   type WorkType,
 } from '../shared/logic'
-import { TASK_VIOLATION_DAYS } from '../shared/tasks'
+import {
+  TASK_VIOLATION_DAYS,
+  TASK_VIOLATION_REPEAT_DAYS,
+  isTaskViolationDue,
+  type TaskStatus,
+} from '../shared/tasks'
 
 // ---------------------------------------------------------------- helpers
 
@@ -131,16 +136,21 @@ export async function effectiveBalance(
 }
 
 /**
- * Automatic penalty for a task that went stale (see `isTaskStale` in
- * shared/tasks.ts) — called from server/tasks.ts for every open, assigned
- * task it finds past the threshold. No human admin triggers this, so it has
- * no `admin_id`; see migrations/0038_task_violations.sql for why that's a
- * separate table from point_deductions rather than a special-cased row in it.
+ * Automatic penalty for a task that has gone too long without being touched
+ * (see `isTaskViolationDue` in shared/tasks.ts) — called from
+ * server/tasks.ts for every open, assigned task that might be due. No human
+ * admin triggers this, so it has no `admin_id`; see
+ * migrations/0038_task_violations.sql for why that's a separate table from
+ * point_deductions rather than a special-cased row in it.
  *
- * Idempotent per (task_id, violation_at): `violation_at` is the task's
- * `updated_at` at the moment it was found stale, and the table's unique index
- * on that pair means a second call for the same still-stale task (e.g. two
- * requests landing close together) is a harmless no-op, caught below.
+ * Repeats every `TASK_VIOLATION_REPEAT_DAYS` for as long as the task stays
+ * untouched, not just once: each call re-checks the most recent violation
+ * already recorded for the task's *current* touch (`violation_at` — the
+ * task's `updated_at`, which only changes when someone actually touches the
+ * task) and no-ops if the next one isn't due yet. `sequence` (1, 2, 3, ...)
+ * numbers how many violations have landed within that one touch; the unique
+ * index on (task_id, violation_at, sequence) makes a near-simultaneous
+ * duplicate call a harmless no-op, caught below, same as before.
  *
  * Deducts min(configured points, current balance) — never pushes the balance
  * negative — and still records the attempt (possibly for 0 points) so the
@@ -149,7 +159,7 @@ export async function effectiveBalance(
  */
 export async function applyTaskViolation(
   env: Env,
-  task: { id: string; task_code: string | null; title: string; updated_at: string | null; created_at: string },
+  task: { id: string; task_code: string | null; title: string; status: TaskStatus; updated_at: string | null; created_at: string },
   employeeId: string,
 ): Promise<void> {
   const settings = await loadSettings(env)
@@ -157,6 +167,17 @@ export async function applyTaskViolation(
   if (!configured || configured <= 0) return // disabled
 
   const violationAt = task.updated_at || task.created_at
+  const last = await env.DB.prepare(
+    `SELECT created_at, sequence FROM task_violations
+      WHERE task_id = ? AND violation_at = ?
+      ORDER BY sequence DESC LIMIT 1`,
+  )
+    .bind(task.id, violationAt)
+    .first<{ created_at: string; sequence: number }>()
+
+  if (!isTaskViolationDue(task, last?.created_at ?? null, Date.now())) return
+
+  const sequence = (last?.sequence ?? 0) + 1
   const tz = env.TEAM_TZ ?? 'Africa/Accra'
   const month = todayInTz(tz).slice(0, 7)
 
@@ -168,14 +189,14 @@ export async function applyTaskViolation(
   try {
     await env.DB.prepare(
       `INSERT INTO task_violations
-         (id, task_id, employee_id, amount, configured_amount, previous_balance, new_balance, month, violation_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, task_id, employee_id, amount, configured_amount, previous_balance, new_balance, month, violation_at, sequence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(id, task.id, employeeId, amount, configured, bal.balance, newBalance, month, violationAt)
+      .bind(id, task.id, employeeId, amount, configured, bal.balance, newBalance, month, violationAt, sequence)
       .run()
   } catch (e) {
-    // Unique constraint on (task_id, violation_at) — already recorded for
-    // this stale window, most likely a near-simultaneous request.
+    // Unique constraint on (task_id, violation_at, sequence) — already
+    // recorded, most likely a near-simultaneous request.
     if (String(e).includes('UNIQUE')) return
     throw e
   }
@@ -187,17 +208,22 @@ export async function applyTaskViolation(
     previous_balance: bal.balance,
     new_balance: newBalance,
     month,
+    sequence,
   })
 
   const label = task.task_code ? `${task.task_code}: ${task.title}` : task.title
+  const window =
+    sequence === 1
+      ? `${TASK_VIOLATION_DAYS} days`
+      : `another ${TASK_VIOLATION_REPEAT_DAYS} days since the last one`
   await notifyUser(env, {
     employeeId,
     kind: 'point_deduction',
     title: amount > 0 ? 'Points Deducted — Task Violation' : 'Task Violation Recorded',
     body:
       amount > 0
-        ? `${amount} point${amount !== 1 ? 's' : ''} ${amount !== 1 ? 'have' : 'has'} been deducted because a task was not completed within 5 days.\n\nTask: ${label}\n\nPrevious balance: ${bal.balance} points\nNew balance: ${newBalance} points`
-        : `A task went 5+ days without being completed, but your points balance was already at 0 so nothing further was deducted.\n\nTask: ${label}`,
+        ? `${amount} point${amount !== 1 ? 's' : ''} ${amount !== 1 ? 'have' : 'has'} been deducted because a task went ${window} without being completed or worked on.\n\nTask: ${label}\n\nPrevious balance: ${bal.balance} points\nNew balance: ${newBalance} points`
+        : `A task went ${window} without being completed, but your points balance was already at 0 so nothing further was deducted.\n\nTask: ${label}`,
   })
 }
 
@@ -500,7 +526,11 @@ export async function listDeductions(
     admin_id: '',
     admin_name: 'System (task violation)',
     amount: r.amount,
-    reason: `Task not completed within ${TASK_VIOLATION_DAYS} days: ${r.task_code ? `${r.task_code}: ` : ''}${r.task_title ?? 'deleted task'}`,
+    reason:
+      (r.sequence <= 1
+        ? `Task not completed within ${TASK_VIOLATION_DAYS} days`
+        : `Task still not completed — repeat #${r.sequence}, ${TASK_VIOLATION_REPEAT_DAYS} days since the last one`) +
+      `: ${r.task_code ? `${r.task_code}: ` : ''}${r.task_title ?? 'deleted task'}`,
     task_id: r.task_id,
     warning_ref: null,
     previous_balance: r.previous_balance,

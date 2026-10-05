@@ -571,13 +571,15 @@ function downloadBackup() {
           />
           <p class="mt-1 text-xs text-muted">
             Points automatically deducted from an employee's balance when an open task
-            (To do or In progress) goes 5 days without being touched. Defaults to 5 —
+            (To do or In progress) goes 5 days without being touched — then deducted
+            again every 2 more days it stays untouched after that. Defaults to 5 —
             raise or lower it any time, it applies to the next violation found. Never
             pushes a balance below zero. "Working on it", reopening, or any other
-            change to the task resets its 5-day clock. For a specific violation you've
-            already noticed (rather than 5-day inactivity), use the "Log violation"
-            button on that task's own page instead — it lets you pick a different
-            amount and reason per incident.
+            change to the task resets the clock back to a full 5-day wait. For a
+            specific violation you've already noticed (rather than inactivity) — a
+            mistake on a QAP card, say — use Employees → Deduct instead; that's a
+            separate, general-purpose tool with its own reason and amount per incident,
+            and has nothing to do with the Tasks board.
           </p>
         </div>
         <div class="col-span-2">

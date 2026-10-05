@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Repeating Automatic Task-Violation Penalties
+  - The automatic 5-day task-violation deduction no longer charges only once. If the task is still untouched 2 days after that first deduction, it's charged again — and again every 2 days after that — for as long as it stays untouched. Touching the task (ping, status change, reopen, anything) resets the cycle back to a full 5-day wait.
+  - Each occurrence uses the same configured penalty amount and the same never-goes-negative balance protection as before.
+  - `Admin → Point Deductions` now distinguishes a first violation ("Task not completed within 5 days") from a repeat ("Task still not completed — repeat #N, 2 days since the last one") in the reason text.
+  - Added `migrations/0039_task_violation_sequence.sql` (a `sequence` column so more than one violation can be recorded per "touch epoch").
+
 - Fix: Popups Too Wide on Desktop (`.panel` Not in a Tailwind Cascade Layer)
   - The Announcement pop-up, Task Age Alert, Task Deadline Alert, and every other modal built from `panel w-full max-w-*` were ignoring their intended width cap on desktop/wide screens and stretching to nearly the full viewport — invisible on mobile, where the cap and the viewport width were close enough not to matter.
   - Root cause: `.panel` in `src/style.css` was plain, unlayered CSS, and Tailwind v4 generates all its utility classes (`max-w-lg`, `border-red`, `bg-red-soft`, etc.) inside `@layer utilities`. Per the CSS Cascade Layers spec, unlayered styles always beat layered ones of equal specificity regardless of source order, so `.panel`'s own `max-width: 100%` always won.

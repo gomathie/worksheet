@@ -1439,3 +1439,50 @@ Follow-up, after a first pass: "log violation is different from task violation."
 **Remaining Considerations:**
 - Other custom classes in `src/style.css` (`.btn`, `.field-input`, `.display`, etc.) are similarly unlayered and could in principle have the same kind of conflict with a combined utility class — none were reported or found broken this session, so none were touched, keeping this fix scoped to the confirmed, demonstrated bug. Worth a follow-up audit if something else turns up looking subtly off.
 
+### Feature: Repeating Automatic Task-Violation Penalties
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"after first deduction on a task violation, if not indicated to be working on, then deduct another after 2 days"
+
+Follow-up clarifying question asked whether the 2-day follow-up should repeat indefinitely or happen just once; the user chose "repeat every 2 days until touched."
+
+**Implementation Details:**
+1. **Why the existing design couldn't just be reused as-is**: the previous turn's `task_violations` table was keyed uniquely on `(task_id, violation_at)` — one row per "touch epoch," where `violation_at` is the task's `updated_at` at the moment it went stale. Since `updated_at` never changes without an actual touch, a task left untouched forever after its first violation could never be charged again — the unique index would silently block every later attempt forever, not just prevent an immediate duplicate. Needed a way to record more than one violation within the same touch epoch.
+2. **`shared/tasks.ts`**: added `TASK_VIOLATION_REPEAT_DAYS = 2` and a new pure function `isTaskViolationDue(task, lastViolationAt, nowMs)`: with no prior violation this touch, waits the full `TASK_VIOLATION_DAYS` (5, unchanged) from the touch; with one already recorded, waits only `TASK_VIOLATION_REPEAT_DAYS` (2) from *that violation's* timestamp — not from the touch — so it keeps coming due every 2 days for as long as nothing touches the task. Factored the SQLite-datetime-to-ISO parsing (used by both this and the existing `isTaskStale`) into a shared `toMs` helper rather than duplicating it a third time.
+3. **`migrations/0039_task_violation_sequence.sql`**: added a `sequence` column (1, 2, 3, ... — which occurrence this is within the current touch epoch) and changed the unique index to `(task_id, violation_at, sequence)`, so multiple violations can now coexist for the same `violation_at` without colliding.
+4. **`server/deductions.ts` `applyTaskViolation`**: reworked to look up the most recent violation already recorded for the task's current touch (`SELECT ... ORDER BY sequence DESC LIMIT 1`), pass its `created_at` (or `null`) to `isTaskViolationDue`, and no-op if not due yet. `sequence` for the new row is `(last?.sequence ?? 0) + 1`. The idempotency guard is the same pattern as before — a `UNIQUE` constraint violation (now on the three-column index) is caught and treated as a harmless race, not an error. Notification body now distinguishes "went 5 days" (sequence 1) from "went another 2 days since the last one" (sequence 2+).
+5. **`server/tasks.ts`**: `processTaskViolations`'s existing `isTaskStale` pre-filter still works unmodified as a cheap first pass — a task eligible for a *repeat* violation is, by definition, still at least `TASK_VIOLATION_DAYS` stale by the original touch-based measure (nothing has touched it), so it never falls through the filter. Updated the doc comments to explain why that's still correct now that there's a second, finer-grained check inside `applyTaskViolation`.
+6. **`server/deductions.ts` `listDeductions`**: the merged audit-log `reason` text for an automatic row now reads differently for a first violation ("Task not completed within 5 days: ...") versus a repeat ("Task still not completed — repeat #N, 2 days since the last one: ...") so admins can tell them apart in **Admin → Point Deductions** at a glance.
+7. **Found and fixed a stale reference left over from the "Log Violation" revert two turns ago**: `SettingsView.vue`'s help text for the penalty-amount field still pointed at a "Log violation" button on a task's own page — removed in that revert, but this one sentence was missed. Rewrote it to point at Employees → Deduct instead (the actual surviving general-purpose tool) and to describe the new repeat behavior.
+8. **Docs**: `guideline-user.md` and `guideline-admin.md` both updated to describe the repeat cadence (5, then every 2 days) and, for admins, the new "repeat #N" audit-log phrasing.
+
+**Files Changed:**
+- `shared/tasks.ts`
+- `migrations/0039_task_violation_sequence.sql`
+- `server/env.ts`
+- `server/deductions.ts`
+- `server/tasks.ts`
+- `src/views/SettingsView.vue`
+- `tests/tasks.test.ts`
+- `guideline-user.md`
+- `guideline-admin.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Backend type check (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Unit tests (`npm test`): 12 files, 280 passed (added 5 new for `isTaskViolationDue`, covering the no-prior-violation case, the shorter repeat wait, indefinite repetition, and done/cancelled tasks never qualifying).
+- Production build (`npm run build`): completed successfully.
+- Applied migration 0039 locally (`npm run db:migrate:local`): exit code 0.
+- **Live end-to-end verification against `wrangler pages dev` + local D1**:
+  - Backdated a task 5 days, swept (`GET /api/tasks?mine=1`), confirmed sequence-1 violation fired (5 points, balance 80→75) and an immediate re-sweep did not duplicate it.
+  - To simulate 2 days passing without waiting for real time, temporarily dropped and recreated the `task_violations_no_update` append-only trigger (local sandbox only) to backdate the sequence-1 row's `created_at` by 2 days, then swept again: confirmed sequence-2 fired (another 5 points, 75→70) and a further immediate re-sweep did not duplicate it either.
+  - Pinged the task (`POST /api/tasks/:id/ping`), confirmed `updated_at` bumped and a subsequent sweep recorded no further violation — the touch correctly reset the cycle.
+  - Confirmed `GET /api/point-deductions` rendered the two rows with the distinct sequence-1 vs sequence-2 reason text.
+  - Cleaned up all test tasks/entries created during verification; local dev server stopped afterward.
+
+**Remaining Considerations:**
+- None. Repeat cadence confirmed with the user (every 2 days, not a one-time follow-up) before implementing, and verified end to end.
+

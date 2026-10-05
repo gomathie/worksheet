@@ -6,6 +6,7 @@ import {
   TASK_STATUSES,
   TASK_STATUS_LABELS,
   TASK_VIOLATION_DAYS,
+  TASK_VIOLATION_REPEAT_DAYS,
   allowedTaskActions,
   canTask,
   canViewTask,
@@ -14,6 +15,7 @@ import {
   isOpen,
   isOverdue,
   isTaskStale,
+  isTaskViolationDue,
   parseDueDate,
   parseTaskPriority,
   parseTaskStatus,
@@ -230,6 +232,47 @@ describe('isTaskStale', () => {
     expect(isTaskStale({ status: 'todo', updated_at: staleUpdatedAt, created_at: staleUpdatedAt }, now)).toBe(true)
     const freshUpdatedAt = new Date(now - 1 * DAY_MS).toISOString()
     expect(isTaskStale({ status: 'todo', updated_at: freshUpdatedAt, created_at: staleUpdatedAt }, now)).toBe(false)
+  })
+})
+
+describe('isTaskViolationDue', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const now = new Date('2026-08-07T12:00:00Z').getTime()
+
+  it('is 2 days', () => {
+    expect(TASK_VIOLATION_REPEAT_DAYS).toBe(2)
+  })
+
+  it('with no prior violation, uses the same 5-day threshold as isTaskStale', () => {
+    const touchedAt4d = new Date(now - 4 * DAY_MS).toISOString()
+    expect(isTaskViolationDue({ status: 'todo', updated_at: touchedAt4d, created_at: touchedAt4d }, null, now)).toBe(false)
+    const touchedAt5d = new Date(now - 5 * DAY_MS).toISOString()
+    expect(isTaskViolationDue({ status: 'todo', updated_at: touchedAt5d, created_at: touchedAt5d }, null, now)).toBe(true)
+  })
+
+  it('with a prior violation, waits only 2 days from it, not 5 from the touch', () => {
+    const touchedAt10d = new Date(now - 10 * DAY_MS).toISOString()
+    const lastViolation1dAgo = new Date(now - 1 * DAY_MS).toISOString()
+    expect(
+      isTaskViolationDue({ status: 'todo', updated_at: touchedAt10d, created_at: touchedAt10d }, lastViolation1dAgo, now),
+    ).toBe(false)
+    const lastViolation2dAgo = new Date(now - 2 * DAY_MS).toISOString()
+    expect(
+      isTaskViolationDue({ status: 'todo', updated_at: touchedAt10d, created_at: touchedAt10d }, lastViolation2dAgo, now),
+    ).toBe(true)
+  })
+
+  it('keeps being due every 2 days indefinitely while untouched (not just once)', () => {
+    const touchedAt30d = new Date(now - 30 * DAY_MS).toISOString()
+    // Even on the 10th violation, only the 2-day gap from the *last* one matters.
+    const last = new Date(now - 2 * DAY_MS).toISOString()
+    expect(isTaskViolationDue({ status: 'todo', updated_at: touchedAt30d, created_at: touchedAt30d }, last, now)).toBe(true)
+  })
+
+  it('never flags done or cancelled tasks, with or without a prior violation', () => {
+    const touchedAt10d = new Date(now - 10 * DAY_MS).toISOString()
+    expect(isTaskViolationDue({ status: 'done', updated_at: touchedAt10d, created_at: touchedAt10d }, null, now)).toBe(false)
+    expect(isTaskViolationDue({ status: 'cancelled', updated_at: touchedAt10d, created_at: touchedAt10d }, touchedAt10d, now)).toBe(false)
   })
 })
 

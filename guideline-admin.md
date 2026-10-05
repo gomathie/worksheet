@@ -252,6 +252,17 @@ The **Tasks** board allows assigning and monitoring work outside of time entries
   noticed in someone's work (a QAP card mistake, a quality issue, a specific
   incident) — that's not about a task at all, and already has its own tool:
   see *Point deductions & penalties* below.
+  - **It repeats, not just once.** The first deduction waits the full 5
+    days; after that, if the task is still untouched, another deduction
+    lands every **2 more days** — 5, then 7, then 9, and so on — for as
+    long as it stays untouched. Each one uses the same configured penalty
+    amount and the same balance-can't-go-negative protection. A touch
+    (ping, status change, reopen — anything that updates the task) resets
+    the cycle back to the full 5-day wait.
+  - In **Point Deductions**, a repeat shows as *"Task still not completed —
+    repeat #N, 2 days since the last one"* so it's clear at a glance
+    whether a given row was the first deduction or a later one for the
+    same stretch of neglect.
 
 ## Leave & time-off approvals
 

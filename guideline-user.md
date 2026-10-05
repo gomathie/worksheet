@@ -142,6 +142,10 @@ as plain text instead.
     the system automatically deducts points from your balance (the amount is set
     by an admin — see your admin's guide — and the deduction never pushes your
     balance below zero). You'll get a notification when this happens.
+  - **It doesn't stop at one.** If the task is still untouched **2 days after**
+    that first deduction, you're charged again — and again every 2 days after
+    that for as long as it stays untouched. Touch the task (see "Working on it"
+    below) and the charging stops until it goes stale again.
   - Tapping **Working on it** on any in-progress task card refreshes its timestamp,
     pauses the aging warning, **and resets the 5-day point-deduction clock** — so
     staying visibly active on a task protects you from the automatic penalty.

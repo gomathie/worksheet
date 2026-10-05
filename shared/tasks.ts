@@ -178,34 +178,73 @@ export function isOverdue(
 }
 
 /**
- * How many days an open task may go untouched before it is eligible for an
- * automatic point deduction (see server/deductions.ts `applyTaskViolation`).
- * Separate from the 2/3-day warnings in TaskAgeAlert.vue on purpose: those
- * are a heads-up, this is the enforcement threshold.
+ * How many days an open task may go untouched before it is eligible for the
+ * *first* automatic point deduction (see server/deductions.ts
+ * `applyTaskViolation`). Separate from the 2/3-day warnings in
+ * TaskAgeAlert.vue on purpose: those are a heads-up, this is the enforcement
+ * threshold.
  */
 export const TASK_VIOLATION_DAYS = 5
+
+/**
+ * How many days after one automatic violation, with the task still
+ * untouched, before the *next* one is due. Shorter than the initial
+ * `TASK_VIOLATION_DAYS` wait on purpose — by this point there has already
+ * been a warning and a deduction, so neglect keeps costing every
+ * `TASK_VIOLATION_REPEAT_DAYS` rather than going quiet again until someone
+ * happens to revisit the task.
+ */
+export const TASK_VIOLATION_REPEAT_DAYS = 2
+
+/**
+ * SQLite's `datetime('now')` is UTC but formatted as "YYYY-MM-DD HH:MM:SS"
+ * rather than ISO-8601 — passing that string to `new Date(...)` directly
+ * parses it as *local* time, not UTC. Normalizing to ISO first (same idiom
+ * as server/http.ts's `dateInTz`) keeps this exact regardless of the
+ * server's own time zone.
+ */
+function toMs(raw: string): number {
+  const iso = raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z'
+  return new Date(iso).getTime()
+}
 
 /**
  * Has this open task gone `TASK_VIOLATION_DAYS` or more without being
  * touched? `updated_at` is bumped by any PATCH — including the "Working on
  * it" ping and reopening a done/cancelled task — so either one resets this
- * clock to zero.
- *
- * Dates here come from SQLite's `datetime('now')`, which is UTC but formatted
- * as "YYYY-MM-DD HH:MM:SS" rather than ISO-8601 — passing that string to
- * `new Date(...)` directly parses it as *local* time, not UTC. Normalizing to
- * ISO first (same idiom as server/http.ts's `dateInTz`) keeps this exact
- * regardless of the server's own time zone.
+ * clock to zero. This is the first-violation threshold only; a task that
+ * already had one violation and is still untouched needs `isTaskViolationDue`
+ * for the shorter repeat interval.
  */
 export function isTaskStale(
   task: { status: TaskStatus; updated_at?: string | null; created_at: string },
   nowMs: number,
 ): boolean {
   if (!isOpen(task.status)) return false
-  const raw = task.updated_at || task.created_at
-  const iso = raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z'
-  const ageMs = nowMs - new Date(iso).getTime()
+  const ageMs = nowMs - toMs(task.updated_at || task.created_at)
   return ageMs >= TASK_VIOLATION_DAYS * 24 * 60 * 60 * 1000
+}
+
+/**
+ * Whether another automatic violation is due right now. `lastViolationAt` is
+ * the `created_at` of the most recent violation already recorded against
+ * this task's *current* touch (its `updated_at`) — `null` if none yet.
+ *
+ * No prior violation this touch: waits the full `TASK_VIOLATION_DAYS` from
+ * when the task was last touched (same threshold as `isTaskStale`). One
+ * already recorded: waits only `TASK_VIOLATION_REPEAT_DAYS` from that
+ * violation — so as long as nobody touches the task, it keeps getting
+ * charged every `TASK_VIOLATION_REPEAT_DAYS`, not just once.
+ */
+export function isTaskViolationDue(
+  task: { status: TaskStatus; updated_at?: string | null; created_at: string },
+  lastViolationAt: string | null,
+  nowMs: number,
+): boolean {
+  if (!isOpen(task.status)) return false
+  if (!lastViolationAt) return isTaskStale(task, nowMs)
+  const ageMs = nowMs - toMs(lastViolationAt)
+  return ageMs >= TASK_VIOLATION_REPEAT_DAYS * 24 * 60 * 60 * 1000
 }
 
 /**

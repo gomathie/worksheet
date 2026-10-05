@@ -276,5 +276,8 @@ export interface TaskViolationRow {
   new_balance: number
   month: string
   violation_at: string
+  /** 1 for the first violation in this touch epoch, 2+ for a repeat — see
+   * migrations/0039_task_violation_sequence.sql. */
+  sequence: number
   created_at: string
 }

@@ -1486,3 +1486,44 @@ Follow-up clarifying question asked whether the 2-day follow-up should repeat in
 **Remaining Considerations:**
 - None. Repeat cadence confirmed with the user (every 2 days, not a one-time follow-up) before implementing, and verified end to end.
 
+### Feature: Settings Page UX Pass
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"HOW CAN i MAKE THE SETTINGS PAGE HAVE A GOOD USER EXPERIENCE" — an open-ended/exploratory question, answered per the system prompt's guidance for such questions: a short recommendation (jump-nav; the "Money & currency" panel had grown to hold unrelated settings) plus the main tradeoff (added UI complexity vs. a page that already works via scroll), then asked which to prioritize rather than just implementing. The user picked all three offered: jump-nav, splitting "Money & currency," and a general polish pass.
+
+**Implementation Details:**
+1. **Investigation first**: read the full 745-line `SettingsView.vue` — 7 stacked `.panel` sections (Work types, Device types, Money & currency, Expense approval workflow, Departments, Categories, Backup) with no page title, one shared `error` ref rendered only at the very bottom of the page (invisible unless scrolled past everything), and success feedback (`saved`/`workflowSaved`) on only 2 of the 7 panels — the rest (work types, device types, departments, categories) gave no confirmation at all when an add/save/toggle succeeded.
+2. **Checked before restructuring "Money & currency"**: confirmed via `functions/api/[[route]].ts`'s `putSettings` that an omitted field doesn't preserve its current value — it resets to a hardcoded default (`task_violation_points` to 5, `max_entries_per_day` to 0, etc.). That ruled out giving each split-out section its own independent save button without a backend change, since a user saving only the "Pay" fields would silently wipe their task-violation-penalty setting back to 5. Asked the user which approach they wanted before building; they chose the safe one.
+3. **Jump-nav (`src/views/SettingsView.vue`)**: a sticky pill-button row at the top (`id`-anchored links to each section), styled to match the app's existing primary-nav pill convention in `App.vue` (`.btn`, horizontal `overflow-x-auto` scroll on narrow screens — no new visual language introduced). Each section's wrapping `<div>` got an `id` and `scroll-mt-16` so the sticky bar doesn't cover the heading when jumped to.
+4. **Global smooth scroll (`src/style.css`)**: added `scroll-behavior: smooth` on `html`, with a `@media (prefers-reduced-motion: reduce)` override back to `auto` — the app had no scroll-behavior set before, and this benefits anchor jumps app-wide, not just this page.
+5. **Split "Money & currency" → "General settings" (one panel, labeled subsections — per the user's chosen approach)**: Pay & currency (point_value, currency) / Time entries (max_entries_per_day, require_entry_approval) / Task violations (task_violation_points) / Employee codes (employee_code_prefix), each with its own `<h3>` and a `border-t` divider, one `saveSettings()` button at the end exactly as before — same request payload, zero backend risk.
+6. **Consistent success feedback**: added a `notice` ref and extended the shared `run()` helper with an optional `successMessage` parameter, threaded through every `run()` call site (work types, device types, departments, categories) plus `decideDeviceType` (which had its own bespoke try/catch, not `run()`). Moved the `error` banner from the bottom of the page to directly under the jump-nav, alongside the new `notice` banner, so feedback from any action on any panel is visible without scrolling — this was a real bug fix (an error from editing the first panel was previously only visible after scrolling past six more panels), not just cosmetic.
+7. **Loading state**: added a `loading` ref, set during `onMounted`'s initial `Promise.all` fetch, gating the whole panel list behind a "Loading settings…" message (matching the full-page-gate pattern already used in `ExpenseDetailView.vue`) instead of rendering panels against still-empty data.
+8. **Page title**: added `<h1 class="display text-3xl">Settings</h1>` — every other view in the app has one; this page didn't.
+9. **Found and fixed a stale doc reference while in `guideline-admin.md`**: the Task violation penalty bullet still said "Settings → Money & currency," which no longer exists as a panel name — updated to "Settings → General settings."
+
+**Files Changed:**
+- `src/style.css`
+- `src/views/SettingsView.vue`
+- `guideline-admin.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Frontend type check (`npx tsc --noEmit -p tsconfig.app.json`) and the stricter `vue-tsc -b` via `npm run build`: both exit code 0 (caught one unclosed-tag error from the `v-else` wrapper mid-edit, fixed before proceeding).
+- Backend type check (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0 (no backend files touched, ran anyway).
+- Unit tests (`npm test`): 12 files, 280 passed — unaffected, as expected for a pure frontend/CSS change.
+- Production build (`npm run build`): completed successfully.
+- **Live visual verification against `wrangler pages dev`, via Playwright screenshots at both a 1440×900 desktop viewport and a 375px mobile viewport**:
+  - Confirmed the jump-nav renders with the same pill styling as the app's primary nav, stays sticky while scrolling, and clicking a link scrolls smoothly to the correct section without the sticky bar covering its heading.
+  - Confirmed the restructured "General settings" panel shows four clearly divided, labeled subsections.
+  - Added a real department and a real category through the UI and confirmed the "Department added."/"Category added." notice appeared at the top of the page, above the jump-nav's scroll position, without needing to scroll down to the panel where the action happened.
+  - Confirmed no horizontal overflow at 375px width (`document.body.scrollWidth === 375`) and that the jump-nav correctly scrolls horizontally within its own row on mobile, matching the existing primary-nav behavior.
+  - Cleaned up all test departments/categories created during verification (no DELETE endpoint exists for either — by design, since historical vouchers may reference them — so removed directly via local-only SQL, same as the app's own soft-delete philosophy intends for anything that isn't truly scratch data); local dev server stopped afterward.
+
+**Remaining Considerations:**
+- The "Money & currency" split deliberately stayed as one panel with a single save button rather than fully independent panels, per the user's explicit choice — revisit only if the backend's `putSettings` is changed to do proper partial merging (preserve omitted fields instead of resetting them to hardcoded defaults), which would also fix a latent footgun unrelated to this session's work.
+- No scrollspy/active-section highlighting was added to the jump-nav (it's click-to-jump only, no "you are here" indicator as you scroll) — kept out to limit scope/risk this pass; straightforward to add later with an IntersectionObserver if wanted.
+

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Settings Page UX Pass
+  - Added a sticky jump-nav bar at the top of Settings linking to each section (Work types, Device types, General, Expense workflow, Departments, Categories, Backup) — no more scrolling through the whole page to find one setting. Smooth-scrolls to the right spot (respects reduced-motion).
+  - Renamed "Money & currency" to **General settings** and split it into clearly labeled subsections (Pay & currency / Time entries / Task violations / Employee codes) instead of one unlabeled grid of unrelated fields — still saves together with a single button (splitting into independently-saved panels would have required backend changes, since the settings endpoint currently resets any omitted field to a hardcoded default rather than preserving it).
+  - Every add/save/activate/deactivate action across the page (work types, device types, departments, categories, device-type approvals) now shows a success confirmation at the top of the page — previously only 2 of 7 panels gave any feedback at all, and the one shared error banner lived at the very bottom, invisible unless you scrolled past everything.
+  - Added a "Loading settings…" state for the initial page load instead of showing empty panels while data is still arriving.
+  - Added a page title ("Settings") — the page didn't have one.
+
 - Feature: Repeating Automatic Task-Violation Penalties
   - The automatic 5-day task-violation deduction no longer charges only once. If the task is still untouched 2 days after that first deduction, it's charged again — and again every 2 days after that — for as long as it stays untouched. Touching the task (ping, status change, reopen, anything) resets the cycle back to a full 5-day wait.
   - Each occurrence uses the same configured penalty amount and the same never-goes-negative balance protection as before.

@@ -23,8 +23,10 @@ const workTypes = ref<WorkTypeInfo[]>([])
 const codePrefix = ref('EMP-')
 const newType = ref({ name: '', points_per_unit: 1, card_based: false, module: '' })
 const error = ref('')
+const notice = ref('')
 const saved = ref(false)
 const busy = ref(false)
+const loading = ref(true)
 
 // ---------------------------------------------------------- expense module
 const departments = ref<Department[]>([])
@@ -61,6 +63,7 @@ async function decideDeviceType(d: PendingDeviceType, decision: 'approved' | 're
     return
   }
   error.value = ''
+  notice.value = ''
   busy.value = true
   try {
     await api(`/api/device-types/${d.id}/decide`, {
@@ -69,6 +72,7 @@ async function decideDeviceType(d: PendingDeviceType, decision: 'approved' | 're
     })
     delete deviceTypeNotes.value[d.id]
     await Promise.all([loadPendingDeviceTypes(), loadDeviceTypes()])
+    notice.value = `"${d.name}" ${decision}.`
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
   } finally {
@@ -81,24 +85,25 @@ function addDeviceType() {
     await api('/api/device-types', { method: 'POST', json: { name: newDeviceType.value } })
     newDeviceType.value = ''
     await loadDeviceTypes()
-  })
+  }, 'Device type added.')
 }
 
 function saveDeviceType(d: DeviceTypeInfo) {
   return run(async () => {
     await api(`/api/device-types/${d.id}`, { method: 'PATCH', json: { name: d.name } })
     await loadDeviceTypes()
-  })
+  }, 'Device type saved.')
 }
 
 function toggleDeviceType(d: DeviceTypeInfo) {
+  const wasActive = d.active
   return run(async () => {
     await api(`/api/device-types/${d.id}`, {
       method: 'PATCH',
-      json: { active: d.active ? 0 : 1 },
+      json: { active: wasActive ? 0 : 1 },
     })
     await loadDeviceTypes()
-  })
+  }, wasActive ? 'Device type deactivated.' : 'Device type reactivated.')
 }
 
 async function loadExpenseConfig() {
@@ -110,22 +115,33 @@ async function loadExpenseConfig() {
 }
 
 onMounted(async () => {
-  const [settings] = await Promise.all([
-    api<RateSettings & { employee_code_prefix?: string }>('/api/settings'),
-    loadTypes(),
-    loadDeviceTypes(),
-    loadPendingDeviceTypes(),
-    loadExpenseConfig(),
-  ])
-  form.value = settings
-  codePrefix.value = settings.employee_code_prefix ?? 'EMP-'
+  try {
+    const [settings] = await Promise.all([
+      api<RateSettings & { employee_code_prefix?: string }>('/api/settings'),
+      loadTypes(),
+      loadDeviceTypes(),
+      loadPendingDeviceTypes(),
+      loadExpenseConfig(),
+    ])
+    form.value = settings
+    codePrefix.value = settings.employee_code_prefix ?? 'EMP-'
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+  } finally {
+    loading.value = false
+  }
 })
 
-async function run(fn: () => Promise<unknown>) {
+/** Every mutating action on this page runs through here so success/failure
+ * feedback is consistent everywhere, not just the two panels (Pay & currency,
+ * Expense workflow) that happened to grow their own `saved` flag early on. */
+async function run(fn: () => Promise<unknown>, successMessage?: string) {
   error.value = ''
+  notice.value = ''
   busy.value = true
   try {
     await fn()
+    if (successMessage) notice.value = successMessage
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
   } finally {
@@ -151,7 +167,7 @@ function addType() {
     await api('/api/work-types', { method: 'POST', json: newType.value })
     newType.value = { name: '', points_per_unit: 1, card_based: false, module: '' }
     await loadTypes()
-  })
+  }, 'Work type added.')
 }
 
 // ---------------------------------------------------- departments & categories
@@ -161,24 +177,25 @@ function addDepartment() {
     await api('/api/departments', { method: 'POST', json: { name: newDepartment.value } })
     newDepartment.value = ''
     await loadExpenseConfig()
-  })
+  }, 'Department added.')
 }
 
 function saveDepartment(d: Department) {
   return run(async () => {
     await api(`/api/departments/${d.id}`, { method: 'PATCH', json: { name: d.name } })
     await loadExpenseConfig()
-  })
+  }, 'Department saved.')
 }
 
 function toggleDepartment(d: Department) {
+  const wasActive = d.active
   return run(async () => {
     await api(`/api/departments/${d.id}`, {
       method: 'PATCH',
-      json: { active: d.active ? 0 : 1 },
+      json: { active: wasActive ? 0 : 1 },
     })
     await loadExpenseConfig()
-  })
+  }, wasActive ? 'Department deactivated.' : 'Department reactivated.')
 }
 
 function addCategory() {
@@ -189,24 +206,25 @@ function addCategory() {
     })
     newCategory.value = ''
     await loadExpenseConfig()
-  })
+  }, 'Category added.')
 }
 
 function saveCategory(c: ExpenseCategory) {
   return run(async () => {
     await api(`/api/expense-categories/${c.id}`, { method: 'PATCH', json: { name: c.name } })
     await loadExpenseConfig()
-  })
+  }, 'Category saved.')
 }
 
 function toggleCategory(c: ExpenseCategory) {
+  const wasActive = c.active
   return run(async () => {
     await api(`/api/expense-categories/${c.id}`, {
       method: 'PATCH',
-      json: { active: c.active ? 0 : 1 },
+      json: { active: wasActive ? 0 : 1 },
     })
     await loadExpenseConfig()
-  })
+  }, wasActive ? 'Category deactivated.' : 'Category reactivated.')
 }
 
 function saveWorkflow() {
@@ -232,17 +250,18 @@ function saveType(wt: WorkTypeInfo) {
       },
     })
     await loadTypes()
-  })
+  }, 'Work type saved.')
 }
 
 function toggleType(wt: WorkTypeInfo) {
+  const wasActive = wt.active
   return run(async () => {
     await api(`/api/work-types/${wt.id}`, {
       method: 'PATCH',
-      json: { active: wt.active ? 0 : 1 },
+      json: { active: wasActive ? 0 : 1 },
     })
     await loadTypes()
-  })
+  }, wasActive ? 'Work type deactivated.' : 'Work type reactivated.')
 }
 
 function downloadBackup() {
@@ -250,14 +269,34 @@ function downloadBackup() {
     const data = await api<unknown>('/api/export')
     const date = new Date().toISOString().slice(0, 10)
     downloadJson(`ledger-backup-${date}.json`, data)
-  })
+  }, 'Backup downloaded.')
 }
 
 </script>
 
 <template>
   <div class="max-w-3xl space-y-6">
-    <div class="panel">
+    <h1 class="display text-3xl">Settings</h1>
+
+    <nav
+      class="no-print sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-line bg-cream px-1 py-2"
+      aria-label="Jump to settings section"
+    >
+      <a href="#work-types" class="btn btn-sm shrink-0">Work types</a>
+      <a href="#device-types" class="btn btn-sm shrink-0">Device types</a>
+      <a href="#general-settings" class="btn btn-sm shrink-0">General</a>
+      <a href="#expense-workflow" class="btn btn-sm shrink-0">Expense workflow</a>
+      <a href="#departments" class="btn btn-sm shrink-0">Departments</a>
+      <a href="#categories" class="btn btn-sm shrink-0">Categories</a>
+      <a href="#backup" class="btn btn-sm shrink-0">Backup</a>
+    </nav>
+
+    <p v-if="error" class="panel border-red bg-red-soft text-red">{{ error }}</p>
+    <p v-if="notice" class="panel border-teal bg-teal-soft text-teal">{{ notice }}</p>
+
+    <p v-if="loading" class="panel text-muted">Loading settings…</p>
+    <template v-else>
+    <div id="work-types" class="panel scroll-mt-16">
       <h2 class="display mb-1 text-2xl">Work types &amp; points</h2>
       <p class="mb-5 text-sm text-muted">
         Each work type is worth points per unit. Assign types to employees in the
@@ -375,7 +414,7 @@ function downloadBackup() {
       </p>
     </div>
 
-    <div class="panel">
+    <div id="device-types" class="panel scroll-mt-16">
       <h2 class="display mb-1 text-2xl">Device types</h2>
       <p class="mb-5 text-sm text-muted">
         The device makes offered on an installation card (Telematics
@@ -484,82 +523,86 @@ function downloadBackup() {
       </form>
     </div>
 
-    <div class="panel">
-      <h2 class="display mb-1 text-2xl">Money &amp; currency</h2>
+    <div id="general-settings" class="panel scroll-mt-16">
+      <h2 class="display mb-1 text-2xl">General settings</h2>
       <p class="mb-5 text-sm text-muted">
-        Remuneration = points × value per point, plus bonuses and approved
-        reimbursements.
+        Pay rates, time-entry rules, the task-violation penalty, and employee
+        codes — everything here saves together with the one button at the
+        bottom.
       </p>
-      <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="saveSettings">
+      <form class="space-y-6" @submit.prevent="saveSettings">
         <div>
-          <label class="field-label" for="pv">Value per point</label>
-          <input
-            id="pv"
-            v-model.number="form.point_value"
-            type="number"
-            min="0"
-            step="any"
-            required
-            class="field-input mono"
-          />
-        </div>
-        <div>
-          <label class="field-label" for="cur">Currency symbol</label>
-          <input
-            id="cur"
-            v-model="form.currency"
-            maxlength="4"
-            required
-            class="field-input mono"
-          />
-        </div>
-        <div>
-          <label class="field-label" for="codeprefix">Employee code prefix</label>
-          <input
-            id="codeprefix"
-            v-model="codePrefix"
-            maxlength="12"
-            class="field-input mono"
-            placeholder="EMP-"
-          />
-          <p class="mt-1 text-xs text-muted">
-            New employees get an auto code like {{ codePrefix }}004. Changing this
-            only affects codes assigned from now on.
+          <h3 class="field-label mb-2 text-sm font-semibold text-ink">Pay &amp; currency</h3>
+          <p class="mb-3 text-xs text-muted">
+            Remuneration = points × value per point, plus bonuses and approved
+            reimbursements.
           </p>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label class="field-label" for="pv">Value per point</label>
+              <input
+                id="pv"
+                v-model.number="form.point_value"
+                type="number"
+                min="0"
+                step="any"
+                required
+                class="field-input mono"
+              />
+            </div>
+            <div>
+              <label class="field-label" for="cur">Currency symbol</label>
+              <input
+                id="cur"
+                v-model="form.currency"
+                maxlength="4"
+                required
+                class="field-input mono"
+              />
+            </div>
+          </div>
         </div>
-        <div class="col-span-2">
-          <label class="field-label" for="maxpd">Max entries per employee per day (0 = unlimited)</label>
-          <input
-            id="maxpd"
-            v-model.number="form.max_entries_per_day"
-            type="number"
-            min="0"
-            step="1"
-            required
-            class="field-input mono"
-          />
-          <p class="mt-1 text-xs text-muted">
-            The default cap on how many times an employee can log per day. Set a
-            per-person override in the Employees tab. Admins are never capped.
-          </p>
+
+        <div class="border-t border-line pt-5">
+          <h3 class="field-label mb-2 text-sm font-semibold text-ink">Time entries</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="field-label" for="maxpd">Max entries per employee per day (0 = unlimited)</label>
+              <input
+                id="maxpd"
+                v-model.number="form.max_entries_per_day"
+                type="number"
+                min="0"
+                step="1"
+                required
+                class="field-input mono"
+              />
+              <p class="mt-1 text-xs text-muted">
+                The default cap on how many times an employee can log per day. Set a
+                per-person override in the Employees tab. Admins are never capped.
+              </p>
+            </div>
+            <div>
+              <label class="flex items-center gap-2 text-sm">
+                <input
+                  :checked="form.require_entry_approval === 1"
+                  type="checkbox"
+                  @change="form.require_entry_approval = ($event.target as HTMLInputElement).checked ? 1 : 0"
+                />
+                Require admin approval for employee time entries
+              </label>
+              <p class="mt-1 text-xs text-muted">
+                When on, entries logged by employees stay pending and only count
+                toward pay once you approve them. Admin-logged entries are approved
+                automatically.
+              </p>
+            </div>
+          </div>
         </div>
-        <div class="col-span-2">
-          <label class="flex items-center gap-2 text-sm">
-            <input
-              :checked="form.require_entry_approval === 1"
-              type="checkbox"
-              @change="form.require_entry_approval = ($event.target as HTMLInputElement).checked ? 1 : 0"
-            />
-            Require admin approval for employee time entries
-          </label>
-          <p class="mt-1 text-xs text-muted">
-            When on, entries logged by employees stay pending and only count
-            toward pay once you approve them. Admin-logged entries are approved
-            automatically.
-          </p>
-        </div>
-        <div class="col-span-2">
-          <label class="field-label" for="taskviolpts">Task violation penalty (points, 0 = disabled)</label>
+
+        <div class="border-t border-line pt-5">
+          <h3 class="field-label mb-2 text-sm font-semibold text-ink">Task violations</h3>
+          <label class="field-label" for="taskviolpts">Penalty (points, 0 = disabled)</label>
           <input
             id="taskviolpts"
             v-model.number="form.task_violation_points"
@@ -582,7 +625,24 @@ function downloadBackup() {
             and has nothing to do with the Tasks board.
           </p>
         </div>
-        <div class="col-span-2">
+
+        <div class="border-t border-line pt-5">
+          <h3 class="field-label mb-2 text-sm font-semibold text-ink">Employee codes</h3>
+          <label class="field-label" for="codeprefix">Prefix</label>
+          <input
+            id="codeprefix"
+            v-model="codePrefix"
+            maxlength="12"
+            class="field-input mono"
+            placeholder="EMP-"
+          />
+          <p class="mt-1 text-xs text-muted">
+            New employees get an auto code like {{ codePrefix }}004. Changing this
+            only affects codes assigned from now on.
+          </p>
+        </div>
+
+        <div class="border-t border-line pt-5">
           <button class="btn btn-solid" :disabled="busy">
             {{ busy ? 'Saving…' : 'Save settings' }}
           </button>
@@ -592,7 +652,7 @@ function downloadBackup() {
     </div>
 
     <!-- ================================================== expense vouchers -->
-    <div class="panel">
+    <div id="expense-workflow" class="panel scroll-mt-16">
       <h2 class="display mb-1 text-2xl">Expense approval workflow</h2>
       <p class="mb-4 text-sm text-muted">
         Which steps a submitted voucher passes through. Turning a step off
@@ -616,7 +676,7 @@ function downloadBackup() {
       <span v-if="workflowSaved" class="ml-3 text-sm text-teal">Saved.</span>
     </div>
 
-    <div class="panel">
+    <div id="departments" class="panel scroll-mt-16">
       <h2 class="display mb-1 text-2xl">Departments</h2>
       <p class="mb-4 text-sm text-muted">
         Assign employees to a department in the Employees tab. Vouchers inherit
@@ -673,7 +733,7 @@ function downloadBackup() {
       </form>
     </div>
 
-    <div class="panel">
+    <div id="categories" class="panel scroll-mt-16">
       <h2 class="display mb-1 text-2xl">Expense categories</h2>
       <p class="mb-4 text-sm text-muted">
         Categories offered on the voucher form and used to group the expense
@@ -726,7 +786,7 @@ function downloadBackup() {
       </form>
     </div>
 
-    <div class="panel">
+    <div id="backup" class="panel scroll-mt-16">
       <h2 class="display mb-1 text-2xl">Backup</h2>
       <p class="mb-4 text-sm text-muted">
         Download a full snapshot of all data (employees, entries, work types,
@@ -737,9 +797,6 @@ function downloadBackup() {
         {{ busy ? 'Preparing…' : 'Download backup (JSON)' }}
       </button>
     </div>
-
-    <p v-if="error" class="rounded-lg border border-red bg-red-soft p-3 text-sm text-red">
-      {{ error }}
-    </p>
+    </template>
   </div>
 </template>

@@ -280,9 +280,10 @@ The **Leaves (Time Off)** system provides structured multi-day absence tracking:
 - **Departments** and **expense categories** — add, rename, deactivate.
 - **Device types** — the telematics device make list, including the queue of
   suggestions from installers. See *Installations & device types* above.
-- **Task violation penalty** — under **Settings → Money & currency**, how many
-  points are automatically deducted when an open task goes 5 days untouched
-  (see *Task management & oversight* above). Set to **0 to disable** the
+- **Task violation penalty** — under **Settings → General settings** (jump-nav
+  at the top of the Settings page), how many points are automatically
+  deducted when an open task goes 5 days untouched (see *Task management &
+  oversight* above). Set to **0 to disable** the
   automatic deduction entirely without touching anything else. Takes effect
   on the next violation found — it isn't retroactive.
 - **Download backup** — a full JSON export.

@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Fix: Task Comment Card Illegible in Dark Mode
+  - The task comment card (`TaskDetailView.vue`) used a stray Tailwind `dark:` variant plus generic `bg-gray-50`/`text-foreground` classes that don't exist anywhere else in the app and aren't part of its design tokens. On a browser/OS set to dark mode, the card's background flipped dark while the comment text kept the app's fixed light-theme color, making comments unreadable; in light mode it also looked visually inconsistent with the rest of the page.
+  - Replaced it with the app's existing `bg-cream`/`border-line` tokens, matching the styling already used elsewhere on the same page, and removed the dead `text-foreground` class.
+
 - Feature: App Default Route to Dashboard
   - Changed the default root route (/) in src/router/index.ts to map to the Dashboard instead of the Time Entry page.
   - The router gracefully redirects users to the Time Entry page if they lack Dashboard access rights.

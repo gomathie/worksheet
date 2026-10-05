@@ -1261,3 +1261,32 @@ Reported a production Sentry issue on `/payments`: Mobile Safari raised an unhan
 **Testing Performed:**
 - Ran frontend and backend type checking which both completed successfully with code 0.
 
+### Fix: Task Comment Card Illegible in Dark Mode
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"check the task functioning. the comments on task dont show well."
+
+**Implementation Details:**
+1. **Diagnosis**:
+   - Reviewed the task-comment stack end to end: `server/tasks.ts` (`listTaskComments`/`createTaskComment`), the `/api/tasks/:id/comments` routes in `functions/api/[[route]].ts`, and the `TaskComment` type in `src/types.ts`. Data flow, routing, and types were all correct — fetching and posting comments worked.
+   - The bug was in rendering: `src/views/TaskDetailView.vue`'s comment card used `bg-gray-50 dark:bg-gray-800` and `text-foreground`. This app has no dark-mode theme anywhere else (confirmed via `grep -rn "dark:" src` — this was the only occurrence in the whole codebase), and `src/style.css`'s `@theme` block defines no `--color-foreground` token. `text-foreground` was a silent no-op, and `dark:bg-gray-800` only fires via the browser/OS `prefers-color-scheme: dark` media query, which nothing else in the app accounts for — so on a dark-mode system the card flipped to a dark background while the comment text kept the app's fixed light-theme ink color, making comments unreadable. In light mode the card also looked visually inconsistent, using a generic gray not in this app's cream/teal/amber palette.
+2. **Fix (`src/views/TaskDetailView.vue`)**:
+   - Replaced `bg-gray-50 p-3 dark:bg-gray-800` with `bg-cream p-3` (an existing, already-used theme token) and dropped the dead `text-foreground` class, matching the card styling used elsewhere on the same page (e.g. the checklist box).
+   - Updated a stale top-of-file comment that still claimed the task page had "no comment thread or activity feed" — left over from before the Task Comments feature shipped.
+
+**Files Changed:**
+- `src/views/TaskDetailView.vue`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Ran frontend type check (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Ran backend type check (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Ran full unit test suite (`npm test`): 12 test files, 254 tests passed.
+- Ran production build (`npm run build`): completed successfully.
+
+**Remaining Considerations:**
+- No other `dark:`-variant or undefined-token styling was found elsewhere in `src/`, so this was an isolated instance. The checklist box on the same page (`bg-surface`) references an undefined token too, but it's inert (no dark-mode pairing, so no legibility break) and wasn't part of the reported issue — left untouched to keep this change focused.
+

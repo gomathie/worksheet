@@ -11,9 +11,8 @@ import {
 } from '../../shared/tasks'
 import type { Task, TaskAssignee, TaskComment } from '../types'
 
-// A single task, Jira-issue-style: the code, its state, and everything
-// about it in one place — deliberately simple, no comment thread or activity
-// feed, since a task here is a note about intent, not a record to audit.
+// A single task, Jira-issue-style: the code, its state, everything about
+// it, and a comment thread underneath for activity/progress updates.
 
 const route = useRoute()
 const router = useRouter()
@@ -350,9 +349,9 @@ async function postComment() {
       <h3 class="mb-4 text-lg font-medium">Activity & Comments</h3>
       
       <div v-if="comments.length > 0" class="mb-6 space-y-4">
-        <div v-for="c in comments" :key="c.id" class="rounded-lg border border-line bg-gray-50 p-3 dark:bg-gray-800">
+        <div v-for="c in comments" :key="c.id" class="rounded-lg border border-line bg-cream p-3">
           <div class="mb-1 flex items-center justify-between text-xs">
-            <span class="font-medium text-foreground">{{ c.employee_name }}</span>
+            <span class="font-medium">{{ c.employee_name }}</span>
             <span class="mono text-muted">{{ c.created_at.slice(0, 16).replace('T', ' ') }}</span>
           </div>
           <p class="text-sm whitespace-pre-wrap">{{ c.content }}</p>

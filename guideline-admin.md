@@ -230,10 +230,24 @@ The **Tasks** board allows assigning and monitoring work outside of time entries
 - **Assignees & Observers**: Tasks support a primary assignee plus an optional secondary participant designated as either an **Additional Assignee** (can edit and complete the task) or an **Observer** (view-only follower).
 - **Recurrence**: When creating or editing a task, choose **Recurrence** (Daily, Weekly, Monthly). Once marked *Done*, a new instance of the task automatically generates with an updated due date.
 - **Task Comments**: Each task detail page features a real-time discussion thread. Adding a comment automatically dispatches notifications to the creator and assignees.
+- **Reopen**: A **Reopen** button on a Done or Cancelled task (list and detail page)
+  moves it back to **To do**, for when it turns out there's more to do. Clears
+  `completed_at` and, like any other change, resets the 5-day violation clock
+  below. Same permission as any other status change — assignee, raiser, or a
+  **Manage tasks** holder.
 - **Inactivity & Task Age Alerts**: Incomplete tasks trigger automated daily alerts:
   - Over 2 days old: warns the assignee that uncompleted tasks impact payment.
   - Over 3 days old: warns that the task is scheduled for deletion/reassignment and will affect compensation.
   - The **Working on it** button on in-progress cards refreshes the task's timestamp and pauses the aging warning.
+- **Automatic task-violation point deduction**: An open task (To do or In
+  progress) that goes **5 days** without being touched automatically deducts
+  points from its assignee's balance — no admin action needed. See **Task
+  violation penalty** under *Other settings* for the amount, and *Point
+  deductions & penalties* below for where these show up in the audit trail.
+  There is no scheduled job behind this: it runs opportunistically whenever
+  anyone's task list is fetched (the Tasks page, the age-warning pop-up, an
+  admin's "everyone" task view), so an idle instance of the app can take a
+  little while to catch a newly-stale task — it isn't checked by the minute.
 
 ## Leave & time-off approvals
 
@@ -251,6 +265,11 @@ The **Leaves (Time Off)** system provides structured multi-day absence tracking:
 - **Departments** and **expense categories** — add, rename, deactivate.
 - **Device types** — the telematics device make list, including the queue of
   suggestions from installers. See *Installations & device types* above.
+- **Task violation penalty** — under **Settings → Money & currency**, how many
+  points are automatically deducted when an open task goes 5 days untouched
+  (see *Task management & oversight* above). Set to **0 to disable** the
+  automatic deduction entirely without touching anything else. Takes effect
+  on the next violation found — it isn't retroactive.
 - **Download backup** — a full JSON export.
 
 ## Admin → Notifications
@@ -304,6 +323,13 @@ Authorized administrators (and users granted `Manage point deductions`) can dedu
 - **Audit trail & CSV Export**: **Admin → Point Deductions** provides a complete log of all penalties and pardons with filters by month, employee, and decision type, plus CSV download.
 - **Immediate employee notification**: Submitting a deduction automatically sends an in-app notification to the affected user with the deducted amount, justification, and new balance.
 - **Monthly report reflection**: Net points, totals, and monthly earnings automatically incorporate deductions.
+- **Automatic task-violation deductions appear here too**: the same audit log
+  and CSV export also include the system's automatic 5-day task-violation
+  penalties (see *Task management & oversight* above), shown with **"System
+  (task violation)"** as the authorizing admin and the task it came from in
+  the reason. They're a separate record type under the hood — no human admin
+  action, so there's nothing to approve — but they count toward the same
+  balance and the same "Total Points Deducted" figure.
 
 ---
 

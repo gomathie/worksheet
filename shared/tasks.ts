@@ -176,3 +176,34 @@ export function isOverdue(
 ): boolean {
   return isOpen(task.status) && task.due_date !== null && task.due_date < today
 }
+
+/**
+ * How many days an open task may go untouched before it is eligible for an
+ * automatic point deduction (see server/deductions.ts `applyTaskViolation`).
+ * Separate from the 2/3-day warnings in TaskAgeAlert.vue on purpose: those
+ * are a heads-up, this is the enforcement threshold.
+ */
+export const TASK_VIOLATION_DAYS = 5
+
+/**
+ * Has this open task gone `TASK_VIOLATION_DAYS` or more without being
+ * touched? `updated_at` is bumped by any PATCH — including the "Working on
+ * it" ping and reopening a done/cancelled task — so either one resets this
+ * clock to zero.
+ *
+ * Dates here come from SQLite's `datetime('now')`, which is UTC but formatted
+ * as "YYYY-MM-DD HH:MM:SS" rather than ISO-8601 — passing that string to
+ * `new Date(...)` directly parses it as *local* time, not UTC. Normalizing to
+ * ISO first (same idiom as server/http.ts's `dateInTz`) keeps this exact
+ * regardless of the server's own time zone.
+ */
+export function isTaskStale(
+  task: { status: TaskStatus; updated_at?: string | null; created_at: string },
+  nowMs: number,
+): boolean {
+  if (!isOpen(task.status)) return false
+  const raw = task.updated_at || task.created_at
+  const iso = raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z'
+  const ageMs = nowMs - new Date(iso).getTime()
+  return ageMs >= TASK_VIOLATION_DAYS * 24 * 60 * 60 * 1000
+}

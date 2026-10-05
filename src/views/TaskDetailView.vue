@@ -334,6 +334,15 @@ async function postComment() {
           Working on it
         </button>
         <button
+          v-if="(task.status === 'done' || task.status === 'cancelled') && can('set_status')"
+          class="btn btn-sm"
+          title="Move this task back to To do"
+          :disabled="busy"
+          @click="setStatus('todo')"
+        >
+          Reopen
+        </button>
+        <button
           v-if="can('delete')"
           class="btn btn-sm btn-danger"
           :disabled="busy"

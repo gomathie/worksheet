@@ -17,6 +17,7 @@ const form = ref<RateSettings>({
   currency: '$',
   max_entries_per_day: 0,
   require_entry_approval: 0,
+  task_violation_points: 5,
 })
 const workTypes = ref<WorkTypeInfo[]>([])
 const codePrefix = ref('EMP-')
@@ -555,6 +556,24 @@ function downloadBackup() {
             When on, entries logged by employees stay pending and only count
             toward pay once you approve them. Admin-logged entries are approved
             automatically.
+          </p>
+        </div>
+        <div class="col-span-2">
+          <label class="field-label" for="taskviolpts">Task violation penalty (points, 0 = disabled)</label>
+          <input
+            id="taskviolpts"
+            v-model.number="form.task_violation_points"
+            type="number"
+            min="0"
+            step="any"
+            required
+            class="field-input mono"
+          />
+          <p class="mt-1 text-xs text-muted">
+            Points automatically deducted from an employee's balance when an open task
+            (To do or In progress) goes 5 days without being touched. Never pushes a
+            balance below zero. "Working on it", reopening, or any other change to the
+            task resets its 5-day clock.
           </p>
         </div>
         <div class="col-span-2">

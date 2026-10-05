@@ -265,3 +265,16 @@ export interface PointDeductionRow {
   idempotency_key: string | null
   created_at: string
 }
+
+export interface TaskViolationRow {
+  id: string
+  task_id: string
+  employee_id: string
+  amount: number
+  configured_amount: number
+  previous_balance: number
+  new_balance: number
+  month: string
+  violation_at: string
+  created_at: string
+}

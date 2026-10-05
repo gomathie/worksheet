@@ -8,11 +8,13 @@ import type { Employee, Env } from './env'
 import { ApiError, json, readJson, todayInTz } from './http'
 import { audit, parseRights, requireUser } from './auth'
 import { firstName, notifyUser, notifyUsers } from './notify'
+import { applyTaskViolation } from './deductions'
 import {
   allowedTaskActions,
   canTask,
   canViewTask,
   completionStamp,
+  isTaskStale,
   parseDueDate,
   parseTaskPriority,
   parseTaskStatus,
@@ -96,6 +98,29 @@ function withActions(rows: TaskRow[] | null | undefined, actor: TaskActor) {
 }
 
 /**
+ * Lazily sweeps an already-fetched batch of tasks for the automatic
+ * point-deduction penalty (shared/tasks.ts `isTaskStale`, server/deductions.ts
+ * `applyTaskViolation`). Pages Functions has no cron trigger wired up here,
+ * so there is no dedicated scheduled job for this — instead it piggybacks on
+ * every `listTasks`/`getTask` call. listTasks returns everyone's tasks to an
+ * admin/manage_tasks caller and just the caller's own otherwise, so between
+ * the two, violations get caught without anyone needing to visit a specific
+ * task. Failures are isolated per task so one bad row never breaks the
+ * response that triggered the sweep.
+ */
+async function processTaskViolations(env: Env, tasks: TaskRow[]): Promise<void> {
+  const nowMs = Date.now()
+  const stale = tasks.filter((t) => t.assignee_id && isTaskStale(t, nowMs))
+  for (const t of stale) {
+    try {
+      await applyTaskViolation(env, t, t.assignee_id!)
+    } catch (err) {
+      console.error('task violation check failed for', t.id, err)
+    }
+  }
+}
+
+/**
  * Who a task can be given to: id and name, nothing else.
  *
  * A `manage_tasks` holder who is not an administrator needs the team's names
@@ -156,6 +181,7 @@ export async function listTasks(request: Request, env: Env): Promise<Response> {
       .bind(...binds)
       .all<TaskRow>()
     const results = res?.results ?? []
+    await processTaskViolations(env, results)
     return json(withActions(results, actor))
   } catch (err) {
     console.error('listTasks error with primary query, attempting resilient fallback:', err)
@@ -249,6 +275,7 @@ export async function getTask(request: Request, env: Env, id: string): Promise<R
   }
   if (!task) throw new ApiError(404, 'Task not found')
   if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')
+  await processTaskViolations(env, [task])
   return json({ ...task, actions: allowedTaskActions(taskLike(task), actor) })
 }
 

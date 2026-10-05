@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Reopen Tasks & Automatic Task-Violation Point Deductions
+  - **Reopen**: a Done or Cancelled task now has an explicit **Reopen** button (task list and detail page) that moves it back to To do and clears its completion date.
+  - **Automatic 5-day penalty**: an open task (To do/In progress) left untouched for 5 days now automatically deducts points from its assignee's balance — no admin action required. The deduction is capped so it never pushes a balance below zero, and is recorded even when capped to 0 so there's always an audit trail.
+  - **"Working on it" (and reopening) reset the clock**: both already bump the task's timestamp, which is exactly what the 5-day check is based on — no separate reset mechanism needed.
+  - **Admin-configurable amount**: new **Task violation penalty (points)** field under Settings → Money & currency (default 5, set to 0 to disable). Added `migrations/0038_task_violations.sql` for the new `task_violations` table and `task_violation_points` to the settings blob.
+  - **Shows up in existing audit trail**: automatic violations appear alongside manual admin deductions in **Admin → Point Deductions** (and its CSV export), tagged `"System (task violation)"`, and are included in monthly report/dashboard point totals the same way manual deductions already are.
+  - No cron trigger involved (Pages Functions doesn't have one wired up here) — the check runs opportunistically whenever a task list is fetched, which happens often enough in normal use (Tasks page, the age-warning popup, an admin's full task view) to catch violations without a dedicated scheduled job.
+
 - Fix: Task Comment Card Illegible in Dark Mode
   - The task comment card (`TaskDetailView.vue`) used a stray Tailwind `dark:` variant plus generic `bg-gray-50`/`text-foreground` classes that don't exist anywhere else in the app and aren't part of its design tokens. On a browser/OS set to dark mode, the card's background flipped dark while the comment text kept the app's fixed light-theme color, making comments unreadable; in light mode it also looked visually inconsistent with the rest of the page.
   - Replaced it with the app's existing `bg-cream`/`border-line` tokens, matching the styling already used elsewhere on the same page, and removed the dead `text-foreground` class.

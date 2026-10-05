@@ -4,15 +4,17 @@
 // records explicit admin-initiated deductions so the monthly report subtracts
 // them and every change to an employee's score is auditable.
 
-import type { Employee, Env, PointDeductionRow } from './env'
+import type { Employee, Env, PointDeductionRow, TaskViolationRow } from './env'
 import { ApiError, json, readJson, todayInTz } from './http'
 import { parseRights, requireUser, audit } from './auth'
 import { notifyUser } from './notify'
+import { loadSettings } from './settings'
 import {
   computePoints,
   type EntryLike,
   type WorkType,
 } from '../shared/logic'
+import { TASK_VIOLATION_DAYS } from '../shared/tasks'
 
 // ---------------------------------------------------------------- helpers
 
@@ -81,21 +83,36 @@ export async function earnedPointsForMonth(
 }
 
 /**
- * Sum of all deductions for an employee in a given month.
+ * Sum of all deductions for an employee in a given month — manual
+ * (point_deductions) and automatic task-violation penalties (task_violations)
+ * combined, since both reduce the same effective balance. The latter query is
+ * wrapped so an environment that hasn't run migration 0038 yet (see the
+ * resilience pattern used throughout server/tasks.ts) degrades to just the
+ * manual total instead of throwing.
  */
 export async function totalDeductionsForMonth(
   env: Env,
   employeeId: string,
   month: string,
 ): Promise<number> {
-  const row = await env.DB.prepare(
-    `SELECT COALESCE(SUM(amount), 0) AS total
-       FROM point_deductions
-      WHERE employee_id = ? AND month = ? AND decision = 'deducted'`,
-  )
-    .bind(employeeId, month)
-    .first<{ total: number }>()
-  return row?.total ?? 0
+  const [manual, automatic] = await Promise.all([
+    env.DB.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total
+         FROM point_deductions
+        WHERE employee_id = ? AND month = ? AND decision = 'deducted'`,
+    )
+      .bind(employeeId, month)
+      .first<{ total: number }>(),
+    env.DB.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total
+         FROM task_violations
+        WHERE employee_id = ? AND month = ?`,
+    )
+      .bind(employeeId, month)
+      .first<{ total: number }>()
+      .catch(() => ({ total: 0 })),
+  ])
+  return (manual?.total ?? 0) + (automatic?.total ?? 0)
 }
 
 /**
@@ -111,6 +128,77 @@ export async function effectiveBalance(
     totalDeductionsForMonth(env, employeeId, month),
   ])
   return { earned, deducted, balance: Math.round((earned - deducted) * 100) / 100 }
+}
+
+/**
+ * Automatic penalty for a task that went stale (see `isTaskStale` in
+ * shared/tasks.ts) — called from server/tasks.ts for every open, assigned
+ * task it finds past the threshold. No human admin triggers this, so it has
+ * no `admin_id`; see migrations/0038_task_violations.sql for why that's a
+ * separate table from point_deductions rather than a special-cased row in it.
+ *
+ * Idempotent per (task_id, violation_at): `violation_at` is the task's
+ * `updated_at` at the moment it was found stale, and the table's unique index
+ * on that pair means a second call for the same still-stale task (e.g. two
+ * requests landing close together) is a harmless no-op, caught below.
+ *
+ * Deducts min(configured points, current balance) — never pushes the balance
+ * negative — and still records the attempt (possibly for 0 points) so the
+ * audit trail shows every violation even when there were no points left to
+ * take.
+ */
+export async function applyTaskViolation(
+  env: Env,
+  task: { id: string; task_code: string | null; title: string; updated_at: string | null; created_at: string },
+  employeeId: string,
+): Promise<void> {
+  const settings = await loadSettings(env)
+  const configured = settings.task_violation_points
+  if (!configured || configured <= 0) return // disabled
+
+  const violationAt = task.updated_at || task.created_at
+  const tz = env.TEAM_TZ ?? 'Africa/Accra'
+  const month = todayInTz(tz).slice(0, 7)
+
+  const bal = await effectiveBalance(env, employeeId, month)
+  const amount = Math.max(0, Math.min(configured, bal.balance))
+  const newBalance = Math.round((bal.balance - amount) * 100) / 100
+
+  const id = crypto.randomUUID()
+  try {
+    await env.DB.prepare(
+      `INSERT INTO task_violations
+         (id, task_id, employee_id, amount, configured_amount, previous_balance, new_balance, month, violation_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(id, task.id, employeeId, amount, configured, bal.balance, newBalance, month, violationAt)
+      .run()
+  } catch (e) {
+    // Unique constraint on (task_id, violation_at) — already recorded for
+    // this stale window, most likely a near-simultaneous request.
+    if (String(e).includes('UNIQUE')) return
+    throw e
+  }
+
+  await audit(env, null, 'task_violation', task.id, {
+    employee_id: employeeId,
+    amount,
+    configured_amount: configured,
+    previous_balance: bal.balance,
+    new_balance: newBalance,
+    month,
+  })
+
+  const label = task.task_code ? `${task.task_code}: ${task.title}` : task.title
+  await notifyUser(env, {
+    employeeId,
+    kind: 'point_deduction',
+    title: amount > 0 ? 'Points Deducted — Task Violation' : 'Task Violation Recorded',
+    body:
+      amount > 0
+        ? `${amount} point${amount !== 1 ? 's' : ''} ${amount !== 1 ? 'have' : 'has'} been deducted because a task was not completed within 5 days.\n\nTask: ${label}\n\nPrevious balance: ${bal.balance} points\nNew balance: ${newBalance} points`
+        : `A task went 5+ days without being completed, but your points balance was already at 0 so nothing further was deducted.\n\nTask: ${label}`,
+  })
 }
 
 // ---------------------------------------------------------------- API handlers
@@ -352,28 +440,80 @@ export async function listDeductions(
   if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ')
   sql += ' ORDER BY pd.created_at DESC LIMIT 200'
 
-  const { results } = await env.DB.prepare(sql)
-    .bind(...binds)
-    .all<PointDeductionRow & { employee_name: string; admin_name: string }>()
-    .catch(() => ({ results: [] }))
+  // Automatic task-violation penalties (0038) live in a separate table (see
+  // applyTaskViolation for why) but belong in the same audit timeline — an
+  // admin reviewing deductions shouldn't have to check two screens to see
+  // everything that touched someone's balance. Same employee/month filters,
+  // applied separately since it's a different table, then merged below.
+  let tvSql = `SELECT tv.*, emp.name AS employee_name, t.title AS task_title, t.task_code
+                 FROM task_violations tv
+                 JOIN employees emp ON emp.id = tv.employee_id
+                 LEFT JOIN tasks t ON t.id = tv.task_id`
+  const tvConditions: string[] = []
+  const tvBinds: unknown[] = []
+  if (!isPrivileged) {
+    tvConditions.push('tv.employee_id = ?')
+    tvBinds.push(user.id)
+  } else if (employeeId) {
+    tvConditions.push('tv.employee_id = ?')
+    tvBinds.push(employeeId)
+  }
+  if (month && MONTH_RE.test(month)) {
+    tvConditions.push('tv.month = ?')
+    tvBinds.push(month)
+  }
+  if (tvConditions.length) tvSql += ' WHERE ' + tvConditions.join(' AND ')
+  tvSql += ' ORDER BY tv.created_at DESC LIMIT 200'
+
+  const [{ results }, { results: tvResults }] = await Promise.all([
+    env.DB.prepare(sql)
+      .bind(...binds)
+      .all<PointDeductionRow & { employee_name: string; admin_name: string }>()
+      .catch(() => ({ results: [] })),
+    env.DB.prepare(tvSql)
+      .bind(...tvBinds)
+      .all<TaskViolationRow & { employee_name: string; task_title: string | null; task_code: string | null }>()
+      .catch(() => ({ results: [] })),
+  ])
+
+  const manual = results.map((r) => ({
+    id: r.id,
+    employee_id: r.employee_id,
+    employee_name: r.employee_name,
+    admin_id: r.admin_id,
+    admin_name: r.admin_name,
+    amount: r.amount,
+    reason: r.reason,
+    task_id: r.task_id,
+    warning_ref: r.warning_ref,
+    previous_balance: r.previous_balance,
+    new_balance: r.new_balance,
+    month: r.month,
+    decision: r.decision,
+    created_at: r.created_at,
+  }))
+
+  const automatic = tvResults.map((r) => ({
+    id: r.id,
+    employee_id: r.employee_id,
+    employee_name: r.employee_name,
+    admin_id: '',
+    admin_name: 'System (task violation)',
+    amount: r.amount,
+    reason: `Task not completed within ${TASK_VIOLATION_DAYS} days: ${r.task_code ? `${r.task_code}: ` : ''}${r.task_title ?? 'deleted task'}`,
+    task_id: r.task_id,
+    warning_ref: null,
+    previous_balance: r.previous_balance,
+    new_balance: r.new_balance,
+    month: r.month,
+    decision: 'deducted' as const,
+    created_at: r.created_at,
+  }))
 
   return json(
-    results.map((r) => ({
-      id: r.id,
-      employee_id: r.employee_id,
-      employee_name: r.employee_name,
-      admin_id: r.admin_id,
-      admin_name: r.admin_name,
-      amount: r.amount,
-      reason: r.reason,
-      task_id: r.task_id,
-      warning_ref: r.warning_ref,
-      previous_balance: r.previous_balance,
-      new_balance: r.new_balance,
-      month: r.month,
-      decision: r.decision,
-      created_at: r.created_at,
-    })),
+    [...manual, ...automatic]
+      .sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
+      .slice(0, 200),
   )
 }
 

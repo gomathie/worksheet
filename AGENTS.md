@@ -1290,3 +1290,69 @@ Reported a production Sentry issue on `/payments`: Mobile Safari raised an unhan
 **Remaining Considerations:**
 - No other `dark:`-variant or undefined-token styling was found elsewhere in `src/`, so this was an isolated instance. The checklist box on the same page (`bg-surface`) references an undefined token too, but it's inert (no dark-mode pairing, so no legibility break) and wasn't part of the reported issue — left untouched to keep this change focused.
 
+### Feature: Reopen Tasks & Automatic Task-Violation Point Deductions
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"provide an option to reopen closed/done task if we need to go back and do something. since we are warning on tasks after 3 days etc. deduct 5 points from a users accumulated work points if the task is not done in 5 days. add a section where an admin can determine how many points can be deducted on task violation. when a task is in progress, add a button that the user can click to indicate its being worked on. when that is clicked, we it resets the violation time"
+
+**Implementation Details:**
+1. **Investigation first** (per the "inspect before modifying" rule):
+   - The "Working on it" button and its `ping()` PATCH (bumping `updated_at` without changing status) already existed from the earlier Task Age Alerts work — it already does exactly what request #4 asks for. No new code needed there beyond making sure the new violation check is based on the same `updated_at` field, so ping (and reopening) naturally reset it.
+   - The status `<select>` on both the task list and detail page already listed every status including when a task was Done/Cancelled, so reopening was technically already possible — but not discoverable as "the way to reopen a task." Added an explicit **Reopen** button for that.
+2. **Reopen (`src/views/TasksView.vue`, `src/views/TaskDetailView.vue`)**:
+   - Added a **Reopen** button next to Working on it, shown when `status === 'done' || status === 'cancelled'` and the actor can `set_status`. PATCHes `{ status: 'todo' }`, reusing the existing `setStatus` function — the backend already clears `completed_at` on any non-'done' status via `completionStamp` (shared/tasks.ts), so no server change was needed for this part.
+3. **Staleness rule (`shared/tasks.ts`)**:
+   - Added `TASK_VIOLATION_DAYS = 5` and a pure `isTaskStale(task, nowMs)` helper (open status + `updated_at`/`created_at` at least 5 days old). Normalizes SQLite's `"YYYY-MM-DD HH:MM:SS"` (UTC, no 'Z') to ISO before parsing — the same idiom `server/http.ts`'s `dateInTz` already uses — since parsing that format directly reads as local time, not UTC.
+4. **New `task_violations` table, not a row in `point_deductions` (`migrations/0038_task_violations.sql`)**:
+   - `point_deductions.admin_id` is `NOT NULL REFERENCES employees(id)` because every row there is something a human admin did; an automatic penalty has no human actor, so it needed its own table rather than a fake "system" employee.
+   - **Caught during local testing**: the first version had `task_id REFERENCES tasks(id) ON DELETE CASCADE` alongside an append-only `BEFORE DELETE` trigger. Deleting a task that had a violation row threw `D1_ERROR: task_violations is append-only` — SQLite fires `BEFORE DELETE` triggers for cascade-originated deletes too, not just direct ones, so the cascade and the append-only guard fought each other. Fixed by dropping the FK on `task_id` entirely (loose reference, exactly how `point_deductions.task_id` already works) — a deleted task's violation history now just outlives it, same as its manual deductions already did. Verified by deleting a task with a violation on record: 200 OK, row persists, and the audit list's `LEFT JOIN tasks` already rendered the orphaned reference as "deleted task" gracefully.
+   - One row per **violation window**: unique on `(task_id, violation_at)` where `violation_at` is the task's `updated_at` at the moment it was found stale. A later ping/reopen bumps `updated_at`, opening a new window the next time it goes stale — so the same stale period is never double-charged, but a task that drifts again later can be.
+5. **`server/deductions.ts`**:
+   - `totalDeductionsForMonth` now sums both `point_deductions` and `task_violations` (two separate queries/catches, not one combined query — a missing `task_violations` table on an unmigrated environment must not also blank out the already-working manual-deductions total).
+   - Added `applyTaskViolation(env, task, employeeId)`: reads the admin-configured points from settings (0 = disabled, returns early), computes `min(configured, currentBalance)` capped at 0 (never negative), inserts the row (catching the unique-constraint race as a harmless no-op), audits it (`actor_id: null` — `audit_log.actor_id` has no FK, confirmed from migration 0001), and notifies the employee.
+   - `listDeductions` now merges `task_violations` into the same response the Point Deductions admin page already renders, tagged `admin_name: 'System (task violation)'` — reused the existing response shape and frontend rather than building a parallel view.
+6. **`server/tasks.ts`**: added `processTaskViolations(env, tasks)`, called from `listTasks` and `getTask` on the batch just fetched. No cron trigger exists for Pages Functions here, so this piggybacks on normal traffic instead — `listTasks` returns everyone's tasks to an admin/manage_tasks caller and just the caller's own otherwise, which between the two gives reasonable coverage without a scheduled job. Each task's violation check is individually try/caught so one bad row can't break the task list that triggered it.
+7. **Settings (`shared/logic.ts`, `server/settings.ts`, `functions/api/[[route]].ts`, `src/views/SettingsView.vue`)**: added `task_violation_points` (default 5) to the existing `RateSettings`/settings blob — reused the already-admin-only `/api/settings` GET/PUT rather than a new endpoint. Added the field to the Settings UI under Money & currency with a `min="0"` input (0 disables).
+8. **Docs**: updated `guideline-user.md` (Reopen button, the 5-day penalty, ping/reopen resetting it) and `guideline-admin.md` (task management section, the new settings field, and a note in the existing Point Deductions section about automatic rows appearing there too).
+
+**Files Changed:**
+- `migrations/0038_task_violations.sql`
+- `shared/tasks.ts`
+- `shared/logic.ts`
+- `server/env.ts`
+- `server/settings.ts`
+- `server/deductions.ts`
+- `server/tasks.ts`
+- `functions/api/[[route]].ts`
+- `src/views/TasksView.vue`
+- `src/views/TaskDetailView.vue`
+- `src/views/SettingsView.vue`
+- `tests/tasks.test.ts`
+- `tests/deductions.test.ts`
+- `guideline-user.md`
+- `guideline-admin.md`
+- `changelog.md`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Applied the migration locally (`npm run db:migrate:local`): exit code 0 (after the DELETE-cascade fix was found and corrected — see above).
+- Frontend type check (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Backend type check (`npx tsc --noEmit -p tsconfig.server.json`): exit code 0.
+- Unit tests (`npm test`): 12 files, 267 passed (added 13 new: 8 for `isTaskStale`/`TASK_VIOLATION_DAYS`, 5 for the deduction-capping math).
+- Production build (`npm run build`): completed successfully.
+- **Live end-to-end verification against `wrangler pages dev` + local D1** (not just unit tests, since the DB-touching parts have no mocks in this project's test setup):
+  - Created a task, backdated it 6 days via direct SQL, confirmed `GET /api/tasks?mine=1` created exactly one `task_violations` row and one notification; confirmed a second sweep did not duplicate it (idempotency).
+  - Gave the test account a real 20-point balance, confirmed a violation deducted exactly `min(configured, balance)` in two scenarios (10 of 20 available; then 15 configured against the remaining 10, correctly capped).
+  - Confirmed `PATCH` with the same status (ping) and PATCH to `done` then back to `todo` (reopen) both bump `updated_at` and clear `completed_at` as expected.
+  - Confirmed `GET /api/settings`/`PUT /api/settings` round-trip `task_violation_points` correctly.
+  - Confirmed `GET /api/point-deductions` includes the automatic rows with the right labeling, including the "deleted task" fallback after deleting the task the violation referenced.
+  - This is also where the `ON DELETE CASCADE` bug above was actually caught — `DELETE /api/tasks/:id` returned 500 until the migration was fixed and reapplied.
+  - Cleaned up all test tasks/entries/settings changes made during verification; local dev server stopped afterward.
+
+**Remaining Considerations:**
+- The 5-day threshold itself is a fixed constant (`TASK_VIOLATION_DAYS`), not admin-configurable — the request only asked to make the *points amount* configurable. If the days threshold needs to be configurable later, follow the same pattern as `task_violation_points`.
+- Deploying to production needs `npm run db:migrate:prod` for migration 0038 before the feature does anything there (consistent with the existing "Production D1 Schema Synchronization" lesson in this log — Cloudflare's GitHub auto-deploy build does not run migrations).
+- Because the violation check only runs when a task list is fetched (no cron), an account that never has its tasks listed by anyone (including no admin ever opening the full Tasks board) won't be checked. In practice the Task Age Alert popup alone guarantees every active user's own tasks get checked at least once a day.
+

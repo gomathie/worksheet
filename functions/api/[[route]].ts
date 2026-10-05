@@ -3011,6 +3011,7 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     max_entries_per_day?: number
     require_entry_approval?: number | boolean
     employee_code_prefix?: string
+    task_violation_points?: number
   }>(request)
   const num = (v: unknown, field: string) => {
     const n = Number(v)
@@ -3022,6 +3023,8 @@ async function putSettings(request: Request, env: Env): Promise<Response> {
     currency: String(body.currency ?? '$').slice(0, 4) || '$',
     max_entries_per_day: Math.floor(num(body.max_entries_per_day ?? 0, 'max_entries_per_day')),
     require_entry_approval: body.require_entry_approval ? 1 : 0,
+    // 0 disables the automatic task-violation penalty entirely.
+    task_violation_points: num(body.task_violation_points ?? 5, 'task_violation_points'),
   }
   await saveSettings(env, next)
   if (body.employee_code_prefix !== undefined) {
@@ -3250,34 +3253,51 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  const [liveSettings, entriesRes, employeesRes, adjRes, payRes, entryUnits, doneTasksRes, deductionsRes] =
-    await Promise.all([
-      loadSettings(env),
-      env.DB.prepare(entrySql)
-        .bind(...entryBinds)
-        .all<EntryRow>(),
-      env.DB.prepare('SELECT id, name FROM employees').all<{ id: string; name: string }>(),
-      env.DB.prepare(
-        "SELECT employee_id, type, amount FROM adjustments WHERE month = ? AND status = 'approved'",
-      )
-        .bind(month)
-        .all<{ employee_id: string; type: string; amount: number }>(),
-      env.DB.prepare('SELECT * FROM payments WHERE month = ?')
-        .bind(month)
-        .all<PaymentRow>(),
-      unitsByEntryId(env, isCustom ? { from: fromParam!, to: toParam! } : { month }),
-      env.DB.prepare(
-        "SELECT assignee_id, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL AND completed_at >= ? AND completed_at < ?",
-      )
-        .bind(taskQueryLower, taskQueryUpper)
-        .all<{ assignee_id: string | null; completed_at: string }>(),
-      env.DB.prepare(
-        "SELECT employee_id, amount FROM point_deductions WHERE month = ? AND decision = 'deducted'",
-      )
-        .bind(month)
-        .all<{ employee_id: string; amount: number }>()
-        .catch(() => ({ results: [] })),
-    ])
+  const [
+    liveSettings,
+    entriesRes,
+    employeesRes,
+    adjRes,
+    payRes,
+    entryUnits,
+    doneTasksRes,
+    deductionsRes,
+    taskViolationsRes,
+  ] = await Promise.all([
+    loadSettings(env),
+    env.DB.prepare(entrySql)
+      .bind(...entryBinds)
+      .all<EntryRow>(),
+    env.DB.prepare('SELECT id, name FROM employees').all<{ id: string; name: string }>(),
+    env.DB.prepare(
+      "SELECT employee_id, type, amount FROM adjustments WHERE month = ? AND status = 'approved'",
+    )
+      .bind(month)
+      .all<{ employee_id: string; type: string; amount: number }>(),
+    env.DB.prepare('SELECT * FROM payments WHERE month = ?')
+      .bind(month)
+      .all<PaymentRow>(),
+    unitsByEntryId(env, isCustom ? { from: fromParam!, to: toParam! } : { month }),
+    env.DB.prepare(
+      "SELECT assignee_id, completed_at FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL AND completed_at >= ? AND completed_at < ?",
+    )
+      .bind(taskQueryLower, taskQueryUpper)
+      .all<{ assignee_id: string | null; completed_at: string }>(),
+    env.DB.prepare(
+      "SELECT employee_id, amount FROM point_deductions WHERE month = ? AND decision = 'deducted'",
+    )
+      .bind(month)
+      .all<{ employee_id: string; amount: number }>()
+      .catch(() => ({ results: [] })),
+    // Separate query (and catch) from point_deductions above on purpose: an
+    // environment that hasn't applied migration 0038 yet must still show
+    // manual deductions correctly rather than losing both to one shared
+    // failure.
+    env.DB.prepare('SELECT employee_id, amount FROM task_violations WHERE month = ?')
+      .bind(month)
+      .all<{ employee_id: string; amount: number }>()
+      .catch(() => ({ results: [] })),
+  ])
   const settings = { ...liveSettings, point_value: rates.point_value, currency: rates.currency }
 
   // Fetch the viewer's data_scope to limit which employees they see on the dashboard/reports.
@@ -3299,7 +3319,7 @@ async function monthlyReport(request: Request, env: Env): Promise<Response> {
     map.set(a.employee_id, round2((map.get(a.employee_id) ?? 0) + a.amount))
   }
   const deductionsBy = new Map<string, number>()
-  for (const d of deductionsRes.results) {
+  for (const d of [...deductionsRes.results, ...taskViolationsRes.results]) {
     deductionsBy.set(d.employee_id, round2((deductionsBy.get(d.employee_id) ?? 0) + d.amount))
   }
   const paymentBy = new Map(payRes.results.map((p) => [p.employee_id, p]))

@@ -566,6 +566,15 @@ const statusTone: Record<TaskStatus, string> = {
             Working on it
           </button>
           <button
+            v-if="(t.status === 'done' || t.status === 'cancelled') && can(t, 'set_status')"
+            class="btn btn-sm"
+            title="Move this task back to To do"
+            :disabled="busy === t.id"
+            @click="setStatus(t, 'todo')"
+          >
+            Reopen
+          </button>
+          <button
             v-if="can(t, 'delete')"
             class="btn btn-sm btn-danger"
             :disabled="busy === t.id"

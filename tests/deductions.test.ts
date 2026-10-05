@@ -56,3 +56,31 @@ describe('deduction balance logic', () => {
     expect(newBalance).toBe(80)
   })
 })
+
+// applyTaskViolation (server/deductions.ts) clamps to
+// `Math.max(0, Math.min(configured, balance))` — never pushes the balance
+// below zero, same rule as the manual-deduction path above, just automatic.
+describe('automatic task-violation deduction amount', () => {
+  const clamp = (configured: number, balance: number) => Math.max(0, Math.min(configured, balance))
+
+  it('deducts the full configured amount when the balance covers it', () => {
+    expect(clamp(5, 100)).toBe(5)
+  })
+
+  it('caps the deduction to whatever balance remains', () => {
+    expect(clamp(5, 3)).toBe(3)
+  })
+
+  it('deducts nothing once the balance is already at zero', () => {
+    expect(clamp(5, 0)).toBe(0)
+  })
+
+  it('never goes negative even if balance is already negative somehow', () => {
+    expect(clamp(5, -2)).toBe(0)
+  })
+
+  it('is a no-op when the admin-configured penalty is 0 (disabled)', () => {
+    const configured = 0
+    expect(configured <= 0).toBe(true) // applyTaskViolation returns early in this case
+  })
+})

@@ -7,6 +7,9 @@ export interface RateSettings {
   max_entries_per_day: number
   /** 1 = employee entries need admin approval before they count; 0 = off. */
   require_entry_approval: number
+  /** Points auto-deducted when an open task goes TASK_VIOLATION_DAYS
+   * (shared/tasks.ts) without being touched. 0 = disabled. */
+  task_violation_points: number
 }
 
 export interface WorkType {

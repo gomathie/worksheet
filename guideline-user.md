@@ -123,6 +123,11 @@ as plain text instead.
   own page — where status changes, reassignment, and accepting an Everyone task
   all happen directly, with no detour through Edit.
 - A task moves **To do → In progress → Done**, or **Cancelled** if it's dropped.
+- **Reopen.** A Done or Cancelled task has a **Reopen** button (next to Edit/Delete,
+  on both the task list and its own page) that puts it back to **To do** — for
+  when it turns out there's more to do. Needs the same permission as changing
+  its status normally (whoever is assigned it, who raised it, or a **Manage
+  tasks** holder).
 - Anything open and past its date is marked **overdue**. Finished and cancelled
   tasks are never flagged, and a task with no date can't be late.
 - Finished tasks hide themselves; tick **Show finished** to see them.
@@ -133,7 +138,15 @@ as plain text instead.
 - **Task Age Warnings & "Working on it"**:
   - Incomplete tasks open for **more than 2 days** trigger a warning that overdue tasks will affect your payment.
   - Tasks open for **more than 3 days** trigger a critical warning that the task is scheduled for deletion or reassignment.
-  - Tapping **Working on it** on any in-progress task card refreshes its timestamp and pauses the aging warning.
+  - A task open for **5 days without being touched** goes further than a warning:
+    the system automatically deducts points from your balance (the amount is set
+    by an admin — see your admin's guide — and the deduction never pushes your
+    balance below zero). You'll get a notification when this happens.
+  - Tapping **Working on it** on any in-progress task card refreshes its timestamp,
+    pauses the aging warning, **and resets the 5-day point-deduction clock** — so
+    staying visibly active on a task protects you from the automatic penalty.
+    Reopening a Done/Cancelled task, or any other change to it, resets the same
+    clock.
 
 **If someone assigns you a task** you get a notification, and whoever raised it
 is told when you finish. You can move it along but **not change its wording** —

@@ -5,12 +5,14 @@ import {
   TASK_PRIORITY_LABELS,
   TASK_STATUSES,
   TASK_STATUS_LABELS,
+  TASK_VIOLATION_DAYS,
   allowedTaskActions,
   canTask,
   canViewTask,
   completionStamp,
   isOpen,
   isOverdue,
+  isTaskStale,
   parseDueDate,
   parseTaskPriority,
   parseTaskStatus,
@@ -177,6 +179,56 @@ describe('isOverdue', () => {
 
   it('never flags an undated task', () => {
     expect(isOverdue({ status: 'todo', due_date: null }, TODAY)).toBe(false)
+  })
+})
+
+describe('isTaskStale', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const now = new Date('2026-08-07T12:00:00Z').getTime()
+
+  it('is 5 days', () => {
+    expect(TASK_VIOLATION_DAYS).toBe(5)
+  })
+
+  it('does not flag a task touched less than 5 days ago', () => {
+    const updated_at = new Date(now - 4 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'todo', updated_at, created_at: updated_at }, now)).toBe(false)
+  })
+
+  it('flags a task untouched for exactly 5 days', () => {
+    const updated_at = new Date(now - 5 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'in_progress', updated_at, created_at: updated_at }, now)).toBe(true)
+  })
+
+  it('flags a task untouched for more than 5 days', () => {
+    const updated_at = new Date(now - 10 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'todo', updated_at, created_at: updated_at }, now)).toBe(true)
+  })
+
+  it('never flags done or cancelled tasks, no matter how old', () => {
+    const updated_at = new Date(now - 30 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'done', updated_at, created_at: updated_at }, now)).toBe(false)
+    expect(isTaskStale({ status: 'cancelled', updated_at, created_at: updated_at }, now)).toBe(false)
+  })
+
+  it('falls back to created_at when updated_at is missing', () => {
+    const created_at = new Date(now - 6 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'todo', updated_at: null, created_at }, now)).toBe(true)
+  })
+
+  it('parses the space-separated SQLite datetime format as UTC, not local time', () => {
+    // datetime('now') in SQLite returns "YYYY-MM-DD HH:MM:SS" (UTC, no 'Z').
+    // Six days ago, formatted that way, must still read as stale.
+    const d = new Date(now - 6 * DAY_MS)
+    const sqliteFormat = d.toISOString().slice(0, 19).replace('T', ' ')
+    expect(isTaskStale({ status: 'todo', updated_at: sqliteFormat, created_at: sqliteFormat }, now)).toBe(true)
+  })
+
+  it('resets to not-stale once the task is touched (ping/reopen bump updated_at)', () => {
+    const staleUpdatedAt = new Date(now - 10 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'todo', updated_at: staleUpdatedAt, created_at: staleUpdatedAt }, now)).toBe(true)
+    const freshUpdatedAt = new Date(now - 1 * DAY_MS).toISOString()
+    expect(isTaskStale({ status: 'todo', updated_at: freshUpdatedAt, created_at: staleUpdatedAt }, now)).toBe(false)
   })
 })
 

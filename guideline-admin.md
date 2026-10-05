@@ -248,15 +248,10 @@ The **Tasks** board allows assigning and monitoring work outside of time entries
   anyone's task list is fetched (the Tasks page, the age-warning pop-up, an
   admin's "everyone" task view), so an idle instance of the app can take a
   little while to catch a newly-stale task — it isn't checked by the minute.
-- **Log violation (manual)**: On a task's own page, anyone holding **Manage
-  point deductions** (admins always do) sees a **Log violation** button next
-  to Delete — for a specific, noticed problem (e.g. *"found a mistake on this
-  QAP card"*) rather than the generic 5-day inactivity check above. It opens
-  the same deduction form as the Employees tab's **Deduct**, pre-filled with
-  this task's reference and the configured penalty amount (still freely
-  editable — type a different number for a more or less serious violation).
-  Not shown for a task with no assignee, or for your own tasks — the
-  deduction API refuses self-deductions.
+  This is a different thing from logging a one-off violation you've actually
+  noticed in someone's work (a QAP card mistake, a quality issue, a specific
+  incident) — that's not about a task at all, and already has its own tool:
+  see *Point deductions & penalties* below.
 
 ## Leave & time-off approvals
 
@@ -324,9 +319,9 @@ The application supports direct client-side document compilation and sharing:
 
 ## Point deductions & penalties
 
-Authorized administrators (and users granted `Manage point deductions`) can deduct points from an employee's score when they violate requirements, fail tasks, or receive disciplinary action:
+Authorized administrators (and users granted `Manage point deductions`) can deduct points from an employee's score when they violate requirements, fail tasks, or receive disciplinary action. This is the general-purpose way to **log a violation**: a required reason, a points amount you choose per incident, and an optional free-text reference (e.g. a card name or incident number) — it has nothing to do with the Tasks board and doesn't require one.
 
-- **Deducting from Employees tab**: Next to each employee in the team list, click **Deduct** to open the deduction modal.
+- **Deducting from Employees tab**: Next to each employee in the team list, click **Deduct** to open the deduction modal. For example, finding a mistake on someone's QAP card: open their row, click **Deduct**, write the reason ("Found mistake on a QAP card"), and set however many points fit the severity.
 - **Balance protection**: The modal displays the employee's current earned points, existing deductions, and live available balance. You cannot deduct more points than the available balance (balance cannot drop below zero).
 - **"Let It Go" (Pardon)**: If management reviews an infraction and decides to pardon it, you can select *Let It Go*. This records the explanation and incident in the audit trail with 0 points deducted.
 - **Audit trail & CSV Export**: **Admin → Point Deductions** provides a complete log of all penalties and pardons with filters by month, employee, and decision type, plus CSV download.

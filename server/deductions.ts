@@ -540,19 +540,11 @@ export async function getEmployeeBalance(
   const month = url.searchParams.get('month') ?? todayInTz(tz).slice(0, 7)
   if (!MONTH_RE.test(month)) throw new ApiError(400, 'month must be YYYY-MM')
 
-  const [bal, settings] = await Promise.all([
-    effectiveBalance(env, employeeId, month),
-    loadSettings(env),
-  ])
+  const bal = await effectiveBalance(env, employeeId, month)
   return json({
     employee_id: target.id,
     employee_name: target.name,
     month,
     ...bal,
-    // The admin-configured default for a manual "Log Violation" entry (see
-    // PointDeductionModal's `defaultAmount` prop) — sent here rather than via
-    // /api/settings since that endpoint hides money-sensitive fields from
-    // non-admin manage_point_deductions holders, who can still call this one.
-    task_violation_points: settings.task_violation_points,
   })
 }

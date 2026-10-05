@@ -5,10 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
-- Feature: "Working on it" Elapsed-Time Log & Manual "Log Violation" on Tasks
-  - **"Working on it" now logs how long the task's been open**: tapping it posts a comment to the task's activity feed like *"Marked as being worked on — 4 hours so far."* or *"...2 days so far."*, computed from when the task was created. New `POST /api/tasks/:id/ping` endpoint behind it, replacing the generic status-PATCH it used to send — same effect on the task-violation clock as before, plus the logged comment.
-  - **Manual "Log Violation"**: a new **Log violation** button on a task's own page (next to Delete, for anyone with **Manage point deductions**) opens the existing Point Deductions form pre-filled with that task's reference and the configured penalty amount — for a specific, already-noticed problem (e.g. "found a mistake on this QAP card") with its own reason and point amount, separate from the automatic 5-day inactivity check.
-  - **Task violation penalty confirmed adjustable**: the admin setting already defaulted to 5 and was already freely editable up or down (including to 0 to disable) — reworded its in-app description to say so and point at the new per-incident button.
+- Feature: "Working on it" Elapsed-Time Log
+  - Tapping **Working on it** now posts a comment to the task's activity feed recording how long it's been open in total, e.g. *"Marked as being worked on — 4 hours so far."* or *"...2 days so far."*, computed from when the task was created. New `POST /api/tasks/:id/ping` endpoint behind it, replacing the generic status-PATCH it used to send — same effect on the task-violation clock as before, plus the logged comment.
+  - **Task violation penalty confirmed adjustable**: the admin setting already defaulted to 5 and was already freely editable up or down (including to 0 to disable) — reworded its in-app description to say so, and to point at the existing general-purpose Point Deductions tool (Employees tab → **Deduct**) for logging a one-off violation unrelated to a task, e.g. "found a mistake on this QAP card" — that tool already supported a custom reason and a custom point amount per incident; nothing new was needed there.
 
 - Feature: Reopen Tasks & Automatic Task-Violation Point Deductions
   - **Reopen**: a Done or Cancelled task now has an explicit **Reopen** button (task list and detail page) that moves it back to To do and clears its completion date.

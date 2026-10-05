@@ -26,13 +26,6 @@ html {
   -webkit-font-smoothing: antialiased;
   max-width: 100%;
   overflow-x: clip;
-  scroll-behavior: smooth;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
 }
 
 body,

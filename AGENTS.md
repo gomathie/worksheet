@@ -1527,3 +1527,38 @@ Follow-up clarifying question asked whether the 2-day follow-up should repeat in
 - The "Money & currency" split deliberately stayed as one panel with a single save button rather than fully independent panels, per the user's explicit choice — revisit only if the backend's `putSettings` is changed to do proper partial merging (preserve omitted fields instead of resetting them to hardcoded defaults), which would also fix a latent footgun unrelated to this session's work.
 - No scrollspy/active-section highlighting was added to the jump-nav (it's click-to-jump only, no "you are here" indicator as you scroll) — kept out to limit scope/risk this pass; straightforward to add later with an IntersectionObserver if wanted.
 
+### Fix: Replaced Settings Jump-Nav/Scroll with Real Tabs
+**Date:** October 5, 2026
+**Branch:** main
+
+**User Request:**
+"I think the log scroll in the settings must go. click and see the page" — referring to the jump-nav + smooth-scroll feature from the previous entry (already committed as `eb2e7d8` and pushed to `origin/main` by the point this started, per this session's external auto-commit tool).
+
+**Implementation Details:**
+1. **Investigated before guessing**: "the log scroll" was ambiguous — could mean "the smooth scroll" (remove the animation, keep instant jump-nav) or "the long scroll" (replace the whole long-page paradigm with tabs). Rather than pick one, built the app and timed the actual behavior with Playwright: clicking a jump-nav link to a distant section (e.g. Backup) took ~700-900ms of animated scrolling to settle — a real, measurable sluggishness, not just a hunch. Presented both readings plus the measured finding and asked which scope was wanted; the user chose the bigger one — real tabs, not just removing the animation.
+2. **`src/views/SettingsView.vue`**: replaced the `<nav>` of `<a href="#...">` anchor links with a `TABS` array of `{id, label}` and an `activeTab` computed property, each panel's wrapping `<div>` changed from `id="..." class="panel scroll-mt-16"` (always rendered, anchor-jumped to) to `v-if="activeTab === '...'" class="panel"` (only the active one renders at all). Page height on a single tab dropped from 4141px (the old full-scroll page) to under 1000px.
+3. **URL-synced tab state**: `activeTab` reads from `route.query.tab` (falling back to `'work-types'` if missing/invalid) and `setTab()` calls `router.replace({ query: { ...route.query, tab: id } })` — preserves the one thing anchor-links had that plain tab state wouldn't: a reload or a shared `?tab=backup` link lands back on the same section. Verified via Playwright: navigated to the Backup tab, reloaded the page, confirmed the URL kept `?tab=backup` and the Backup button was still the active (`.btn-solid`) one afterward.
+4. **Active-tab highlighting came free**: switching from scroll-based "jump to" to real tab state meant the `.btn-solid` active-state styling (matching the app's existing nav-pill convention) is now exact — no IntersectionObserver/scrollspy guessing needed, which the previous entry's "Remaining Considerations" had explicitly deferred.
+5. **Reverted the now-unused global CSS**: removed the `scroll-behavior: smooth` (and its `prefers-reduced-motion` override) added to `html` in the previous entry — nothing else in the app uses anchor-based scrolling, so it was dead weight once the Settings page stopped needing it.
+6. **Confirmed data isn't lost switching tabs**: all the panel data (work types, departments, etc.) lives in the component's top-level `ref`s, not in per-tab child components, so `v-if`-hiding a tab doesn't unmount any state — switching away and back re-renders from the same reactive data.
+
+**Files Changed:**
+- `src/style.css`
+- `src/views/SettingsView.vue`
+- `AGENTS.md`
+
+**Testing Performed:**
+- Frontend type check (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Production build (`npm run build`, i.e. `vue-tsc -b && vite build`): completed successfully.
+- Unit tests (`npm test`): 12 files, 280 passed — unaffected, as expected for a frontend-only UI change.
+- **Live verification against `wrangler pages dev` + local D1 via Playwright**, at 1440×900 and 375px viewports:
+  - Measured the pre-fix smooth-scroll duration (~700-900ms to a distant anchor) before making the change, to confirm the complaint was real and not just a perception issue.
+  - Confirmed page height drops to under 1000px per tab (from 4141px) and the URL updates to `?tab=<id>` on switch.
+  - Confirmed reloading on a non-default tab (`?tab=backup`) preserves it — both the URL and the active-button highlighting survive the reload.
+  - Added a real department while on the Departments tab, confirmed the "Department added." notice still renders correctly above the (now much shorter) tab content.
+  - Confirmed no horizontal overflow at 375px width.
+  - Cleaned up the test department created during verification (local-only SQL delete, same reasoning as the prior entry — no DELETE endpoint exists for departments by design); local dev server stopped afterward.
+
+**Remaining Considerations:**
+- The previous commit (`eb2e7d8`, smooth-scroll jump-nav) is already on `origin/main` and likely deployed to production. This correction is intentionally left uncommitted per the user's standing instruction (given earlier this session) that commit/push authorization is per-instance only, never assumed — they'll commit and push this themselves, or their external auto-commit tool will pick it up.
+

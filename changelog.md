@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Fix: Settings Page — Real Tabs Instead of Jump-Nav/Scroll
+  - Replaced the sticky jump-nav + smooth-scroll from the previous entry with real tabs: clicking a section switches to it directly (only the active section renders) instead of animating a scroll down a single long page. Page height per section dropped from ~4100px to under 1000px.
+  - The active tab is kept in the URL (`?tab=...`), so reloading or sharing a link still lands on the same section — the one thing the anchor-link approach had that plain tab state otherwise wouldn't.
+  - Removed the now-unused global `scroll-behavior: smooth` added for the jump-nav.
+
 - Feature: Settings Page UX Pass
   - Added a sticky jump-nav bar at the top of Settings linking to each section (Work types, Device types, General, Expense workflow, Departments, Categories, Backup) — no more scrolling through the whole page to find one setting. Smooth-scrolls to the right spot (respects reduced-motion).
   - Renamed "Money & currency" to **General settings** and split it into clearly labeled subsections (Pay & currency / Time entries / Task violations / Employee codes) instead of one unlabeled grid of unrelated fields — still saves together with a single button (splitting into independently-saved panels would have required backend changes, since the settings endpoint currently resets any omitted field to a hardcoded default rather than preserving it).

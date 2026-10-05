@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import { downloadJson } from '../csv'
 import type {
@@ -11,6 +12,31 @@ import type {
   WorkflowConfig,
   WorkTypeInfo,
 } from '../types'
+
+const route = useRoute()
+const router = useRouter()
+
+const TABS = [
+  { id: 'work-types', label: 'Work types' },
+  { id: 'device-types', label: 'Device types' },
+  { id: 'general', label: 'General' },
+  { id: 'expense-workflow', label: 'Expense workflow' },
+  { id: 'departments', label: 'Departments' },
+  { id: 'categories', label: 'Categories' },
+  { id: 'backup', label: 'Backup' },
+] as const
+type TabId = (typeof TABS)[number]['id']
+
+// Keeps the active tab in the URL (?tab=...) so a reload or a shared link
+// lands back on the same section — the one thing a switch from anchors to
+// real tabs would otherwise lose.
+const activeTab = computed<TabId>(() => {
+  const q = route.query.tab
+  return TABS.some((t) => t.id === q) ? (q as TabId) : 'work-types'
+})
+function setTab(id: TabId) {
+  router.replace({ query: { ...route.query, tab: id } })
+}
 
 const form = ref<RateSettings>({
   point_value: 1,
@@ -280,15 +306,19 @@ function downloadBackup() {
 
     <nav
       class="no-print sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-line bg-cream px-1 py-2"
-      aria-label="Jump to settings section"
+      aria-label="Settings sections"
     >
-      <a href="#work-types" class="btn btn-sm shrink-0">Work types</a>
-      <a href="#device-types" class="btn btn-sm shrink-0">Device types</a>
-      <a href="#general-settings" class="btn btn-sm shrink-0">General</a>
-      <a href="#expense-workflow" class="btn btn-sm shrink-0">Expense workflow</a>
-      <a href="#departments" class="btn btn-sm shrink-0">Departments</a>
-      <a href="#categories" class="btn btn-sm shrink-0">Categories</a>
-      <a href="#backup" class="btn btn-sm shrink-0">Backup</a>
+      <button
+        v-for="t in TABS"
+        :key="t.id"
+        type="button"
+        class="btn btn-sm shrink-0"
+        :class="{ 'btn-solid': activeTab === t.id }"
+        :aria-current="activeTab === t.id ? 'page' : undefined"
+        @click="setTab(t.id)"
+      >
+        {{ t.label }}
+      </button>
     </nav>
 
     <p v-if="error" class="panel border-red bg-red-soft text-red">{{ error }}</p>
@@ -296,7 +326,7 @@ function downloadBackup() {
 
     <p v-if="loading" class="panel text-muted">Loading settings…</p>
     <template v-else>
-    <div id="work-types" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'work-types'" class="panel">
       <h2 class="display mb-1 text-2xl">Work types &amp; points</h2>
       <p class="mb-5 text-sm text-muted">
         Each work type is worth points per unit. Assign types to employees in the
@@ -414,7 +444,7 @@ function downloadBackup() {
       </p>
     </div>
 
-    <div id="device-types" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'device-types'" class="panel">
       <h2 class="display mb-1 text-2xl">Device types</h2>
       <p class="mb-5 text-sm text-muted">
         The device makes offered on an installation card (Telematics
@@ -523,7 +553,7 @@ function downloadBackup() {
       </form>
     </div>
 
-    <div id="general-settings" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'general'" class="panel">
       <h2 class="display mb-1 text-2xl">General settings</h2>
       <p class="mb-5 text-sm text-muted">
         Pay rates, time-entry rules, the task-violation penalty, and employee
@@ -652,7 +682,7 @@ function downloadBackup() {
     </div>
 
     <!-- ================================================== expense vouchers -->
-    <div id="expense-workflow" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'expense-workflow'" class="panel">
       <h2 class="display mb-1 text-2xl">Expense approval workflow</h2>
       <p class="mb-4 text-sm text-muted">
         Which steps a submitted voucher passes through. Turning a step off
@@ -676,7 +706,7 @@ function downloadBackup() {
       <span v-if="workflowSaved" class="ml-3 text-sm text-teal">Saved.</span>
     </div>
 
-    <div id="departments" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'departments'" class="panel">
       <h2 class="display mb-1 text-2xl">Departments</h2>
       <p class="mb-4 text-sm text-muted">
         Assign employees to a department in the Employees tab. Vouchers inherit
@@ -733,7 +763,7 @@ function downloadBackup() {
       </form>
     </div>
 
-    <div id="categories" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'categories'" class="panel">
       <h2 class="display mb-1 text-2xl">Expense categories</h2>
       <p class="mb-4 text-sm text-muted">
         Categories offered on the voucher form and used to group the expense
@@ -786,7 +816,7 @@ function downloadBackup() {
       </form>
     </div>
 
-    <div id="backup" class="panel scroll-mt-16">
+    <div v-if="activeTab === 'backup'" class="panel">
       <h2 class="display mb-1 text-2xl">Backup</h2>
       <p class="mb-4 text-sm text-muted">
         Download a full snapshot of all data (employees, entries, work types,

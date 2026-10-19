@@ -74,6 +74,22 @@ function scrollActivePillsIntoView() {
   }
 }
 onMounted(scrollActivePillsIntoView)
+
+// Any api() call elsewhere in the app that gets a 401 (session expired,
+// deleted, or the account deactivated mid-use) dispatches this instead of
+// leaving each view to notice and handle it individually — several don't,
+// which is how an unguarded 401 was reaching Sentry as an unhandled
+// exception instead of a clean bounce back to the login screen. Guarded on
+// auth.user so a burst of several failing requests (the common case: a page
+// fires a few fetches in parallel right as the session dies) only redirects
+// once, not once per failed request.
+onMounted(() => {
+  window.addEventListener('auth:unauthorized', () => {
+    if (!auth.user) return
+    auth.user = null
+    router.push({ name: 'login' })
+  })
+})
 watch(
   () => route.name,
   async () => {

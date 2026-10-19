@@ -78,7 +78,17 @@ onMounted(async () => {
     // Not /api/employees — that returns only the caller to a non-admin (it
     // carries rights and pay settings), which left a manage_tasks holder
     // with a one-name "Assigned to" list and no way to use their own right.
-    employees.value = await api<TaskAssignee[]>('/api/tasks/assignees')
+    try {
+      employees.value = await api<TaskAssignee[]>('/api/tasks/assignees')
+    } catch (e) {
+      // Non-fatal: the task list itself already loaded (or already showed
+      // its own error above). Losing the assignee list just means the
+      // "Assigned to" select falls back to empty rather than crashing the
+      // whole page — this used to be an unguarded await that turned any
+      // failure here (most commonly a session that expired between the two
+      // calls) into an unhandled exception.
+      console.error('Failed to fetch task assignees:', e)
+    }
   }
   // Deep link from the task detail page's Edit button (?edit=<id>) — open
   // the form pre-filled, then drop the param so a refresh doesn't reopen it.

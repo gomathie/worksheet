@@ -160,6 +160,13 @@ name, or leave it blank for everything, across one month or all.
 This is also where a duplicate reported by the entry-form warning ends up, so
 it's the place to check when a notification says somebody continued past one.
 
+**Admins get a notification for every duplicate.** If several land within the
+same few minutes — e.g. one employee logging several duplicate cards in a
+session — you may get one consolidated message ("N updates") instead of a
+separate ping for each. Nothing else (point deductions, approvals, payments)
+is batched this way; see **Point deductions & penalties** below for how
+automatic and manual deductions are always sent immediately.
+
 ## Installations & device types
 
 **Reports → Installations** breaks down telematics installation activity by

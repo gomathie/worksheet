@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Fix: Session-Expiry Crash on the Tasks Page, and Missing Production Migrations
+  - Fixed a Sentry-reported crash: if a session died mid-use (expired, or the account was deactivated) while someone had the Tasks page open, an unguarded API call threw an unhandled `Not signed in` error instead of being caught — now it is, and any 401 anywhere in the app (except on the login form itself) triggers a clean redirect to `/login` instead of a confusing crash.
+  - Found and applied two migrations (`0038`, `0039` — the task-violations feature from two weeks earlier) that had never reached production, meaning automatic task-violation deductions had been silently doing nothing there the whole time.
+
+- Feature: Batched Low-Stakes Notifications
+  - Three notification kinds that are purely informational (`card_duplicate`, `task_accepted`, `task_done`) are now collected for up to 10 minutes and sent as one consolidated message instead of a separate ping for each — e.g. "3 updates" with each item on its own short paragraph, rather than 3 separate notifications arriving back to back.
+  - Everything else is unaffected and still sends immediately, especially point deductions, expense/reimbursement/petty-cash workflow notices, task assignments, and account/device-type approvals — nothing anyone needs to act on or be cautious about got delayed.
+  - Added `migrations/0040_notification_batches.sql`.
+
 - Fix: Settings Page — Real Tabs Instead of Jump-Nav/Scroll
   - Replaced the sticky jump-nav + smooth-scroll from the previous entry with real tabs: clicking a section switches to it directly (only the active section renders) instead of animating a scroll down a single long page. Page height per section dropped from ~4100px to under 1000px.
   - The active tab is kept in the URL (`?tab=...`), so reloading or sharing a link still lands on the same section — the one thing the anchor-link approach had that plain tab state otherwise wouldn't.

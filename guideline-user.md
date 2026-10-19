@@ -161,6 +161,12 @@ is told when you finish. You can move it along but **not change its wording** �
 otherwise "do X" could quietly become "do Y" and then be marked done. If a task
 is wrong, ask the person who raised it to change it.
 
+_Being told you finished a task, and being told someone accepted an "Everyone"
+task you raised, are both low-stakes notifications — if a few of these land
+within the same few minutes, you may get one combined message ("3 updates")
+instead of several separate ones. Nothing you need to act on (assignments,
+deadlines, point deductions) is ever delayed this way — only these two._
+
 **Everyone tasks.** Instead of naming one person, anyone can open a task to
 **Everyone** — a ticket for the team to pick up rather than an instruction to
 somebody in particular. It shows an _Everyone_ badge and sits unclaimed —

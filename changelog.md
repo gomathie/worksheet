@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Fix: Dashboard Auth Nullability Crash
+  - Made Dashboard date initialization and work-type visibility safe when the authenticated user becomes temporarily null during session expiry or login redirect, preventing `Cannot read properties of null (reading 'work_types')` from reaching Vue's global error handler.
+
+- Fix: Production Route Chunk Recovery
+  - Handles the browser-level `unhandledrejection`/`error` events emitted when an open tab requests a removed Vite route chunk after a deployment, suppressing the duplicate unhandled Sentry event and reloading the current route once.
+  - Rotated the service-worker cache version and added Cloudflare Pages headers so the app shell is always revalidated while hashed assets remain cacheable.
+
 - Fix: Session-Expiry Crash on the Tasks Page, and Missing Production Migrations
   - Fixed a Sentry-reported crash: if a session died mid-use (expired, or the account was deactivated) while someone had the Tasks page open, an unguarded API call threw an unhandled `Not signed in` error instead of being caught — now it is, and any 401 anywhere in the app (except on the login form itself) triggers a clean redirect to `/login` instead of a confusing crash.
   - Found and applied two migrations (`0038`, `0039` — the task-violations feature from two weeks earlier) that had never reached production, meaning automatic task-violation deductions had been silently doing nothing there the whole time.

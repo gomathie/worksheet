@@ -9,17 +9,23 @@ import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
 import type { ExpenseVoucher, ReportPayload } from '../types'
 
 const auth = useAuthStore()
-const month = ref(auth.user!.today.slice(0, 7))
+// The router normally loads the user before this view mounts, but a session
+// can disappear while the view is still alive (for example after a 401). Keep
+// the dashboard's reactive state safe during that redirect window as well.
+const initialToday = auth.user?.today ?? new Date().toISOString().slice(0, 10)
+const month = ref(initialToday.slice(0, 7))
 const rangeMode = ref<'month' | 'custom'>('month')
-const fromDate = ref(auth.user!.today.slice(0, 8) + '01')
-const toDate = ref(auth.user!.today)
+const fromDate = ref(initialToday.slice(0, 8) + '01')
+const toDate = ref(initialToday)
 const report = ref<ReportPayload | null>(null)
 const error = ref('')
 
 // Types to show as columns/series: active ones, plus any inactive type that
 // still has units logged this month — then scoped to the viewer's own
 // assignments (admins see everything).
-const myTypeIds = computed(() => new Set(auth.user!.work_types.map((w) => w.id)))
+const myTypeIds = computed(
+  () => new Set((auth.user?.work_types ?? []).map((w) => w.id)),
+)
 const visibleTypes = computed(() => {
   const r = report.value
   if (!r) return []

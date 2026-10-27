@@ -7,7 +7,7 @@
 //   other GET         -> stale-while-revalidate
 //
 // Bump CACHE_VERSION to force clients onto fresh cached assets.
-const CACHE_VERSION = 'ledger-v1'
+const CACHE_VERSION = 'ledger-v2'
 const SHELL = '/index.html'
 
 self.addEventListener('install', (event) => {

@@ -3,7 +3,44 @@ import { createPinia } from 'pinia'
 import * as Sentry from '@sentry/vue'
 import App from './App.vue'
 import router from './router'
+import { isRouteChunkLoadError, recoverRouteChunkLoad } from './router/chunkRecovery'
 import './style.css'
+
+// Vue Router reports lazy-route import failures through its own error hook,
+// but browsers also surface the same failed import as an unhandled promise
+// rejection. Recover the latter too and suppress it after the one-time reload
+// has been scheduled; otherwise monitoring still records a user-visible error
+// even though the fresh app shell can load the route successfully.
+if (import.meta.env.PROD) {
+  const currentRouteTarget = () =>
+    `${window.location.pathname}${window.location.search}${window.location.hash}`
+
+  const recoverFromBrowserError = (reason: unknown) => {
+    if (!isRouteChunkLoadError(reason)) return false
+
+    recoverRouteChunkLoad(
+      reason,
+      currentRouteTarget(),
+      window.sessionStorage,
+      () => window.location.reload(),
+    )
+    return true
+  }
+
+  window.addEventListener('unhandledrejection', (event) => {
+    if (recoverFromBrowserError(event.reason)) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+  })
+
+  window.addEventListener('error', (event) => {
+    if (recoverFromBrowserError(event.error ?? event.message)) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+  })
+}
 
 const app = createApp(App)
 

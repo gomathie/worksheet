@@ -1630,3 +1630,69 @@ Follow-up clarifying question asked whether the 2-day follow-up should repeat in
 - Only three kinds are batchable for now. If the user wants more aggressive batching later, the change is adding to the `BATCHABLE_KINDS` set in `server/notify.ts` — deliberately the only place that decision lives.
 - `point_deduction` was explicitly kept immediate, confirmed with the user as the priority before this feature was scoped.
 
+October 27, 2026
+Bug Fix: Production Route Chunk Recovery
+
+Branch: main
+
+User Request
+
+"TypeError: Failed to fetch dynamically imported module: https://dem.trace365.net/assets/ReportView-DTAqm1Er.js" on the production `/payments` route.
+
+Implementation
+
+Investigated the production error as a stale Vite hashed route chunk requested by an open tab after a deployment. The current build has a different `ReportView` asset name, confirming that the reported file belongs to an older app shell.
+
+Updated `src/main.ts` to handle browser-level `unhandledrejection` and `error` events for route chunk failures. The existing one-time session guard is reused, the current route is reloaded once, and the event is prevented from being reported as an unhandled Sentry error after recovery is scheduled.
+
+Updated `public/sw.js` from cache version `ledger-v1` to `ledger-v2` so clients retire the previous service-worker cache on this release.
+
+Added `public/_headers` to force `index.html` and the SPA root to revalidate while leaving content-hashed assets suitable for long-lived caching.
+
+Files changed
+
+- `src/main.ts`
+- `public/sw.js`
+- `public/_headers`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Full Vitest suite (`npm.cmd test`): 12 files and 280 tests passed.
+- Preserved the existing focused route-chunk regression tests in `tests/router.test.ts`.
+
+Any remaining considerations
+
+The one-time reload guard intentionally avoids infinite refresh loops when the user is offline or the new asset is genuinely unavailable. A production deployment is still required for the fix to affect existing clients.
+
+October 27, 2026
+Bug Fix: Dashboard Auth Nullability Crash
+
+Branch: main
+
+User Request
+
+Sentry issue 156574980: `TypeError: Cannot read properties of null (reading 'work_types')` from `DashboardView` during the login transaction.
+
+Implementation
+
+Updated `src/views/DashboardView.vue` so its initial date range falls back safely when `auth.user` is temporarily unavailable, and `myTypeIds` treats a missing user as an empty assignment set. This protects the computed `visibleTypes` path during session expiry/redirect transitions while preserving the existing admin and assigned-work-type filtering for authenticated users.
+
+Files changed
+
+- `src/views/DashboardView.vue`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Backend type check (`npx.cmd tsc --noEmit -p tsconfig.server.json`): passed.
+- Full Vitest suite (`npm.cmd test`): 12 files and 280 tests passed.
+
+Any remaining considerations
+
+The report API call remains protected by its existing error handling, and the router/App session-expiry redirect remains authoritative. A production deployment is required for the fix to reach `qap.dubblestack.com`.
+

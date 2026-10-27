@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Responsive Settings Navigation
+  - Replaced the mobile horizontal Settings tab strip with a labelled full-width section selector.
+  - Kept the desktop tab bar and preserved `?tab=` URL state, active panels, and existing permission behavior.
+  - Verified the page at 320px, 375px, 768px, 1024px, and 1440px without body-level horizontal overflow.
+
 - Feature: Long Content and Mobile Action Cleanup
   - Entry notes and expense voucher descriptions now wrap inside mobile table cards instead of being truncated.
   - Final-column mobile table actions use the available card width, while employee session-switch controls and task participant radio groups wrap on narrow screens.

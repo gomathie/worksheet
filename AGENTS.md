@@ -1910,9 +1910,40 @@ Testing performed
 - Frontend type check and production build (`npm.cmd run build`): passed.
 - Full Vitest suite (`npm.cmd test`): passed after the responsive changes.
 - Playwright smoke test with a mocked authenticated user: Entries and Expenses kept document width equal to the viewport at 375px; long text wrapped normally; mobile action buttons filled their action field; both routes stayed within the viewport at 1440px.
-- `git diff --check`: pending final diff review.
+- `git diff --check`: passed.
 
 Any remaining considerations
 
 The next planned slice is Work package 5: improve Settings navigation on mobile.
+
+October 27, 2026
+Feature: Responsive Settings Navigation
+
+Branch: main
+
+User Request
+
+"Continue" with the next responsive UI work package from `docs/responsive-ui-improvement-plan.md`.
+
+Implementation
+
+Updated `src/views/SettingsView.vue` to render a full-width, labelled Settings section selector below the mobile breakpoint while retaining the existing button tab bar on tablet and desktop. The selector uses the existing `setTab` route update, so `?tab=` URLs, reloads, shared links, active-panel rendering, and Settings permissions remain unchanged. No API, server authorization, or settings mutation behavior changed.
+
+Files changed
+
+- `src/views/SettingsView.vue`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Playwright smoke test with a mocked authenticated admin: mobile selector and desktop tabs were verified at 320px, 375px, 768px, 1024px, and 1440px; no body-level horizontal overflow was detected.
+- Mobile and desktop tab switching updated the URL and rendered the requested panel; no browser console errors were observed.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The next planned slice is Work package 6: accessibility and finish pass.
 

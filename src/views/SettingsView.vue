@@ -305,20 +305,35 @@ function downloadBackup() {
     <h1 class="display text-3xl">Settings</h1>
 
     <nav
-      class="no-print sticky top-0 z-10 -mx-1 flex gap-1.5 overflow-x-auto border-b border-line bg-cream px-1 py-2"
+      class="no-print sticky top-0 z-10 -mx-1 border-b border-line bg-cream px-1 py-2"
       aria-label="Settings sections"
     >
-      <button
-        v-for="t in TABS"
-        :key="t.id"
-        type="button"
-        class="btn btn-sm shrink-0"
-        :class="{ 'btn-solid': activeTab === t.id }"
-        :aria-current="activeTab === t.id ? 'page' : undefined"
-        @click="setTab(t.id)"
+      <label class="field-label mb-1 sm:hidden" for="settings-section">
+        Settings section
+      </label>
+      <select
+        id="settings-section"
+        class="field-input w-full sm:hidden"
+        :value="activeTab"
+        aria-label="Settings section"
+        @change="setTab(($event.target as HTMLSelectElement).value as TabId)"
       >
-        {{ t.label }}
-      </button>
+        <option v-for="t in TABS" :key="t.id" :value="t.id">{{ t.label }}</option>
+      </select>
+      <div class="hidden flex-wrap gap-1.5 sm:flex" role="tablist" aria-label="Settings sections">
+        <button
+          v-for="t in TABS"
+          :key="t.id"
+          type="button"
+          role="tab"
+          class="btn btn-sm shrink-0"
+          :class="{ 'btn-solid': activeTab === t.id }"
+          :aria-selected="activeTab === t.id"
+          @click="setTab(t.id)"
+        >
+          {{ t.label }}
+        </button>
+      </div>
     </nav>
 
     <p v-if="error" class="panel border-red bg-red-soft text-red">{{ error }}</p>

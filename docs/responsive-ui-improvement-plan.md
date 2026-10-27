@@ -1,6 +1,6 @@
 # Responsive UI Improvement Plan
 
-Status: Work packages 1-4 complete; Work package 5 next
+Status: Work packages 1-5 complete; Work package 6 next
 Owner: Any contributing agent  
 Branch: `main`  
 Created: October 27, 2026
@@ -250,6 +250,8 @@ Status: Complete
 
 ## Work package 5: Improve Settings navigation on mobile
 
+Status: Complete
+
 ### Files
 
 - `src/views/SettingsView.vue`
@@ -266,6 +268,18 @@ desktop. Preserve the active tab URL state and permission behavior.
 - Settings sections are accessible without horizontal scrolling on mobile.
 - The active section is obvious.
 - Reloading or sharing the Settings URL still opens the requested section.
+
+### Implementation notes
+
+- Replaced the mobile horizontal Settings tab strip with a full-width labelled section selector.
+- Kept the existing seven-button tab bar for tablet and desktop widths.
+- Preserved `?tab=` URL state, active-panel rendering, permission-gated Settings routing, and existing settings actions.
+
+### Verification
+
+- `npm.cmd run build`: passed.
+- Playwright smoke test with a mocked authenticated admin: the selector was visible at 320px and 375px, desktop tabs were visible at 768px, 1024px, and 1440px, and no body-level horizontal overflow was detected.
+- Mobile and desktop section switching both updated the URL and rendered the requested panel; no browser console errors were observed.
 
 ## Work package 6: Accessibility and finish pass
 
@@ -314,6 +328,6 @@ Before completion:
 6. Work package 5: Settings navigation
 7. Work package 6: accessibility and finish pass
 
-Work packages 1, 2, 3, and 4 are complete. The next implementation slice should be
-Work package 5, which improves Settings navigation on mobile without touching data
-flow or authorization.
+Work packages 1, 2, 3, 4, and 5 are complete. The next implementation slice should
+be Work package 6, the accessibility and finish pass, without changing data flow or
+authorization.

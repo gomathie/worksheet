@@ -1947,3 +1947,39 @@ Any remaining considerations
 
 The next planned slice is Work package 6: accessibility and finish pass.
 
+October 27, 2026
+Feature: Accessibility and Motion Finish Pass
+
+Branch: main
+
+User Request
+
+"Continue" with the final responsive UI work package from `docs/responsive-ui-improvement-plan.md`.
+
+Implementation
+
+Updated `src/style.css` with a shared `:focus-visible` ring for plain links and controls plus a `prefers-reduced-motion` rule that minimizes animations and transitions. Updated `src/App.vue` with Account menu semantics and state attributes. Updated `src/components/PointDeductionModal.vue`, `src/components/NewsPopup.vue`, `src/components/TaskAgeAlert.vue`, and `src/components/TaskDeadlineAlert.vue` with dialog semantics, accessible labels, and initial focus on the primary dismissal control. No API, route permission, server authorization, or business-rule behavior changed.
+
+Files changed
+
+- `src/style.css`
+- `src/App.vue`
+- `src/components/PointDeductionModal.vue`
+- `src/components/NewsPopup.vue`
+- `src/components/TaskAgeAlert.vue`
+- `src/components/TaskDeadlineAlert.vue`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Full Vitest suite (`npm.cmd test`): passed.
+- Playwright accessibility smoke test with a mocked authenticated admin: dialog metadata and focus, Account menu semantics, keyboard focus visibility, reduced-motion behavior, clean console output, and no body-level horizontal overflow passed at 320px, 375px, 768px, 1024px, and 1440px.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The responsive UI improvement plan is complete. Future changes should preserve the focus, reduced-motion, dialog, and menu patterns established here.
+

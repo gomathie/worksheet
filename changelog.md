@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Accessibility and Motion Finish Pass
+  - Added consistent keyboard focus rings for plain links and controls, reduced-motion support, Account menu semantics, and accessible recurring dialogs.
+  - Verified dialog focus, menu semantics, responsive widths, reduced-motion behavior, and clean browser output without changing authorization or API behavior.
+
 - Feature: Responsive Settings Navigation
   - Replaced the mobile horizontal Settings tab strip with a labelled full-width section selector.
   - Kept the desktop tab bar and preserved `?tab=` URL state, active panels, and existing permission behavior.

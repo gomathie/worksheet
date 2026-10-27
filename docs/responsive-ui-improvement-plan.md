@@ -1,6 +1,6 @@
 # Responsive UI Improvement Plan
 
-Status: Work packages 1-5 complete; Work package 6 next
+Status: Work packages 1-6 complete
 Owner: Any contributing agent  
 Branch: `main`  
 Created: October 27, 2026
@@ -283,6 +283,8 @@ desktop. Preserve the active tab URL state and permission behavior.
 
 ## Work package 6: Accessibility and finish pass
 
+Status: Complete
+
 ### Verify
 
 - Keyboard-tab through navigation, menus, filters, table actions, and forms.
@@ -292,6 +294,19 @@ desktop. Preserve the active tab URL state and permission behavior.
 - Check loading, empty, error, success, and permission states.
 - Check reduced-motion behavior for any new menu or transition.
 - Check contrast using the existing design tokens.
+
+### Implementation notes
+
+- Added a shared `:focus-visible` ring for plain links, menu controls, and form controls that do not use the primary button/input classes.
+- Added a reduced-motion media query that minimizes transitions and animations for users who request less motion.
+- Added expanded/controlled menu semantics to the Account menu and dialog semantics, labels, and initial focus for recurring announcement, task-alert, and points-decision dialogs.
+- Kept active navigation states, permission-gated content, API contracts, and server-side authorization unchanged.
+
+### Verification
+
+- `npm.cmd run build`: passed.
+- `npm.cmd test`: passed.
+- Playwright accessibility smoke test with a mocked authenticated admin: dialog metadata and autofocus, Account menu semantics, keyboard focus visibility, reduced-motion transition timing, clean console output, and no body-level horizontal overflow passed at 320px, 375px, 768px, 1024px, and 1440px.
 
 ## Verification after each work package
 
@@ -328,6 +343,5 @@ Before completion:
 6. Work package 5: Settings navigation
 7. Work package 6: accessibility and finish pass
 
-Work packages 1, 2, 3, 4, and 5 are complete. The next implementation slice should
-be Work package 6, the accessibility and finish pass, without changing data flow or
-authorization.
+Work packages 1, 2, 3, 4, 5, and 6 are complete. The responsive UI improvement plan
+is ready for normal maintenance and future issue-driven refinements.

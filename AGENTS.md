@@ -34,6 +34,12 @@ Keep naming consistent with the existing codebase.
 
 Avoid adding dependencies unless they are genuinely necessary.
 
+Development Tooling
+
+- Project-scoped Agent Skills live under `.agents/skills/` and are pinned by `skills-lock.json`.
+- Use `frontend-ui-engineering` for UI/layout/accessibility changes, `browser-testing-with-devtools` only when its isolated Chrome DevTools MCP is configured, and `code-review-and-quality` for the final review pass.
+- Read `docs/development-tools.md` before adding Context7, Graphify, 21st MCP, Strix, or another external development service. Do not add credentials, production dependencies, or active security testing without explicit scope.
+
 Before completing a task, inspect the resulting diff for accidental changes.
 
 2. Security & Data Access Rules
@@ -1695,4 +1701,54 @@ Testing performed
 Any remaining considerations
 
 The report API call remains protected by its existing error handling, and the router/App session-expiry redirect remains authoritative. A production deployment is required for the fix to reach `qap.dubblestack.com`.
+
+October 27, 2026
+Development Tooling Review and Selective Setup
+
+Branch: main
+
+User Request
+
+"Review my existing application and selectively configure useful development tools" from Agent Skills, Context7, Graphify, 21st MCP, and Strix, with the goal of improving future UI/UX development and maintenance.
+
+Implementation
+
+Inspected the repository instructions, README, package manifests and lockfile, current `.claude` configuration, source layout, tests, and available CI/configuration files. Confirmed the application is a Vue 3/Vite/TypeScript frontend with Tailwind CSS, Pinia, Vue Router, Cloudflare Pages Functions, D1, KV sessions, Sentry, Vitest, strict frontend/server type configurations, and Playwright available as a dependency.
+
+Established the baseline before setup: `npm.cmd test` passed 12 files and 280 tests; `npm.cmd run build` passed.
+
+Installed only the three relevant Agent Skills from the verified `addyosmani/agent-skills` source into the project:
+
+- `.agents/skills/frontend-ui-engineering`
+- `.agents/skills/browser-testing-with-devtools`
+- `.agents/skills/code-review-and-quality`
+- `skills-lock.json` records their source paths and content hashes.
+
+Deferred Context7 because no Context7 MCP is connected in this Codex session and automatic client-global credential setup was not authorized. Deferred Graphify because the repository is small enough for existing code search and documentation. Deferred 21st MCP because its documented component output is React-oriented and this application is Vue. Deferred Strix because active pentesting requires an explicitly authorized isolated target, Docker, and an LLM provider/key.
+
+Added `docs/development-tools.md` with the decision table, official sources, license/cost/data-handling notes, exact usage examples, UI/UX priorities, and rollback instructions. Added a README pointer and concise Agent Skill usage guidance without changing application runtime behavior.
+
+Files changed
+
+- `.agents/skills/frontend-ui-engineering/SKILL.md`
+- `.agents/skills/browser-testing-with-devtools/SKILL.md`
+- `.agents/skills/code-review-and-quality/SKILL.md`
+- `skills-lock.json`
+- `docs/development-tools.md`
+- `README.md`
+- `AGENTS.md`
+- `changelog.md`
+
+Testing performed
+
+- Verified the official upstream sources and current installation guidance for all five evaluated tools.
+- Confirmed the Agent Skills installer completed successfully and recorded hashes in `skills-lock.json`.
+- Re-ran `npm.cmd test`: 12 files and 280 tests passed.
+- Re-ran `npm.cmd run build`: passed.
+- Ran `git diff --check` successfully before documentation changes.
+- Ran `npm.cmd audit --omit=dev --audit-level=high`: 10 advisories reported (1 moderate, 8 high, 1 critical); traced the main paths with `npm.cmd ls`/`npm.cmd explain` and did not apply automatic upgrades.
+
+Any remaining considerations
+
+The browser-testing skill still needs a Chrome DevTools MCP connection before it can run its preferred live-browser workflow; Playwright remains the current local fallback. No tool was deployed, added to the production bundle, or given application credentials. The next UI/UX pass should start with Dashboard hierarchy and mobile entry flow, then standardize feedback and accessibility states using the existing design tokens.
 

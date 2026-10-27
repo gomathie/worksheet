@@ -493,6 +493,8 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 
 ## Local development
 
+Development-tool decisions, installed agent workflows, and rollback instructions are documented in [`docs/development-tools.md`](docs/development-tools.md).
+
 ```bash
 npm install
 npm run db:migrate:local     # apply migrations to the local D1 DB

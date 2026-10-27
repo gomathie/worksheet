@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Development tooling review and selective setup
+  - Added project-scoped Agent Skills for frontend UI engineering, browser testing, and code review, pinned in `skills-lock.json`.
+  - Documented decisions to defer Context7, Graphify, 21st MCP, and Strix until their integration, repository fit, or authorization requirements are satisfied.
+  - Added a UI/UX improvement sequence focused on Dashboard hierarchy, mobile entry flow, feedback states, accessibility, and browser evidence.
+  - Ran the read-only npm security audit; it reported 10 transitive advisories (1 moderate, 8 high, 1 critical). Dependency upgrades were intentionally not applied and are recorded as a separate follow-up.
+
 - Fix: Dashboard Auth Nullability Crash
   - Made Dashboard date initialization and work-type visibility safe when the authenticated user becomes temporarily null during session expiry or login redirect, preventing `Cannot read properties of null (reading 'work_types')` from reaching Vue's global error handler.
 

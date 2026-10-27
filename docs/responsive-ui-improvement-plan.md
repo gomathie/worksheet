@@ -90,7 +90,7 @@ Below the mobile breakpoint:
 3. Preserve desktop navigation and route permissions.
 4. Preserve active-route styling and the current section fallback behavior.
 5. add a button to click and add app to homepage.
-6. Ensure the menu has keyboard focus, an accessible label, and predictable close behavior.
+6. Ensure the menu has keyboard focus, an accessible label, and predictable close behavior. Provide a ubtton to click on mobile to add app to homepage as PWA.
 
 ### Acceptance criteria
 

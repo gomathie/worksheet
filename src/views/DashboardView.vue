@@ -106,17 +106,39 @@ function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: bool
 <template>
   <div>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="display text-2xl">Dashboard</h2>
-      <div class="flex items-center gap-2">
-        <select v-model="rangeMode" class="field-input py-1 text-sm bg-transparent">
+      <h2 class="display shrink-0 text-2xl">Dashboard</h2>
+      <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+        <select
+          v-model="rangeMode"
+          class="field-input w-full bg-transparent py-1 text-sm sm:w-auto"
+          aria-label="Dashboard date range"
+        >
           <option value="month">Month</option>
           <option value="custom">Custom</option>
         </select>
-        <MonthPicker v-if="rangeMode === 'month'" v-model="month" />
-        <div v-else class="flex items-center gap-1">
-          <input type="date" v-model="fromDate" class="field-input py-1 text-sm mono" />
-          <span class="text-muted">to</span>
-          <input type="date" v-model="toDate" class="field-input py-1 text-sm mono" />
+        <MonthPicker v-if="rangeMode === 'month'" v-model="month" class="w-full sm:w-auto" />
+        <div v-else class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-1">
+          <label class="flex w-full items-center gap-2 sm:w-auto">
+            <span class="text-sm text-muted sm:sr-only">From</span>
+            <input
+              id="dashboard-from-date"
+              v-model="fromDate"
+              type="date"
+              class="field-input mono min-w-0 flex-1 py-1 text-sm"
+              aria-label="Dashboard start date"
+            />
+          </label>
+          <span class="hidden text-muted sm:inline" aria-hidden="true">to</span>
+          <label class="flex w-full items-center gap-2 sm:w-auto">
+            <span class="text-sm text-muted sm:sr-only">To</span>
+            <input
+              id="dashboard-to-date"
+              v-model="toDate"
+              type="date"
+              class="field-input mono min-w-0 flex-1 py-1 text-sm"
+              aria-label="Dashboard end date"
+            />
+          </label>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 # Responsive UI Improvement Plan
 
-Status: Work package 1 complete; Work package 2 next  
+Status: Work packages 1-2 complete; Work package 3 next
 Owner: Any contributing agent  
 Branch: `main`  
 Created: October 27, 2026
@@ -115,6 +115,8 @@ Below the mobile breakpoint:
 
 ## Work package 2: Make dashboard controls wrap cleanly
 
+Status: Complete
+
 ### Files
 
 - `src/views/DashboardView.vue`
@@ -139,6 +141,19 @@ At 320px and 375px, the date controls can become cramped or overflow.
 - Custom range mode fits at 320px and 375px without clipping.
 - Date inputs remain large enough to use comfortably by touch.
 - Desktop spacing remains compact and aligned.
+
+### Implementation notes
+
+- Made the dashboard range selector full-width on phones and compact from the `sm` breakpoint upward.
+- Stacked custom start/end date fields below 640px and kept them inline on larger screens.
+- Added accessible labels for the range selector and both date inputs.
+- Preserved the existing month/custom mode state and API query behavior.
+
+### Verification
+
+- `npm.cmd run build`: passed.
+- `npm.cmd test`: 12 files and 280 tests passed.
+- Playwright smoke test with a mocked authenticated user: dashboard rendered at 320px, 375px, 768px, 1024px, and 1440px; custom dates rendered at 375px; no body-level horizontal overflow was detected.
 
 ## Work package 3: Standardize responsive data tables
 
@@ -267,6 +282,6 @@ Before completion:
 6. Work package 5: Settings navigation
 7. Work package 6: accessibility and finish pass
 
-Work package 1 is complete. The next implementation slice should be Work package
-2, which addresses dashboard and page-header controls without touching data flow
-or authorization.
+Work packages 1 and 2 are complete. The next implementation slice should be Work
+package 3, which standardizes responsive data tables without touching data flow or
+authorization.

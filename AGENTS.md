@@ -1816,3 +1816,34 @@ Any remaining considerations
 
 The browser check used the unauthenticated shell because no test login session was available. The next verification pass should exercise the Reports, Finance, and Admin contextual menus with a permitted test account before this slice is deployed.
 
+October 27, 2026
+Feature: Responsive Dashboard Controls
+
+Branch: main
+
+User Request
+
+"Continue" with the next responsive UI work package from `docs/responsive-ui-improvement-plan.md`.
+
+Implementation
+
+Updated `src/views/DashboardView.vue` so the date-range selector fills the available phone width, the month picker remains compact from the `sm` breakpoint upward, and custom start/end dates stack below 640px. Added visible mobile labels and accessible labels for the range selector and date inputs. Existing month/custom state and report/expense query behavior remain unchanged.
+
+Files changed
+
+- `src/views/DashboardView.vue`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Full Vitest suite (`npm.cmd test`): 12 files and 280 tests passed.
+- Playwright smoke test with a mocked authenticated user: dashboard rendered at 320px, 375px, 768px, 1024px, and 1440px; custom dates rendered at 375px; no body-level horizontal overflow was detected.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The next planned slice is Work package 3: standardize responsive data tables and make intentional horizontal table scrolling clearer and more accessible.
+

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Responsive Dashboard Controls
+  - Made the dashboard range selector wrap cleanly on phones and remain compact on larger screens.
+  - Stacked custom start/end date fields below 640px and added accessible labels without changing date-range queries or report behavior.
+  - Verified the dashboard at 320px, 375px, 768px, 1024px, and 1440px with no body-level horizontal overflow.
+
 - Feature: Mobile Section Navigation
   - Reused permission-filtered Reports, Finance, and Admin link lists for desktop and mobile navigation.
   - Replaced stacked mobile section tab scrollers with one contextual section menu that supports active states, keyboard focus, Escape-to-close, and click-away closing.

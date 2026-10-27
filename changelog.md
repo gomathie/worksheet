@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Fix: Compact Mobile Per-Person Dashboard Cards
+  - The Dashboard per-person table now uses a two-column card layout on phones.
+  - Employee names remain full width while metrics pair side by side; desktop table behavior is unchanged.
+
+- Feature: Sentry Source Map Uploads
+  - Added conditional Vite source-map upload support using `@sentry/vite-plugin`.
+  - Production builds upload hidden source maps only when `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and
+    `SENTRY_PROJECT` are configured; local builds remain unchanged without those values.
+  - Documented that the Sentry project must exist first and that the upload token is build-time
+    secret material only.
+
 - Feature: In-App PWA Installation
   - Added a signed-in header button that invokes the browser's native PWA install prompt when available.
   - Added an iPhone/iPad fallback dialog with Safari's Add to Home Screen steps.

@@ -238,7 +238,7 @@ function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: bool
       <div class="panel mb-6">
         <h3 class="display mb-3 text-xl">Per person</h3>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data per-person-table">
             <thead>
               <tr>
                 <th>Employee</th>

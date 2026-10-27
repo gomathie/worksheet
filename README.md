@@ -559,9 +559,36 @@ reachable, no behavior change) when they aren't:
   Requires the `nodejs_compat` compatibility flag in `wrangler.toml` (already added) — the SDK
   needs `AsyncLocalStorage`.
 
-Both read from the same Sentry project's DSN (Settings → Client Keys); nothing else to create on
-the Sentry side. `tracesSampleRate` is set low (0.2) on both sides — this is an internal team tool,
-not high-traffic, so that is plenty to catch real problems without burning through quota.
+Once a Sentry project exists, both read from the same project's DSN (Settings → Client Keys); no
+additional runtime integration needs to be created on the Sentry side. `tracesSampleRate` is set low
+(0.2) on both sides — this is an internal team tool, not high-traffic, so that is plenty to catch
+real problems without burning through quota.
+
+### Source maps and project setup
+
+The runtime SDK does not create a Sentry project. Create or select the project in the `365-s3`
+organization first, then use that project's slug for source-map uploads. The configured DSN currently
+identifies the existing Sentry project by its numeric project ID; the Sentry Projects page shows the
+human-readable project name and slug.
+
+For Cloudflare Pages builds, add these build-time variables/secrets:
+
+```text
+SENTRY_ORG=365-s3
+SENTRY_PROJECT=<existing Sentry project slug>
+SENTRY_AUTH_TOKEN=<CI-only Sentry token>
+```
+
+`SENTRY_AUTH_TOKEN` must remain a Pages build secret and must never be prefixed with `VITE_` or
+committed to the repository. Use a token with the minimum release/source-map upload permissions
+(typically `org:ci` or `project:releases`). An optional `SENTRY_RELEASE` can override the default
+Cloudflare commit-based release name.
+
+When all three required build values are present, `vite.config.ts` enables the Sentry Vite plugin,
+emits hidden source maps, uploads them during the build, and removes the map files from `dist` after
+upload. Builds without those values keep source-map upload disabled. Preview builds also need
+`VITE_SENTRY_DSN` as a Pages build variable if browser errors should be reported there; the runtime
+`SENTRY_DSN` secret alone only configures the Pages Functions side.
 
 ## Migrations
 

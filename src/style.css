@@ -524,6 +524,26 @@ table.data tr.group-head td {
   table.data td:last-child {
     border-bottom: none;
   }
+
+  /* Per-person metrics are easier to scan as a compact two-column card. Keep
+     the employee name full width, then pair the remaining metrics so a card
+     does not become a long vertical list on phones. */
+  table.data.per-person-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  table.data.per-person-table tbody tr td {
+    width: auto;
+  }
+
+  table.data.per-person-table tbody tr td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  table.data.per-person-table tbody tr td:nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
   
   /* The injected data-label pseudo-element */
   table.data td::before {

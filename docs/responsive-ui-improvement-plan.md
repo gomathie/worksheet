@@ -347,3 +347,9 @@ Before completion:
 
 Work packages 1, 2, 3, 4, 5, and 6 are complete. The responsive UI improvement plan
 is ready for normal maintenance and future issue-driven refinements.
+
+### Maintenance refinement: compact dashboard per-person cards
+
+The Dashboard's per-person table now uses a two-column card layout below the mobile breakpoint.
+Employee names span the card width, while the remaining metrics pair side by side to reduce
+vertical scrolling. Desktop and tablet table layouts remain unchanged.

@@ -2015,3 +2015,67 @@ Any remaining considerations
 
 The native install button only appears when the browser exposes `beforeinstallprompt`. iOS intentionally uses the guided Safari fallback because Apple does not expose that event.
 
+October 27, 2026
+Feature: Sentry Source Map Uploads
+
+Branch: main
+
+User Request
+
+"Continue" after approving the Sentry source-map upload setup and reporting that the created Sentry project was not visible.
+
+Implementation
+
+Added conditional `@sentry/vite-plugin` configuration in `vite.config.ts`. The plugin is enabled only when `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are all present. It uploads hidden production source maps, optionally uses `SENTRY_RELEASE` or the Cloudflare commit SHA for release identity, and removes uploaded map files from `dist`. Existing frontend and Pages Functions DSN behavior is unchanged.
+
+Updated the README and changelog to explain that the runtime DSN does not create a Sentry project, the configured DSN points at an existing numeric project ID, and Cloudflare Pages must be configured with the organization slug, existing project slug, and a CI-only upload token. Preview browser monitoring also requires `VITE_SENTRY_DSN` as a build variable.
+
+Files changed
+
+- `vite.config.ts`
+- `README.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Local production build without upload credentials (`npm.cmd run build`): passed; no `.map` files remained in `dist`.
+- Vitest suite (`npm.cmd test`): passed, 12 files and 280 tests.
+- `git diff --check`: passed; only normal line-ending warnings were reported.
+
+Any remaining considerations
+
+The project must be created or selected in the Sentry `365-s3` organization before `SENTRY_PROJECT` can be configured. No Sentry project was created through the repository, and no secret values were added to source control.
+
+October 27, 2026
+Feature: Compact Mobile Per-Person Dashboard Cards
+
+Branch: main
+
+User Request
+
+"On the mobile cards, the per-person card is too long. Can some rows be two columns?"
+
+Implementation
+
+Added a `per-person-table` hook to the Dashboard per-person table. Below the existing mobile breakpoint, each person is rendered as a two-column grid card: the employee name spans both columns, and the remaining days, hours, work-type, and payment metrics pair side by side. The shared mobile table behavior, desktop layout, data values, permission filtering, and API behavior remain unchanged.
+
+Files changed
+
+- `src/views/DashboardView.vue`
+- `src/style.css`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build: pending final verification.
+- Vitest suite: pending final verification.
+- Browser DevTools MCP was not available in this session; static responsive CSS review will be supplemented by the existing project test suite.
+- `git diff --check`: pending final verification.
+
+Any remaining considerations
+
+At very narrow widths, long work-type labels may still wrap inside their half-width metric cell; the card remains contained without changing the underlying table data.
+

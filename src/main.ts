@@ -73,6 +73,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 }
 
 // Automatically inject data-labels onto data tables for responsive mobile cards
+// and make only genuinely overflowing table regions keyboard-scrollable.
 const observeTables = () => {
   document.querySelectorAll('table.data').forEach(table => {
     const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent?.trim() || '')
@@ -87,6 +88,45 @@ const observeTables = () => {
       })
     })
   })
+
+  document.querySelectorAll<HTMLElement>('.table-wrap').forEach(wrapper => {
+    const overflowing = wrapper.scrollWidth > wrapper.clientWidth + 1
+    wrapper.dataset.overflowing = String(overflowing)
+
+    if (overflowing) {
+      if (!wrapper.hasAttribute('tabindex')) {
+        wrapper.tabIndex = 0
+        wrapper.dataset.autoTableTabIndex = 'true'
+      }
+      if (!wrapper.hasAttribute('role')) {
+        wrapper.setAttribute('role', 'region')
+        wrapper.dataset.autoTableRole = 'true'
+      }
+      if (!wrapper.hasAttribute('aria-label')) {
+        const heading = wrapper.closest('.panel')?.querySelector('h2, h3')
+        wrapper.setAttribute(
+          'aria-label',
+          heading?.textContent?.trim() || 'Scrollable data table',
+        )
+        wrapper.dataset.autoTableLabel = 'true'
+      }
+      wrapper.dataset.autoTableRegion = 'true'
+    } else if (wrapper.dataset.autoTableRegion === 'true') {
+      if (wrapper.dataset.autoTableTabIndex === 'true') {
+        wrapper.removeAttribute('tabindex')
+        delete wrapper.dataset.autoTableTabIndex
+      }
+      if (wrapper.dataset.autoTableRole === 'true') {
+        wrapper.removeAttribute('role')
+        delete wrapper.dataset.autoTableRole
+      }
+      if (wrapper.dataset.autoTableLabel === 'true') {
+        wrapper.removeAttribute('aria-label')
+        delete wrapper.dataset.autoTableLabel
+      }
+      delete wrapper.dataset.autoTableRegion
+    }
+  })
 }
 
 // Observe DOM for new tables being rendered
@@ -94,3 +134,4 @@ const observer = new MutationObserver(observeTables)
 observer.observe(document.body, { childList: true, subtree: true })
 // And run once immediately
 observeTables()
+window.addEventListener('resize', observeTables)

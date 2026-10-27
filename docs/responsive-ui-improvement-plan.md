@@ -1,6 +1,6 @@
 # Responsive UI Improvement Plan
 
-Status: Work packages 1-2 complete; Work package 3 next
+Status: Work packages 1-3 complete; Work package 4 next
 Owner: Any contributing agent  
 Branch: `main`  
 Created: October 27, 2026
@@ -89,7 +89,8 @@ Below the mobile breakpoint:
    `More` menu or section dropdown.
 3. Preserve desktop navigation and route permissions.
 4. Preserve active-route styling and the current section fallback behavior.
-5. Ensure the menu has keyboard focus, an accessible label, and predictable close behavior.
+5. add a button to clcik and add app to homepage.
+6. Ensure the menu has keyboard focus, an accessible label, and predictable close behavior.
 
 ### Acceptance criteria
 
@@ -157,6 +158,8 @@ At 320px and 375px, the date controls can become cramped or overflow.
 
 ## Work package 3: Standardize responsive data tables
 
+Status: Complete
+
 ### Files
 
 - `src/style.css`
@@ -182,6 +185,20 @@ Any table that intentionally scrolls horizontally should have an understandable
 accessible name, for example `aria-label="Recent expense activity"`. Do not add
 `tabindex` to every wrapper automatically; only make a region keyboard-scrollable
 when keyboard users otherwise cannot reach its content.
+
+### Implementation notes
+
+- Strengthened `.table-wrap` with width containment, contained horizontal overscroll, scroll padding, and thin native scrollbars.
+- Extended the existing table observer in `src/main.ts` to detect actual overflow after render and on resize.
+- Only overflowing wrappers receive keyboard focus, `role="region"`, and an accessible label derived from the nearest panel heading.
+- Non-overflowing mobile card tables remain out of the tab order.
+- Left the `ExpensePackView.vue` raw table unchanged because it is a print-only document table rather than a screen-facing data table.
+
+### Verification
+
+- `npm.cmd run build`: passed.
+- `npm.cmd test`: 12 files and 280 tests passed.
+- Playwright table smoke test with a mocked authenticated user: mobile card tables did not become overflow regions at 375px; wide dashboard tables became labelled, keyboard-scrollable regions at 768px and 1024px; no body-level horizontal overflow was detected.
 
 ### Acceptance criteria
 
@@ -282,6 +299,6 @@ Before completion:
 6. Work package 5: Settings navigation
 7. Work package 6: accessibility and finish pass
 
-Work packages 1 and 2 are complete. The next implementation slice should be Work
-package 3, which standardizes responsive data tables without touching data flow or
-authorization.
+Work packages 1, 2, and 3 are complete. The next implementation slice should be
+Work package 4, which handles long content and action groups without touching data
+flow or authorization.

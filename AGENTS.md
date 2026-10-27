@@ -1847,3 +1847,37 @@ Any remaining considerations
 
 The next planned slice is Work package 3: standardize responsive data tables and make intentional horizontal table scrolling clearer and more accessible.
 
+October 27, 2026
+Feature: Accessible Responsive Table Regions
+
+Branch: main
+
+User Request
+
+"Continue" with the next responsive UI work package from `docs/responsive-ui-improvement-plan.md`.
+
+Implementation
+
+Updated `src/style.css` so shared `.table-wrap` containers are width-contained, keep horizontal overscroll inside the table region, expose scroll padding, and use thin native scrollbars. Extended the existing table observer in `src/main.ts` to detect actual overflow after table rendering and window resize. Only overflowing wrappers receive `tabindex="0"`, `role="region"`, and an accessible label taken from the nearest panel heading. Non-overflowing mobile card tables remain out of the tab order. The print-only raw table in `ExpensePackView.vue` was intentionally left unchanged.
+
+No API contracts, route guards, server-side authorization, or data-scoping behavior changed.
+
+Files changed
+
+- `src/style.css`
+- `src/main.ts`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Full Vitest suite (`npm.cmd test`): 12 files and 280 tests passed.
+- Playwright table smoke test with a mocked authenticated user: mobile card tables remained non-overflowing at 375px; wide dashboard tables became labelled, keyboard-scrollable regions at 768px and 1024px; no body-level horizontal overflow was detected.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The next planned slice is Work package 4: long content and action-group cleanup across employee, task, entry, and expense views.
+

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Accessible Responsive Table Regions
+  - Added width containment, contained horizontal overscroll, scroll padding, and thin native scrollbars to shared `.table-wrap` containers.
+  - Table regions are now detected after render and resize; only genuinely overflowing tables become keyboard-focusable regions with accessible labels derived from nearby headings.
+  - Mobile card tables remain out of the tab order when they do not overflow.
+
 - Feature: Responsive Dashboard Controls
   - Made the dashboard range selector wrap cleanly on phones and remain compact on larger screens.
   - Stacked custom start/end date fields below 640px and added accessible labels without changing date-range queries or report behavior.

@@ -405,7 +405,7 @@ const statusTone: Record<TaskStatus, string> = {
               {{ e.name }}
             </option>
           </select>
-          <div v-if="form.secondary_person_id" class="mt-2 flex items-center gap-4 text-sm">
+          <div v-if="form.secondary_person_id" class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <label class="flex items-center gap-1">
               <input type="radio" v-model="form.secondary_role" value="assignee" />
               Additional Assignee

@@ -1,6 +1,6 @@
 # Responsive UI Improvement Plan
 
-Status: Work packages 1-3 complete; Work package 4 next
+Status: Work packages 1-4 complete; Work package 5 next
 Owner: Any contributing agent  
 Branch: `main`  
 Created: October 27, 2026
@@ -89,7 +89,7 @@ Below the mobile breakpoint:
    `More` menu or section dropdown.
 3. Preserve desktop navigation and route permissions.
 4. Preserve active-route styling and the current section fallback behavior.
-5. add a button to clcik and add app to homepage.
+5. add a button to click and add app to homepage.
 6. Ensure the menu has keyboard focus, an accessible label, and predictable close behavior.
 
 ### Acceptance criteria
@@ -209,6 +209,8 @@ when keyboard users otherwise cannot reach its content.
 
 ## Work package 4: Clean up long content and action groups
 
+Status: Complete
+
 ### Likely files
 
 - `src/views/EmployeesView.vue`
@@ -232,6 +234,19 @@ when keyboard users otherwise cannot reach its content.
 - Long employee names, task titles, voucher descriptions, and announcement text do not clip.
 - Row actions remain reachable at 320px.
 - Touch targets remain at least as comfortable as the current button rules.
+
+### Implementation notes
+
+- Entry notes and expense voucher descriptions now wrap inside their table cards instead of using truncation.
+- Final-column mobile table actions use the available card width, keeping Edit/Delete and similar controls easy to reach.
+- Employee session-switch controls and task participant radio groups can wrap on narrow screens.
+- Destructive actions, permissions, API contracts, and server-side authorization were unchanged.
+
+### Verification
+
+- `npm.cmd run build`: passed.
+- `npm.cmd test`: passed after the responsive changes.
+- Playwright smoke test with a mocked authenticated user: Entries and Expenses kept document width equal to the viewport at 375px; long text used normal wrapping; action buttons filled the mobile action field; both routes stayed within the viewport at 1440px.
 
 ## Work package 5: Improve Settings navigation on mobile
 
@@ -299,6 +314,6 @@ Before completion:
 6. Work package 5: Settings navigation
 7. Work package 6: accessibility and finish pass
 
-Work packages 1, 2, and 3 are complete. The next implementation slice should be
-Work package 4, which handles long content and action groups without touching data
+Work packages 1, 2, 3, and 4 are complete. The next implementation slice should be
+Work package 5, which improves Settings navigation on mobile without touching data
 flow or authorization.

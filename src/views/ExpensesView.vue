@@ -271,7 +271,7 @@ function exportCsv() {
               <td class="mono whitespace-nowrap">{{ v.expense_date }}</td>
               <td v-if="seesOthers">{{ v.employee_name }}</td>
               <td class="text-xs">{{ v.category_name ?? '—' }}</td>
-              <td class="max-w-64 truncate" :title="v.description">
+              <td class="max-w-64 break-words" :title="v.description">
                 {{ v.description }}
                 <span v-if="v.vendor" class="text-xs text-muted"> · {{ v.vendor }}</span>
               </td>

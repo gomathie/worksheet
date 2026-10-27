@@ -1881,3 +1881,38 @@ Any remaining considerations
 
 The next planned slice is Work package 4: long content and action-group cleanup across employee, task, entry, and expense views.
 
+October 27, 2026
+Feature: Long Content and Mobile Action Cleanup
+
+Branch: main
+
+User Request
+
+"Continue" with the next responsive UI work package from `docs/responsive-ui-improvement-plan.md`.
+
+Implementation
+
+Updated `src/style.css` so direct action buttons in the final column of mobile card tables use the available card width. Updated `src/views/EntriesView.vue` and `src/views/ExpensesView.vue` so long notes and voucher descriptions wrap instead of truncating. Updated `src/views/EmployeesView.vue` so the session-switch control can wrap, and `src/views/TasksView.vue` so the secondary participant radio group wraps on narrow screens. No data flow, API contract, authorization, or destructive-action behavior changed.
+
+Files changed
+
+- `src/style.css`
+- `src/views/EntriesView.vue`
+- `src/views/ExpensesView.vue`
+- `src/views/EmployeesView.vue`
+- `src/views/TasksView.vue`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Full Vitest suite (`npm.cmd test`): passed after the responsive changes.
+- Playwright smoke test with a mocked authenticated user: Entries and Expenses kept document width equal to the viewport at 375px; long text wrapped normally; mobile action buttons filled their action field; both routes stayed within the viewport at 1440px.
+- `git diff --check`: pending final diff review.
+
+Any remaining considerations
+
+The next planned slice is Work package 5: improve Settings navigation on mobile.
+

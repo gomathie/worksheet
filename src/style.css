@@ -500,6 +500,7 @@ table.data tr.group-head td {
   table.data td > .field-input,
   table.data td > .flex { width: 100%; }
   table.data td > .flex { flex-wrap: wrap; justify-content: flex-start; }
+  table.data td:last-child > .btn { width: 100%; }
   
   table.data td:last-child {
     border-bottom: none;

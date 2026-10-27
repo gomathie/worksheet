@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Long Content and Mobile Action Cleanup
+  - Entry notes and expense voucher descriptions now wrap inside mobile table cards instead of being truncated.
+  - Final-column mobile table actions use the available card width, while employee session-switch controls and task participant radio groups wrap on narrow screens.
+  - No API, authorization, or business-rule behavior changed.
+
 - Feature: Accessible Responsive Table Regions
   - Added width containment, contained horizontal overscroll, scroll padding, and thin native scrollbars to shared `.table-wrap` containers.
   - Table regions are now detected after render and resize; only genuinely overflowing tables become keyboard-focusable regions with accessible labels derived from nearby headings.

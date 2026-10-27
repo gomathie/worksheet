@@ -1156,7 +1156,7 @@ const dayGroups = computed(() =>
                     >{{ cardNamesFor(e, wt.id) }}</span
                   >
                 </td>
-                <td class="max-w-56 truncate text-muted" :title="e.notes ?? ''">
+                <td class="max-w-56 break-words text-muted" :title="e.notes ?? ''">
                   {{ e.notes }}
                 </td>
                 <td v-if="approvalOn" class="whitespace-nowrap">

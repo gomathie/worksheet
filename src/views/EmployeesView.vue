@@ -670,11 +670,14 @@ const managerName = (e: Employee) =>
           <h2 class="display text-2xl">Team</h2>
           <p class="text-xs text-muted">Manage active team members, rights, and employee sessions.</p>
         </div>
-        <div v-if="auth.rights.login_as_others && otherActiveEmployees.length" class="flex items-center gap-2">
-          <label class="text-xs font-semibold text-teal whitespace-nowrap">Switch User:</label>
+        <div
+          v-if="auth.rights.login_as_others && otherActiveEmployees.length"
+          class="flex w-full flex-wrap items-center gap-2 sm:w-auto"
+        >
+          <label class="text-xs font-semibold text-teal">Switch User:</label>
           <select
             v-model="quickLoginTargetId"
-            class="rounded border border-line bg-paper px-2 py-1 text-xs"
+            class="min-w-0 max-w-full flex-1 rounded border border-line bg-paper px-2 py-1 text-xs sm:flex-none"
           >
             <option value="">Select employee to log in as…</option>
             <option

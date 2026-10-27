@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Fix: Compact Mobile Per-Person Dashboard Cards
   - The Dashboard per-person table now uses a two-column card layout on phones.
   - Employee names remain full width while metrics pair side by side; desktop table behavior is unchanged.
+  - Verified with the production build and the full 280-test Vitest suite.
 
 - Feature: Sentry Source Map Uploads
   - Added conditional Vite source-map upload support using `@sentry/vite-plugin`.

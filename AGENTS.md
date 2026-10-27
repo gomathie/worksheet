@@ -1752,3 +1752,67 @@ Any remaining considerations
 
 The browser-testing skill still needs a Chrome DevTools MCP connection before it can run its preferred live-browser workflow; Playwright remains the current local fallback. No tool was deployed, added to the production bundle, or given application credentials. The next UI/UX pass should start with Dashboard hierarchy and mobile entry flow, then standardize feedback and accessibility states using the existing design tokens.
 
+October 27, 2026
+Documentation: Responsive UI Improvement Handoff Plan
+
+Branch: main
+
+User Request
+
+"Make the responsive UI implementation plan an md file so other agents can also do some of the work."
+
+Implementation
+
+Created `docs/responsive-ui-improvement-plan.md` as a step-by-step handoff for the horizontal-scroll and responsive UI audit. The plan separates baseline evidence, mobile navigation, dashboard controls, responsive tables, long-content/action handling, Settings navigation, and accessibility verification into focused work packages. It includes affected files, guardrails, acceptance criteria, and the required test commands.
+
+Added a README link to the plan and recorded it in `changelog.md`. No runtime application code, API behavior, authorization logic, or dependencies were changed.
+
+Files changed
+
+- `docs/responsive-ui-improvement-plan.md`
+- `README.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Documentation-only change; no application tests were required.
+- Reviewed the resulting documentation diff for scope and accidental runtime changes.
+
+Any remaining considerations
+
+The remaining work packages in the plan are intentionally not implemented yet. Agents should complete one work package at a time and update this work log and `changelog.md` after each code change.
+
+October 27, 2026
+Feature: Mobile Section Navigation
+
+Branch: main
+
+User Request
+
+"Start the responsive UI improvement work." The first slice was the mobile navigation work package from `docs/responsive-ui-improvement-plan.md`.
+
+Implementation
+
+Updated `src/App.vue` to define Reports, Finance, and Admin section links once and reuse the permission-filtered lists for both desktop and mobile navigation. Added a mobile-only contextual section menu with active route styling, focus movement to the first link, Escape-to-close focus restoration, and click-away closing. The existing desktop section strips remain available from the `md` breakpoint upward, while the primary navigation remains the only horizontal mobile navigation strip.
+
+No API contracts, route guards, server-side authorization, or data-scoping behavior changed.
+
+Files changed
+
+- `src/App.vue`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Full Vitest suite (`npm.cmd test`): 12 files and 280 tests passed.
+- Playwright shell verification against the local Wrangler preview: the accessible route loaded at 320px, 375px, 768px, 1024px, and 1440px with no body-level horizontal overflow.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The browser check used the unauthenticated shell because no test login session was available. The next verification pass should exercise the Reports, Finance, and Admin contextual menus with a permitted test account before this slice is deployed.
+

@@ -56,7 +56,60 @@ const canApproveExpenses = computed(
   () => auth.isAdmin && auth.rights.approve_expenses,
 )
 
+type SectionLink = { name: string; label: string }
+
+const reportsLinks = computed<SectionLink[]>(() => [
+  ...(auth.rights.view_reports ? [{ name: 'report', label: 'Monthly Report' }] : []),
+  { name: 'trends', label: 'Trends' },
+  { name: 'absences', label: 'Absences' },
+  { name: 'time-off', label: 'Leaves (Time Off)' },
+  ...(auth.rights.view_reports ? [{ name: 'card-audit', label: 'Card Audit' }] : []),
+  ...(auth.rights.view_reports ? [{ name: 'installations-report', label: 'Installations' }] : []),
+  ...(auth.isAdmin ? [{ name: 'activity', label: 'Activity' }] : []),
+])
+
+const financeLinks = computed<SectionLink[]>(() => [
+  { name: 'payments', label: 'Payments' },
+  ...(auth.rights.view_payslip ? [{ name: 'payslip', label: 'Payslip' }] : []),
+  { name: 'expenses', label: 'Expenses' },
+  ...(auth.rights.use_petty_cash || auth.isAdmin
+    ? [{ name: 'petty-cash', label: 'Petty Cash' }]
+    : []),
+  ...(auth.rights.review_expenses ||
+  canApproveExpenses.value ||
+  auth.canApproveUsers ||
+  auth.rights.add_users
+    ? [{ name: 'expense-approvals', label: 'Approvals' }]
+    : []),
+  ...(auth.rights.send_for_approval
+    ? [{ name: 'expense-screening', label: 'Screening' }]
+    : []),
+  ...(auth.rights.record_expenses ? [{ name: 'expense-finance', label: 'To Record' }] : []),
+  ...(canSeeExpenseReports.value
+    ? [{ name: 'expense-reports', label: 'Expense Reports' }]
+    : []),
+])
+
+const adminLinks = computed<SectionLink[]>(() => [
+  ...(auth.isAdmin ? [{ name: 'employees', label: 'Employees' }] : []),
+  ...(auth.isAdmin || auth.rights.manage_point_deductions
+    ? [{ name: 'point-deductions', label: 'Point Deductions' }]
+    : []),
+  ...(auth.isAdmin ? [{ name: 'settings', label: 'Settings' }] : []),
+  ...(auth.isAdmin ? [{ name: 'notifications', label: 'Notifications' }] : []),
+])
+
+const mobileSectionLabel = computed(() =>
+  reportsActive.value ? 'Reports pages' : financeActive.value ? 'Finance pages' : 'Admin pages',
+)
+const activeSectionLinks = computed(() =>
+  reportsActive.value ? reportsLinks.value : financeActive.value ? financeLinks.value : adminLinks.value,
+)
+
 const menuOpen = ref(false)
+const mobileSectionOpen = ref(false)
+const mobileSectionToggleEl = ref<HTMLButtonElement | null>(null)
+const mobileSectionMenuEl = ref<HTMLElement | null>(null)
 
 // The primary nav row and each mini-tab strip scroll horizontally on mobile,
 // so the active pill can land off-screen with nothing on screen to say which
@@ -74,6 +127,20 @@ function scrollActivePillsIntoView() {
   }
 }
 onMounted(scrollActivePillsIntoView)
+
+function toggleMobileSectionMenu() {
+  if (mobileSectionOpen.value) {
+    closeMobileSectionMenu()
+    return
+  }
+  mobileSectionOpen.value = true
+  nextTick(() => mobileSectionMenuEl.value?.querySelector<HTMLElement>('a')?.focus())
+}
+
+function closeMobileSectionMenu(restoreFocus = false) {
+  mobileSectionOpen.value = false
+  if (restoreFocus) nextTick(() => mobileSectionToggleEl.value?.focus())
+}
 
 // Any api() call elsewhere in the app that gets a 401 (session expired,
 // deleted, or the account deactivated mid-use) dispatches this instead of
@@ -93,6 +160,7 @@ onMounted(() => {
 watch(
   () => route.name,
   async () => {
+    closeMobileSectionMenu()
     await nextTick()
     scrollActivePillsIntoView()
   },
@@ -439,6 +507,7 @@ async function returnToAdmin() {
     <nav
       v-if="auth.user"
       ref="primaryNavEl"
+      aria-label="Primary navigation"
       class="no-print -mx-5 my-5 flex gap-1.5 overflow-x-auto px-5 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
       <!-- Six possible sections, always visible and one tap away \u2014 same
@@ -477,135 +546,100 @@ async function returnToAdmin() {
       >
     </nav>
 
-    <!-- Section mini-tabs: a single horizontally-scrolling row rather than a
-         long stacked list, and always visible (not nested in the collapsible
-         Menu above) since these are how you move between the pages you're
-         actually working in. -mx-5/px-5 lets the scroll area bleed to the
-         screen edge on mobile, matching the page's own gutter. -->
+    <div
+      v-if="
+        auth.user &&
+        (reportsActive ||
+          financeActive ||
+          (adminActive && (auth.isAdmin || auth.rights.manage_point_deductions)))
+      "
+      class="no-print relative mb-5 md:hidden"
+    >
+      <div
+        v-if="mobileSectionOpen"
+        class="fixed inset-0 z-10"
+        aria-hidden="true"
+        @click="closeMobileSectionMenu()"
+      />
+      <button
+        ref="mobileSectionToggleEl"
+        type="button"
+        class="btn relative z-20 w-full justify-between"
+        :aria-expanded="mobileSectionOpen"
+        aria-controls="mobile-section-menu"
+        aria-haspopup="true"
+        @click="toggleMobileSectionMenu"
+        @keydown.esc.prevent="closeMobileSectionMenu(true)"
+      >
+        <span>{{ mobileSectionLabel }}</span>
+        <span aria-hidden="true">{{ mobileSectionOpen ? 'Close' : 'Open' }}</span>
+      </button>
+
+      <nav
+        v-if="mobileSectionOpen"
+        id="mobile-section-menu"
+        ref="mobileSectionMenuEl"
+        class="panel relative z-20 mt-2 !p-2"
+        :aria-label="mobileSectionLabel"
+        @keydown.esc.prevent="closeMobileSectionMenu(true)"
+      >
+        <RouterLink
+          v-for="(link, index) in activeSectionLinks"
+          :key="link.name"
+          :to="{ name: link.name }"
+          :class="['btn btn-sm w-full justify-start', index ? 'mt-1' : '']"
+          active-class="btn-solid"
+          @click="closeMobileSectionMenu()"
+        >
+          {{ link.label }}
+        </RouterLink>
+      </nav>
+    </div>
+
+    <!-- Section links stay as a compact row on desktop. Mobile users get the
+         accessible contextual menu above so only the primary nav scrolls. -->
     <div
       v-if="auth.user && reportsActive"
       ref="reportsNavEl"
-      class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+      class="no-print -mx-5 mb-5 hidden gap-1.5 overflow-x-auto px-5 pb-1 md:flex [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
       <RouterLink
-        v-if="auth.rights.view_reports"
-        :to="{ name: 'report' }"
+        v-for="link in reportsLinks"
+        :key="link.name"
+        :to="{ name: link.name }"
         class="btn btn-sm"
         active-class="btn-solid"
-        >Monthly Report</RouterLink
-      >
-      <RouterLink :to="{ name: 'trends' }" class="btn btn-sm" active-class="btn-solid"
-        >Trends</RouterLink
-      >
-      <RouterLink :to="{ name: 'absences' }" class="btn btn-sm" active-class="btn-solid"
-        >Absences</RouterLink
-      >
-      <RouterLink :to="{ name: 'time-off' }" class="btn btn-sm" active-class="btn-solid"
-        >Leaves (Time Off)</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.view_reports"
-        :to="{ name: 'card-audit' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Card Audit</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.view_reports"
-        :to="{ name: 'installations-report' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Installations</RouterLink
-      >
-      <RouterLink
-        v-if="auth.isAdmin"
-        :to="{ name: 'activity' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Activity</RouterLink
+        >{{ link.label }}</RouterLink
       >
     </div>
 
     <div
       v-if="auth.user && financeActive"
       ref="financeNavEl"
-      class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+      class="no-print -mx-5 mb-5 hidden gap-1.5 overflow-x-auto px-5 pb-1 md:flex [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
-      <RouterLink :to="{ name: 'payments' }" class="btn btn-sm" active-class="btn-solid"
-        >Payments</RouterLink
-      >
       <RouterLink
-        v-if="auth.rights.view_payslip"
-        :to="{ name: 'payslip' }"
+        v-for="link in financeLinks"
+        :key="link.name"
+        :to="{ name: link.name }"
         class="btn btn-sm"
         active-class="btn-solid"
-        >Payslip</RouterLink
-      >
-      <RouterLink :to="{ name: 'expenses' }" class="btn btn-sm" active-class="btn-solid"
-        >Expenses</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.use_petty_cash || auth.isAdmin"
-        :to="{ name: 'petty-cash' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Petty Cash</RouterLink
-      >
-      <RouterLink
-        v-if="
-          auth.rights.review_expenses ||
-          canApproveExpenses ||
-          auth.canApproveUsers ||
-          auth.rights.add_users
-        "
-        :to="{ name: 'expense-approvals' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Approvals</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.send_for_approval"
-        :to="{ name: 'expense-screening' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Screening</RouterLink
-      >
-      <RouterLink
-        v-if="auth.rights.record_expenses"
-        :to="{ name: 'expense-finance' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >To Record</RouterLink
-      >
-      <RouterLink
-        v-if="canSeeExpenseReports"
-        :to="{ name: 'expense-reports' }"
-        class="btn btn-sm"
-        active-class="btn-solid"
-        >Expense Reports</RouterLink
+        >{{ link.label }}</RouterLink
       >
     </div>
 
     <div
       v-if="auth.user && adminActive && (auth.isAdmin || auth.rights.manage_point_deductions)"
       ref="adminNavEl"
-      class="no-print -mx-5 mb-5 flex gap-1.5 overflow-x-auto px-5 pb-1 [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
+      class="no-print -mx-5 mb-5 hidden gap-1.5 overflow-x-auto px-5 pb-1 md:flex [&>a]:flex-shrink-0 [&>a]:whitespace-nowrap"
     >
-      <RouterLink v-if="auth.isAdmin" :to="{ name: 'employees' }" class="btn btn-sm" active-class="btn-solid"
-        >Employees</RouterLink
-      >
       <RouterLink
-        v-if="auth.isAdmin || auth.rights.manage_point_deductions"
-        :to="{ name: 'point-deductions' }"
+        v-for="link in adminLinks"
+        :key="link.name"
+        :to="{ name: link.name }"
         class="btn btn-sm"
         active-class="btn-solid"
-        >Point Deductions</RouterLink
-      >
-      <RouterLink v-if="auth.isAdmin" :to="{ name: 'settings' }" class="btn btn-sm" active-class="btn-solid"
-        >Settings</RouterLink
-      >
-      <RouterLink v-if="auth.isAdmin" :to="{ name: 'notifications' }" class="btn btn-sm" active-class="btn-solid"
-        >Notifications</RouterLink
+        >{{ link.label }}</RouterLink
       >
     </div>
 

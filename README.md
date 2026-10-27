@@ -495,6 +495,8 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 
 Development-tool decisions, installed agent workflows, and rollback instructions are documented in [`docs/development-tools.md`](docs/development-tools.md).
 
+The responsive UI handoff plan for future agents is documented in [`docs/responsive-ui-improvement-plan.md`](docs/responsive-ui-improvement-plan.md).
+
 ```bash
 npm install
 npm run db:migrate:local     # apply migrations to the local D1 DB

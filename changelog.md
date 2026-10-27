@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: Mobile Section Navigation
+  - Reused permission-filtered Reports, Finance, and Admin link lists for desktop and mobile navigation.
+  - Replaced stacked mobile section tab scrollers with one contextual section menu that supports active states, keyboard focus, Escape-to-close, and click-away closing.
+  - Kept the existing horizontal primary navigation and desktop section strips intact.
+  - No API, route permission, or server authorization behavior changed.
+
+- Responsive UI improvement handoff plan
+  - Added `docs/responsive-ui-improvement-plan.md` with sequenced work packages for mobile navigation, dashboard controls, responsive tables, long-content handling, Settings navigation, accessibility, and verification.
+  - Added a README pointer so future agents can find the plan without changing application behavior.
+
 - Development tooling review and selective setup
   - Added project-scoped Agent Skills for frontend UI engineering, browser testing, and code review, pinned in `skills-lock.json`.
   - Documented decisions to defer Context7, Graphify, 21st MCP, and Strix until their integration, repository fit, or authorization requirements are satisfied.

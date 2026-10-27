@@ -348,8 +348,13 @@ async function returnToAdmin() {
         <NotificationBell />
         <div class="relative">
         <button
+          type="button"
           class="btn btn-sm flex items-center gap-2"
+          aria-haspopup="menu"
+          aria-controls="account-menu"
+          :aria-expanded="menuOpen"
           @click="menuOpen = !menuOpen"
+          @keydown.esc.prevent="menuOpen = false"
         >
           <span>Account</span>
           <span class="text-muted">▾</span>
@@ -360,6 +365,8 @@ async function returnToAdmin() {
 
         <div
           v-if="menuOpen"
+          id="account-menu"
+          role="menu"
           class="panel absolute right-0 z-20 mt-1 max-h-[80vh] w-52 max-w-[calc(100vw-2.5rem)] overflow-y-auto !p-1 text-sm shadow-lg"
         >
           <div class="border-b border-line px-3 py-2">
@@ -370,6 +377,7 @@ async function returnToAdmin() {
           </div>
           <div v-if="auth.isImpersonating" class="border-b border-line pb-1 mb-1">
             <button
+              role="menuitem"
               class="flex w-full items-center justify-between rounded px-3 py-2 text-left font-medium text-amber hover:bg-amber-soft"
               :disabled="exitBusy"
               @click="returnToAdmin"
@@ -379,12 +387,14 @@ async function returnToAdmin() {
             </button>
           </div>
           <button
+            role="menuitem"
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="openProfile"
           >
             Edit profile
           </button>
           <button
+            role="menuitem"
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="openPassword"
           >
@@ -392,6 +402,7 @@ async function returnToAdmin() {
           </button>
           <div class="my-1 border-t border-line" />
           <RouterLink
+            role="menuitem"
             :to="{ name: 'help-user' }"
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="menuOpen = false"
@@ -400,6 +411,7 @@ async function returnToAdmin() {
           </RouterLink>
           <RouterLink
             v-if="auth.isAdmin"
+            role="menuitem"
             :to="{ name: 'help-admin' }"
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="menuOpen = false"
@@ -408,6 +420,7 @@ async function returnToAdmin() {
           </RouterLink>
           <div class="my-1 border-t border-line" />
           <button
+            role="menuitem"
             class="block w-full rounded px-3 py-2 text-left hover:bg-teal-soft"
             @click="signOut"
           >

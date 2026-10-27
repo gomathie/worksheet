@@ -124,13 +124,16 @@ async function submit() {
   <div
     v-if="open && employee"
     class="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4 backdrop-blur-xs"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="point-deduction-title"
   >
     <div
       class="panel max-h-[90vh] w-full max-w-xl overflow-y-auto border border-line shadow-2xl"
     >
       <div class="mb-4 flex items-center justify-between border-b border-line pb-3">
         <div>
-          <h2 class="display text-xl text-teal">
+          <h2 id="point-deduction-title" class="display text-xl text-teal">
             {{ decision === 'deducted' ? '⚠️ Deduct Points' : '🕊️ Record Warning / Let It Go' }}
           </h2>
           <p class="text-xs text-muted">
@@ -141,6 +144,8 @@ async function submit() {
         <button
           type="button"
           class="text-muted hover:text-ink text-lg leading-none"
+          aria-label="Close points decision dialog"
+          autofocus
           @click="emit('close')"
         >
           ✕

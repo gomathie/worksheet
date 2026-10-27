@@ -63,9 +63,15 @@ function close() {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4">
+  <div
+    v-if="open"
+    class="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="news-popup-title"
+  >
     <div class="panel w-full max-w-lg">
-      <h2 class="display mb-1 text-xl text-teal">📣 Announcement{{ items.length > 1 ? 's' : '' }}</h2>
+      <h2 id="news-popup-title" class="display mb-1 text-xl text-teal">📣 Announcement{{ items.length > 1 ? 's' : '' }}</h2>
       <div class="mb-4 max-h-[60vh] space-y-4 overflow-y-auto pr-1">
         <div
           v-for="n in items"
@@ -82,7 +88,7 @@ function close() {
       </div>
       <div class="flex gap-2">
         <RouterLink :to="{ name: 'news' }" class="btn" @click="close">View all news</RouterLink>
-        <button type="button" class="btn btn-solid" @click="close">Got it</button>
+        <button type="button" class="btn btn-solid" autofocus @click="close">Got it</button>
       </div>
     </div>
   </div>

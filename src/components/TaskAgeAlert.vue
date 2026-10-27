@@ -66,9 +66,15 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4">
+  <div
+    v-if="open"
+    class="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="task-age-alert-title"
+  >
     <div class="panel w-full max-w-md">
-      <h2 class="display mb-1 text-xl text-amber">⚠ Pending Task Alert</h2>
+      <h2 id="task-age-alert-title" class="display mb-1 text-xl text-amber">⚠ Pending Task Alert</h2>
       
       <p v-if="hasOver3Days" class="mb-4 text-sm font-medium text-red">
         Your task has been scheduled for deletion or to be reassigned and will affect your finances or payment.
@@ -87,7 +93,7 @@ onMounted(async () => {
       </ul>
       <div class="flex gap-2">
         <RouterLink :to="{ name: 'tasks' }" class="btn" @click="dismiss">View tasks</RouterLink>
-        <button type="button" class="btn btn-solid" @click="dismiss">Got it</button>
+        <button type="button" class="btn btn-solid" autofocus @click="dismiss">Got it</button>
       </div>
     </div>
   </div>

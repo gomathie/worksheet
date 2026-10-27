@@ -267,6 +267,25 @@ canvas {
 }
 .field-input.mono { font-family: var(--font-mono); }
 
+/* Keep a visible keyboard cue for plain links and menu controls that do not
+   use the shared .btn/.field-input classes. Shared controls keep their more
+   specific focus treatment above. */
+:where(a, button, select, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ---------- data tables ---------- */
 
 .table-wrap {

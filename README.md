@@ -5,6 +5,10 @@ that into a points-based pay calculation with bonuses, reimbursements, payslips,
 tracking. Admins add employees, assign what each can do, and get dashboards, reports, and a
 printable monthly report. Installable as a PWA.
 
+On supported browsers, signed-in users can use the **Install app** button in the
+header. iPhone and iPad users can use its guided **Add to Home Screen** steps in
+Safari.
+
 **Stack:** Vue 3 (`<script setup>`) + Vite + TypeScript · Tailwind CSS 4 · Pinia · Vue Router ·
 Chart.js (`vue-chartjs`) · `marked` (renders the in-app guides) · Cloudflare Pages + Pages Functions ·
 Cloudflare D1 (SQLite) · Workers KV (sessions). No paid third-party services — Cloudflare tier only.

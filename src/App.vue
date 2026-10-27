@@ -7,6 +7,7 @@ import NotificationBell from './components/NotificationBell.vue'
 import TaskDeadlineAlert from './components/TaskDeadlineAlert.vue'
 import TaskAgeAlert from './components/TaskAgeAlert.vue'
 import NewsPopup from './components/NewsPopup.vue'
+import InstallAppButton from './components/InstallAppButton.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -346,6 +347,7 @@ async function returnToAdmin() {
            right edge regardless, on every width, fixing both at once. -->
       <div v-if="auth.user" class="ml-auto flex items-center gap-2 text-sm">
         <NotificationBell />
+        <InstallAppButton />
         <div class="relative">
         <button
           type="button"

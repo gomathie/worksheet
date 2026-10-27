@@ -1983,3 +1983,35 @@ Any remaining considerations
 
 The responsive UI improvement plan is complete. Future changes should preserve the focus, reduced-motion, dialog, and menu patterns established here.
 
+October 27, 2026
+Feature: In-App PWA Installation
+
+Branch: main
+
+User Request
+
+"yes do it" in response to adding a button that installs the app to a phone home screen as a PWA.
+
+Implementation
+
+Added `src/components/InstallAppButton.vue` and mounted it in the authenticated application header through `src/App.vue`. The control captures the browser's `beforeinstallprompt` event and opens the native install flow on supported browsers, handles `appinstalled`, hides after acceptance, and provides a labelled iPhone/iPad Safari fallback dialog with Add to Home Screen instructions. The feature is presentation-only and does not change authentication, permissions, API contracts, or server behavior.
+
+Files changed
+
+- `src/components/InstallAppButton.vue`
+- `src/App.vue`
+- `README.md`
+- `docs/responsive-ui-improvement-plan.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check and production build (`npm.cmd run build`): passed.
+- Playwright PWA smoke test with a mocked authenticated admin: native install prompt path invoked once and removed the button after acceptance; iPhone user-agent path showed Add to Home Screen instructions, dialog semantics, and initial focus; no 375px overflow or browser console errors were observed.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The native install button only appears when the browser exposes `beforeinstallprompt`. iOS intentionally uses the guided Safari fallback because Apple does not expose that event.
+

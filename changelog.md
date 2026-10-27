@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: In-App PWA Installation
+  - Added a signed-in header button that invokes the browser's native PWA install prompt when available.
+  - Added an iPhone/iPad fallback dialog with Safari's Add to Home Screen steps.
+  - The button hides after installation and does not change authentication or application data behavior.
+
 - Feature: Accessibility and Motion Finish Pass
   - Added consistent keyboard focus rings for plain links and controls, reduced-motion support, Account menu semantics, and accessible recurring dialogs.
   - Verified dialog focus, menu semantics, responsive widths, reduced-motion behavior, and clean browser output without changing authorization or API behavior.

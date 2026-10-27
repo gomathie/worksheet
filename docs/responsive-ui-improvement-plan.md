@@ -103,6 +103,7 @@ Below the mobile breakpoint:
 
 - Added shared `reportsLinks`, `financeLinks`, and `adminLinks` data in `src/App.vue` so desktop and mobile navigation use the same permission-filtered link lists.
 - Added one mobile-only contextual section menu with keyboard focus restoration and Escape handling.
+- Added a signed-in header PWA install control: supported browsers use the native install prompt, while iPhone/iPad users receive Safari Home Screen instructions.
 - Kept the primary navigation as the only horizontal mobile navigation strip.
 - Kept the existing section strips visible on tablet and desktop.
 - No API, route permission, or server authorization behavior changed.
@@ -300,6 +301,7 @@ Status: Complete
 - Added a shared `:focus-visible` ring for plain links, menu controls, and form controls that do not use the primary button/input classes.
 - Added a reduced-motion media query that minimizes transitions and animations for users who request less motion.
 - Added expanded/controlled menu semantics to the Account menu and dialog semantics, labels, and initial focus for recurring announcement, task-alert, and points-decision dialogs.
+- Added a direct PWA install button with an iOS Home Screen fallback dialog.
 - Kept active navigation states, permission-gated content, API contracts, and server-side authorization unchanged.
 
 ### Verification

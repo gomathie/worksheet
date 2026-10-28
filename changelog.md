@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Documentation: Developer onboarding and validation improvements
+  - Corrected README route and migration-count documentation to match the current router and migration directory.
+  - Added architecture, project-layout, local-development, testing, authorization, database, and contributing guides.
+  - Added `.env.example`, explicit app/server type-check scripts, a watch test script, a combined `check` script, and GitHub Actions CI.
+
+- Documentation: Shared workflow and skill library audit
+  - Audited the Ledger stack, repository instructions, project-local skills, lockfile, client settings, tests, migrations, and MCP configuration.
+  - Added an explicit repository rule requiring the shared-library contribution check immediately after every skill invocation and again at task end.
+  - Added four workflow/skill pairs to the shared library: Vue UI engineering, browser testing with DevTools, code review and quality, and the Ledger Vue/Cloudflare stack; updated the library index.
+  - Added the audit result and post-skill rule to `docs/development-tools.md`; no runtime code, dependencies, credentials, deployment, or remote repository state changed.
+
 - Fix: Compact Mobile Per-Person Dashboard Cards
   - The Dashboard per-person table now uses a two-column card layout on phones.
   - Employee names remain full width while metrics pair side by side; desktop table behavior is unchanged.

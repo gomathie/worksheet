@@ -39,6 +39,7 @@ Development Tooling
 - Project-scoped Agent Skills live under `.agents/skills/` and are pinned by `skills-lock.json`.
 - Use `frontend-ui-engineering` for UI/layout/accessibility changes, `browser-testing-with-devtools` only when its isolated Chrome DevTools MCP is configured, and `code-review-and-quality` for the final review pass.
 - Read `docs/development-tools.md` before adding Context7, Graphify, 21st MCP, Strix, or another external development service. Do not add credentials, production dependencies, or active security testing without explicit scope.
+- After invoking any project-local or shared-library skill, run the library contribution check immediately. Read `C:\Users\gomat\OneDrive\Documents\Workflow and skills\workflows\library-contribution.md`, compare what was learned with the library, and update the library only when the check finds reusable knowledge. This is required in addition to the end-of-task contribution check.
 
 Before completing a task, inspect the resulting diff for accidental changes.
 
@@ -2078,4 +2079,76 @@ Testing performed
 Any remaining considerations
 
 At very narrow widths, long work-type labels may still wrap inside their half-width metric cell; the card remains contained without changing the underlying table data.
+
+October 28, 2026
+Documentation: Shared Workflow and Skill Library Audit
+
+Branch: main
+
+User Request
+
+"Read the standing workflow-library instructions, inspect this workspace and its configured skills/tools, save missing workflows and skills to the shared library, create a stack-specific skill, update the library index, and make the post-skill contribution rule apply to all agents in this repository."
+
+Implementation
+
+Audited the repository stack, project instructions, project-local skills, skill lockfile, client settings, development-tool notes, source layout, migrations, tests, and available MCP namespaces. Added the explicit post-skill contribution rule to the Development Tooling section so agents run the shared-library contribution check immediately after any skill invocation as well as at task end.
+
+Files changed
+
+- `AGENTS.md`
+- `docs/development-tools.md`
+- `changelog.md`
+- Shared library: `C:\Users\gomat\OneDrive\Documents\Workflow and skills\workflows\{frontend-ui-engineering,browser-testing-with-devtools,code-review-and-quality,ledger-vue-cloudflare}.md`
+- Shared library: `C:\Users\gomat\OneDrive\Documents\Workflow and skills\skills\{frontend-ui-engineering,browser-testing-with-devtools,code-review-and-quality,ledger-vue-cloudflare}\SKILL.md`
+
+Testing performed
+
+- `npm.cmd run build`: passed.
+- `npm.cmd test`: passed outside the restricted sandbox; 12 files and 280 tests passed. The first sandboxed run failed before test collection because esbuild could not read a parent directory, so it was retried with the required local-only escalation.
+- Verified the final documentation diff with `git diff --check`.
+
+Any remaining considerations
+
+The shared library is stored outside this repository and must be kept synchronized separately. This task does not install a Chrome DevTools MCP server, add credentials, deploy, or push changes.
+
+October 28, 2026
+Documentation: Developer Onboarding and Validation Improvements
+
+Branch: main
+
+User Request
+
+"Make the recommended local-folder improvements for easier understanding and onboarding."
+
+Implementation
+
+Corrected stale README route and migration-count details. Added project architecture, layout, local-development, testing, authorization, database, and contributing documentation. Added `.env.example`, explicit frontend/server type-check scripts, Vitest watch mode, a combined validation script, and a GitHub Actions validation workflow. Historical work-log entries remain in this file because the repository instructions require the work log to stay below the instructions.
+
+Files changed
+
+- `README.md`
+- `package.json`
+- `.env.example`
+- `CONTRIBUTING.md`
+- `docs/ARCHITECTURE.md`
+- `docs/PROJECT-LAYOUT.md`
+- `docs/LOCAL-DEVELOPMENT.md`
+- `docs/TESTING.md`
+- `docs/AUTHORIZATION.md`
+- `docs/DATABASE.md`
+- `.github/workflows/ci.yml`
+- `docs/development-tools.md`
+- `changelog.md`
+- `AGENTS.md`
+- Shared library: `C:\Users\gomat\OneDrive\Documents\Workflow and skills\workflows\ledger-vue-cloudflare.md`
+- Shared library: `C:\Users\gomat\OneDrive\Documents\Workflow and skills\skills\ledger-vue-cloudflare\SKILL.md`
+
+Testing performed
+
+- `npm run check`: passed; frontend/server type checks, 12 Vitest files with 280 tests, and the production build all completed successfully.
+- `git diff --check`: passed.
+
+Any remaining considerations
+
+The CI workflow validates code but intentionally does not deploy or apply remote D1 migrations. The repository still has no committed Playwright configuration and no local Chrome DevTools MCP server.
 

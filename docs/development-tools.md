@@ -10,6 +10,16 @@ Reviewed October 27, 2026 for the OpenSignal Ledger repository.
 - Validation already present: Vitest, strict frontend/server TypeScript configurations, Vite production build, Wrangler local development, Sentry error tracking, and Playwright as a dependency.
 - Baseline on this review: `npm.cmd test` passed 12 files/280 tests; `npm.cmd run build` passed. The installed working-tree versions were Node 22.15.0, npm 11.7.0, Vue 3.5.40, Vite 6.4.3, TypeScript 5.9.3, Vitest 3.2.7, Wrangler 4.113.0, and Tailwind CSS 4.3.3.
 
+## Repository onboarding documents
+
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md): change, validation, migration, and deployment-safety rules.
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md): runtime, frontend, backend, authorization, and deployment boundaries.
+- [`docs/PROJECT-LAYOUT.md`](PROJECT-LAYOUT.md): folder responsibilities and request flow.
+- [`docs/LOCAL-DEVELOPMENT.md`](LOCAL-DEVELOPMENT.md): local setup, ports, D1, admin seed, and troubleshooting.
+- [`docs/TESTING.md`](TESTING.md): type checks, Vitest, builds, browser checks, and access-sensitive verification.
+- [`docs/AUTHORIZATION.md`](AUTHORIZATION.md): roles, rights, employee scopes, and work-type scopes.
+- [`docs/DATABASE.md`](DATABASE.md): migration workflow and remote D1 trigger caveat.
+
 ## Security baseline
 
 `npm.cmd audit --omit=dev --audit-level=high` reached the advisory service after a network-enabled retry and reported 10 advisories: 1 moderate, 8 high, and 1 critical. The reported paths include Vue's server renderer, DOMPurify through `html2pdf.js`, PostCSS/source-map-js through Vite/Tailwind, and sharp/undici through the Wrangler/Miniflare toolchain.
@@ -44,6 +54,10 @@ Browser verification: use @browser-testing-with-devtools for DOM, console, netwo
 
 Review: use @code-review-and-quality after implementation, with correctness, security, architecture, performance, and verification findings separated by severity.
 ```
+
+### Shared workflow-library contribution rule
+
+All agents working in this repository must run the library contribution check immediately after invoking any project-local or shared-library skill, and again at the end of the task. Read `C:\Users\gomat\OneDrive\Documents\Workflow and skills\workflows\library-contribution.md`; update the shared library only when the check finds reusable project knowledge, a missing step, or an inaccurate instruction. This rule is also recorded in `AGENTS.md`.
 
 The browser skill's recommended isolated MCP configuration, for a future client that supports project `.mcp.json`, is:
 

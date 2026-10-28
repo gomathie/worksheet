@@ -7,7 +7,11 @@
     "dev": "npm run build && wrangler pages dev dist",
     "dev:web": "vite",
     "build": "vue-tsc -b && vite build",
+    "typecheck:app": "vue-tsc --noEmit -p tsconfig.app.json",
+    "typecheck:server": "tsc --noEmit -p tsconfig.server.json",
     "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck:app && npm run typecheck:server && npm test && npm run build",
     "db:migrate:local": "wrangler d1 migrations apply ledger-db --local",
     "db:migrate:prod": "wrangler d1 migrations apply ledger-db --remote",
     "deploy": "npm run db:migrate:prod && npm run build && wrangler pages deploy dist --project-name ledger"

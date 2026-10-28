@@ -13,6 +13,10 @@ Safari.
 Chart.js (`vue-chartjs`) · `marked` (renders the in-app guides) · Cloudflare Pages + Pages Functions ·
 Cloudflare D1 (SQLite) · Workers KV (sessions). No paid third-party services — Cloudflare tier only.
 
+**Developer documentation:** [architecture](docs/ARCHITECTURE.md) · [local development](docs/LOCAL-DEVELOPMENT.md) ·
+[testing](docs/TESTING.md) · [authorization](docs/AUTHORIZATION.md) · [database](docs/DATABASE.md) ·
+[project layout](docs/PROJECT-LAYOUT.md) · [contributing](CONTRIBUTING.md)
+
 ---
 
 ## What it does
@@ -454,10 +458,10 @@ src/                         Vue 3 app
   types.ts                   TypeScript type definitions
   stores/auth.ts             Pinia auth store (session, rights, role, justLoggedIn)
   router/index.ts            Vue Router with auth/right/role guards
-  views/                     28 page-level components (see below)
+  views/                     30 page-level components (see below)
   components/                Reusable components (charts, notification bell, deadline/news pop-ups, etc.)
 public/                      PWA assets (manifest, service worker, icons)
-migrations/                  D1 SQL migrations (30 files, 0001–0028 — see note on duplicate numbers)
+migrations/                  D1 SQL migrations (43 files; inspect the directory before naming a new one)
 tests/                       Vitest tests for shared/* and the sanitization helpers
 scripts/                     Helpers (seed admin, generate PWA icons)
 ```
@@ -467,8 +471,8 @@ scripts/                     Helpers (seed admin, generate PWA icons)
 | View | Route | Access |
 |---|---|---|
 | `LoginView` | `/login` | Public |
-| `EntriesView` | `/` | Authenticated |
-| `DashboardView` | `/dashboard` | `view_dashboard` |
+| `EntriesView` | `/entries` | Authenticated |
+| `DashboardView` | `/` | `view_dashboard` |
 | `ReportView` | `/report` | `view_reports` |
 | `PaymentsView` | `/payments` | Authenticated |
 | `FinanceTrailView` | `/finance-trail` | Admin |
@@ -507,8 +511,11 @@ npm run db:migrate:local     # apply migrations to the local D1 DB
 npm run dev                  # builds + wrangler pages dev on :8788
 ```
 
+For a complete setup sequence, environment placeholders, ports, troubleshooting, and safe local-only
+commands, read [`docs/LOCAL-DEVELOPMENT.md`](docs/LOCAL-DEVELOPMENT.md).
+
 `npm run dev:web` runs plain Vite on :5173 with `/api` proxied to :8788 for UI hot reload (keep
-`npm run dev` running in another terminal). Run tests with `npm test`.
+`npm run dev` running in another terminal). Run `npm run check` for the full local validation gate.
 
 The first admin needs a username and password. Once one admin exists, create the rest from the
 **Employees** tab. `scripts/seed-admin.sh "Name" email` inserts an admin row; set that account's
@@ -593,8 +600,8 @@ upload. Builds without those values keep source-map upload disabled. Preview bui
 ## Migrations
 
 Plain SQL in `migrations/`, applied with wrangler's migration tracking
-(`npm run db:migrate:local` / `npm run db:migrate:prod`). 30 migration files (0001–0028, with two
-numbers used twice — see below) covering: employees, departments, work types and assignments,
+(`npm run db:migrate:local` / `npm run db:migrate:prod`). 43 migration files, with duplicate numeric
+prefixes from parallel historical work — see below, covering: employees, departments, work types and assignments,
 entries and their per-type items, entry cards (card-based work types), adjustments
 (bonuses/reimbursements), payments, absences, expense vouchers (with categories, approvals,
 attachments, audit logs, funding source, screening), petty cash (ledger and top-up requests), in-app

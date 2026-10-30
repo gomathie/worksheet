@@ -6,9 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Feature: three-month productivity comparison on the Dashboard
-  - Every user now sees **Your productivity — last 3 months**: their own units per work type as a
-    bar chart, plus a row per month with total units and hours and the change against the previous
-    month.
+  - Every user now sees **Your productivity — last 3 months**: one column per month split by work
+    type, with the month's total printed above it, plus a row per month with total units and hours
+    and the change against the previous month.
+  - The columns are stacked rather than grouped side by side. Grouped bars split a month's output
+    across several bars, so the tallest bar no longer represents that month — a month with more work
+    types could look worse than a smaller one, and months with a missing type sat off-centre from
+    their label. Stacking makes column height the month's total, which is the comparison being asked
+    for, while the segments still show the work-type mix.
+  - `TrendChart` gained opt-in `stacked` and `showTotals` props plus a canvas data-label plugin, and
+    the dashboard's chart is capped in width so three columns are close enough to compare by eye.
+    Trends and Installations keep their existing grouped bars.
   - Reads the existing `/api/trends?months=3` endpoint, which already restricts a non-admin to their
     own figures, so no new endpoint or aggregation was needed. The panel is loaded separately from
     the main report, so a trends failure cannot blank the dashboard.

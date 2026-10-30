@@ -2152,3 +2152,100 @@ Any remaining considerations
 
 The CI workflow validates code but intentionally does not deploy or apply remote D1 migrations. The repository still has no committed Playwright configuration and no local Chrome DevTools MCP server.
 
+October 30, 2026
+Feature: Three-Month Productivity Comparison on the Dashboard
+
+Branch: main
+
+User Request
+
+"on the dashboard. I want every user to see thier monthly productivity comparison for the last 3 months" - then, after the design questions, "use the best recomended options": current month included and labelled month-to-date, units plus hours with change against the prior month, per-assigned-work-type series, and `view_dashboard` granted to standard users.
+
+Implementation
+
+Investigated first, and found the data already existed: `/api/trends?months=3` returns one employee's month-by-month hours and per-work-type units (plus points/remuneration only where those rights are held), and `trends()` already rejects a non-admin requesting anyone but themselves. So this needed no new endpoint, no new aggregation, and no new right.
+
+- `src/views/DashboardView.vue`: added a **Your productivity - last 3 months** panel between the personal attendance block and the team panels. It fetches the trend in its own try/catch (the same supplementary-panel pattern the expense strip uses), and only on mount, because the window is anchored to today and the month picker's `watch` must not re-fetch it. Series are filtered to the viewer's assigned work types the same way the existing columns are, and the table shows total units and hours per month with the change against the previous month. The newest row is labelled **month to date**. Declines render muted rather than red, since a drop is not an error in this app.
+- `shared/logic.ts`: added `percentChange(cur, prev)`, returning `null` when there is no base to divide by (first month, or a month with nothing logged), so "no comparison" stays distinct from "went up enormously". Pure logic in `shared/` per the existing `formatElapsed` precedent, so Vitest can cover it.
+- `server/auth.ts`: `DEFAULT_RIGHTS.view_dashboard` is now `true`, so the dashboard is reachable by every new standard account.
+- `migrations/0041_dashboard_default_right.sql`: grants the right to existing non-admin accounts, since a default change alone does nothing for rows already stored. Data scope is untouched, so a standard employee still sees only their own figures, and the limited-scope response never carried colleagues' points or remuneration anyway.
+- `tests/expenses.test.ts`: the existing "gives an employee no team visibility" assertion encoded the old default; renamed and re-pointed so it now asserts own-dashboard-yes, team-and-reports-no.
+
+Files changed
+
+- `src/views/DashboardView.vue`
+- `shared/logic.ts`
+- `server/auth.ts`
+- `migrations/0041_dashboard_default_right.sql`
+- `tests/logic.test.ts`
+- `tests/rights.test.ts`
+- `tests/expenses.test.ts`
+- `guideline-user.md`
+- `guideline-admin.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- `npm run check`: passed - 12 Vitest files with 290 tests (10 new: six for `percentChange`, four for the dashboard default and its revocability), plus the production build.
+- Applied `0041` locally and verified with a read-back query that a previously-withheld employee row now carries a JSON `true` (not `1`), that an already-granted employee was untouched, and that the admin row was left alone since the role implies the right.
+- Live end-to-end verification against `wrangler pages dev` + local D1, via Playwright as a real standard employee:
+  - Confirmed `/api/trends?months=3` was called once with a 200 and the panel rendered with the chart plus all three month rows.
+  - Seeded temporary entries for August (10 units / 8h), September (20 / 6h) and October (8 across two types / 4h), then confirmed the rendered deltas exactly: +100% then -60% for units, -25% then -33% for hours, dashes on the first month, and **month to date** only on the newest row.
+  - Confirmed the chart rendered both work-type series at 1094x256, the team panels still appeared, and there were no console or page errors.
+  - At 390px, confirmed the document width stayed exactly 390 and the table fell back to the vertical card layout with its `data-label` intact.
+  - Deleted the seeded entries afterwards (verified zero rows remained) and restored the employee's original password hash, which had been temporarily reset to obtain a session.
+
+Any remaining considerations
+
+- Deploying needs `npm run db:migrate:prod` for `0041` before the grant reaches existing production accounts. `npm run deploy` already runs it; a Cloudflare GitHub auto-deploy does not.
+- Granting `view_dashboard` to everyone also exposes the team panels, but only within each person's data scope. Anyone deliberately scoped to a department or everything will now see those colleagues' hours and units (never money). Un-tick the right on such accounts if that was not intended.
+- The panel reads the trend endpoint, which returns every work type the employee has ever logged against rather than only their current assignments; the frontend filters the series, and since the endpoint is self-only there is no cross-user exposure. Server-side filtering was left out on purpose so legitimately-earned historical units stay visible.
+- While appending this entry, a `Get-Content -Raw` / `WriteAllText` round trip used to trim a trailing blank line re-encoded the whole file as ANSI, mojibake-ing every emoji and em-dash in it. Caught by inspecting the diff (148+/99- instead of ~51+), and fixed by restoring the file and re-appending through the edit tool. Do not round-trip this file through Windows PowerShell text cmdlets.
+
+October 30, 2026
+Fix: Stacked Columns for the Three-Month Productivity Chart
+
+Branch: main
+
+User Request
+
+"the comparison chart is not easy to understans. make it somoother. Maybe a grouped bar graph. chekc deeply"
+
+Implementation
+
+Checked the rendering before changing anything, with a realistic three-month history (August 20 units / 16h, September 24 / 6h, October 8 / 4h) rendered in the real app. The chart was not merely unpolished, it said the opposite of the truth, for three reasons:
+
+- One bar per work type meant a month's output was split across columns, so bar height stopped meaning the month's output. September was the best month at 24 units, but its tallest bar (18) was shorter than August's only bar (20) — the chart showed August ahead while the table directly beneath it showed September at +20%.
+- An empty work type still reserved its slot, so a month with one type drew its single bar left of its own month label while months with two types straddled theirs. Every group had a different visual centre.
+- The y-axis drew a gridline every 2 units — eleven of them — for three short columns.
+
+Changes:
+
+- `src/components/TrendChart.vue`, extended rather than duplicated (it still serves Trends and Installations unchanged, both opt-in): added `stacked` and `showTotals` props, a small canvas plugin that prints each column's total above it (chart.js has no built-in data labels and pulling in another package for three numbers is not worth a dependency), a `maxTicksLimit` of 5 and integer precision on the y-axis when stacked, `borderRadius: 6` with `borderSkipped: 'middle'` so only the outer corners of a column round, `categoryPercentage`/`barPercentage` tuned for wide columns, 20px top padding reserved for the total, and a tooltip footer showing the column total.
+- `src/views/DashboardView.vue`: the panel now renders stacked columns with totals, its caption reads "Total units per month, by work type", and the chart is capped at `max-w-xl` and centred — three columns spread across a 1100px panel sat so far apart that comparing heights meant sweeping the eye back and forth.
+- Also fixed a flaw in the panel's own empty state: it tested `trendSeries.length`, but a series exists for every assigned work type, so an employee with nothing logged got an empty axis frame instead of the "No countable work logged" message. It now tests whether any series actually holds a non-zero value, the same way `TrendsView` does.
+
+Files changed
+
+- `src/components/TrendChart.vue`
+- `src/views/DashboardView.vue`
+- `changelog.md`
+- `guideline-user.md`
+- `AGENTS.md`
+
+Testing performed
+
+- `npm run check`: passed — 12 Vitest files with 290 tests and the production build.
+- Live verification against `wrangler pages dev` + local D1, before and after: captured the misreading directly (August's single bar left of its label; September's 18-high bar under a 24-unit month), then confirmed after the change that column height matches the table (20 / 24 / 8), the totals 20 / 24 / 8 print above the columns, September's 6 QAP units show as an amber segment, the y-axis drops from 11 gridlines to 4, and the bars sit centred under their labels.
+- Confirmed the empty state renders the message with no canvas, and that a populated panel has no console or page errors.
+- At 390px: document width stayed exactly 390, the chart scaled to 316px, and the vertical card table below was untouched.
+- Regression-checked the shared component: `/trends` still renders its grouped "Work output by month" and "Hours by month" bars unchanged, with no console errors.
+- Deleted every seeded row afterwards (verified zero remain) and restored the employee's original password hash.
+
+Any remaining considerations
+
+- `TrendsView` keeps grouped bars and so keeps the same "tallest bar is not the month" ambiguity over 3-12 months. It was left alone deliberately — it was not what was reported, and 12 months of stacked columns with many work types would be harder to read than grouped ones. Adding `stacked` there is a one-word change if that page should match.
+- The chart's y-axis tops out at 30 for a 24-unit month, leaving a little headroom. That is chart.js's default rounding; pinning a max would clip an unusually large month.
+
+

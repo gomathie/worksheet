@@ -146,6 +146,13 @@ const trendUnitTotals = computed(() =>
   ),
 )
 
+// Series exist for every assigned work type, so "there are series" is not the
+// same as "there is data" — without this an idle employee gets an empty axis
+// frame instead of an explanation.
+const hasTrendUnits = computed(() =>
+  trendSeries.value.some((s) => s.data.some((n) => n > 0)),
+)
+
 /** The month before `i`, or undefined for the first one — nothing to compare to. */
 function prevMonth(values: number[], i: number): number | undefined {
   return i === 0 ? undefined : values[i - 1]
@@ -313,10 +320,14 @@ function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: bool
       <div v-if="trend && trendMonths.length" class="panel mb-6">
         <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h3 class="display text-xl">Your productivity — last 3 months</h3>
-          <p class="text-sm text-muted">Units logged, by work type</p>
+          <p class="text-sm text-muted">Total units per month, by work type</p>
         </div>
 
-        <TrendChart v-if="trendSeries.length" :labels="trendLabels" :series="trendSeries" />
+        <!-- Horizontal bars: three rows beat three far-apart columns for
+             comparing lengths, and the totals sit at each bar's tip. -->
+        <div v-if="hasTrendUnits">
+          <TrendChart :labels="trendLabels" :series="trendSeries" stacked horizontal show-totals />
+        </div>
         <p v-else class="py-6 text-center text-muted">
           No countable work logged in the last 3 months.
         </p>

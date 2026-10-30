@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { Bar } from 'vue-chartjs'
 import {
   BarController,
@@ -132,14 +132,6 @@ const chartData = computed(() => ({
   })),
 }))
 
-// The category axis carries the labels; the value axis carries the numbers.
-// Horizontal bars simply swap which one is which.
-const categoryAxis = computed(() => ({
-  stacked: props.stacked ?? false,
-  grid: { display: false },
-  ticks: { color: '#7C7F87', font: { family: 'IBM Plex Mono', size: 11 } },
-}))
-
 const valueAxis = computed(() => ({
   stacked: props.stacked ?? false,
   beginAtZero: true,
@@ -217,6 +209,6 @@ const options = computed(() => ({
 
 <template>
   <div class="h-64">
-    <Bar ref="chartRef" :data="chartData" :options="options" :plugins="plugins" />
+    <Bar :data="chartData" :options="options" :plugins="plugins" />
   </div>
 </template>

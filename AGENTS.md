@@ -2248,4 +2248,39 @@ Any remaining considerations
 - `TrendsView` keeps grouped bars and so keeps the same "tallest bar is not the month" ambiguity over 3-12 months. It was left alone deliberately — it was not what was reported, and 12 months of stacked columns with many work types would be harder to read than grouped ones. Adding `stacked` there is a one-word change if that page should match.
 - The chart's y-axis tops out at 30 for a 24-unit month, leaving a little headroom. That is chart.js's default rounding; pinning a max would clip an unusually large month.
 
+October 30, 2026
+Fix: Horizontal Bars for the Three-Month Productivity Chart
 
+Branch: main
+
+User Request
+
+"maybe we can make the cart horizontal"
+
+Implementation
+
+- `src/components/TrendChart.vue`: added a `horizontal` prop that flips `indexAxis` to `y` and swaps which scale is the category axis and which carries the values, so nothing about the component's vertical behaviour changes for Trends and Installations (both still pass neither prop). The total-label plugin now follows the orientation, drawing past each bar's tip instead of above each column, the tooltip reads the value from `parsed.x` when horizontal and `parsed.y` when vertical, `borderSkipped` skips the left edge instead of the bottom, category thickness was widened for horizontal stacking, and canvas padding moved from the top to the right to make room for the totals.
+- Fixed clipped axis labels, which the vertical orientation had hidden. chart.js sizes the category gutter from a width it measures at layout time; when that measurement lands a few pixels short of what is drawn, the text runs past the canvas edge and the first character of every label disappears ("Aug 26" rendering as "ug 26"). Two related discoveries: `layout.padding.left` alone did not hold it reliably, and the amount of clipping varied between page loads because the webfont sometimes arrived after the first layout. The fix is a fixed `afterFit` gutter of 82px for horizontal charts, which is deterministic where a measurement is not — these labels are always a short "MMM YY". A `document.fonts.ready` re-layout was tried first and dropped: it depended on the component instance exposing its chart, and it did not remove the clipping.
+- `src/views/DashboardView.vue`: the panel now passes `horizontal`, and the width cap added for the vertical version was removed — horizontal bars want the full width, since that is the axis being compared.
+
+Files changed
+
+- `src/components/TrendChart.vue`
+- `src/views/DashboardView.vue`
+- `changelog.md`
+- `guideline-user.md`
+- `AGENTS.md`
+
+Testing performed
+
+- `npm run check`: passed — 12 Vitest files with 290 tests and the production build.
+- Live verification against `wrangler pages dev` + local D1 with three seeded months (August 20 units / 16h, September 24 / 6h, October 8 / 4h): confirmed the bars run horizontally with the months down the side, totals 20 / 24 / 8 at the bar tips, September's 6 QAP units as an amber segment, and all three labels fully legible.
+- Rendered the panel three separate times to confirm the label clipping was gone rather than intermittent, which is how the bug had behaved.
+- Tooltip checked on both orientations: horizontal reads "Sep 26 / Classification: 18 / Total: 24"; the vertical Trends chart still reports correctly after the `parsed.y` switch, and still renders grouped vertical bars.
+- At 390px: document width stayed exactly 390 and the labels still fit within the 82px gutter on a 316px canvas.
+- Diagnosed the gutter numerically rather than by eye, by exposing the chart instance in a temporary debug build and reading the axis geometry (category axis width 47px against drawn labels that needed more), then removed every debug hook.
+- Deleted the seeded rows afterwards (verified zero remain) and restored the employee's original password hash.
+
+Any remaining considerations
+
+- The 82px gutter is sized for "MMM YY" labels. If a 12-month window is ever shown horizontally with year-prefixed labels, the gutter would need to grow or the labels would clip again.

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Feature: three-month productivity comparison on the Dashboard
+  - Every user now sees **Your productivity — last 3 months**: their own units per work type as a
+    bar chart, plus a row per month with total units and hours and the change against the previous
+    month.
+  - Reads the existing `/api/trends?months=3` endpoint, which already restricts a non-admin to their
+    own figures, so no new endpoint or aggregation was needed. The panel is loaded separately from
+    the main report, so a trends failure cannot blank the dashboard.
+  - The window is anchored to today rather than to the month picker, and the in-progress month is
+    labelled **month to date** so it isn't mistaken for a drop.
+  - Added `percentChange` to `shared/logic.ts` for the month-over-month percentages, with unit tests.
+  - `view_dashboard` is now pre-ticked for new accounts, and migration `0041_dashboard_default_right.sql`
+    grants it to existing non-admin accounts, so the dashboard is reachable by everyone. Data scope
+    is unchanged and still bounds which colleagues the team panels show.
+
 - Documentation: Developer onboarding and validation improvements
   - Corrected README route and migration-count documentation to match the current router and migration directory.
   - Added architecture, project-layout, local-development, testing, authorization, database, and contributing guides.

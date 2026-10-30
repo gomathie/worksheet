@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canSeeOwnPay, parseRights, type Rights } from '../server/auth'
+import { canSeeOwnPay, defaultRightsForRole, parseRights, type Rights } from '../server/auth'
 import type { Employee } from '../server/env'
 
 /** A stored employee row carrying just the rights under test. */
@@ -55,6 +55,24 @@ describe('view_points exclusivity', () => {
 
   it('defaults points off for a row predating the right', () => {
     expect(parseRights(person('employee', { view_reports: true })).view_points).toBe(false)
+  })
+})
+
+describe('view_dashboard default', () => {
+  it('is pre-ticked for a new standard account, so the dashboard is reachable', () => {
+    expect(defaultRightsForRole('employee').view_dashboard).toBe(true)
+  })
+
+  it('is pre-ticked for a new manager account', () => {
+    expect(defaultRightsForRole('manager').view_dashboard).toBe(true)
+  })
+
+  it('still honours a stored false, so an administrator can revoke it', () => {
+    expect(parseRights(person('employee', { view_dashboard: false })).view_dashboard).toBe(false)
+  })
+
+  it('stays on for an administrator by role', () => {
+    expect(parseRights(person('admin', {})).view_dashboard).toBe(true)
   })
 })
 

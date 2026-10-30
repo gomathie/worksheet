@@ -317,6 +317,15 @@ What you see here depends on your rights.
   marks every day so far — worked days in teal, days with **no work done**
   greyed out. Days still to come aren't shown, and logging twice in a day is
   still one day.
+  **Your productivity — last 3 months** compares your own output for the two
+  previous months and the current one: a bar chart of units per work type,
+  then a row per month with total units and hours and the percentage change
+  from the month before. The current month is still running, so it's marked
+  **month to date** and will read low against two completed months — that's
+  expected, not a bad month. A dash instead of a percentage means there was
+  nothing to compare against (the earliest month, or a month with no work).
+  This panel always covers the last three months ending today; changing the
+  month picker above doesn't move it.
 - **Monthly Report** — the fuller per-person report. Months that have ended are automatically locked by default to keep figures reliable. If adjustments are required for a past month, an administrator must unlock it.
 - **Trends** — your figures over the last 3, 6 or 12 months.
 - **Card Audit** — who classified or QAP'd a given card. Admin Guide has more.

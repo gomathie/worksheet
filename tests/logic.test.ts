@@ -10,6 +10,7 @@ import {
   findSameDayCardClashes,
   shiftIsInFuture,
   addOneDay,
+  percentChange,
   FUTURE_GRACE_MINUTES,
   type CardAuditRow,
   parseTime,
@@ -285,6 +286,34 @@ describe('aggregateMonthly', () => {
       // A task contributes no hours/units, so the daily breakdown stays empty.
       expect(r.daily_totals).toEqual([])
     })
+  })
+})
+
+describe('percentChange', () => {
+  it('measures an improvement from a real base', () => {
+    expect(percentChange(120, 100)).toBe(20)
+  })
+
+  it('reports a decline as a negative percentage', () => {
+    expect(percentChange(75, 100)).toBe(-25)
+  })
+
+  it('rounds to a whole percent', () => {
+    expect(percentChange(121, 100)).toBe(21) // 21% exactly
+    expect(percentChange(121, 113)).toBe(7) // 7.08%
+  })
+
+  it('has no percentage without a prior month', () => {
+    expect(percentChange(40, undefined)).toBeNull()
+  })
+
+  it('has no percentage from a zero base, rather than dividing by zero', () => {
+    // The first month of a window, or a month nobody logged anything in.
+    expect(percentChange(40, 0)).toBeNull()
+  })
+
+  it('treats a drop to zero as a full 100% decline', () => {
+    expect(percentChange(0, 50)).toBe(-100)
   })
 })
 

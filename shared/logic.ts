@@ -148,6 +148,17 @@ export function computeRemuneration(points: number, s: RateSettings): number {
   return round2(points * s.point_value)
 }
 
+/**
+ * Percentage change from `prev` to `cur`, or null when there is no base to
+ * divide by — the first month of a window, or a month with nothing logged.
+ * Null rather than Infinity keeps "no comparison available" distinct from
+ * "went up enormously", which a table can then render as a dash.
+ */
+export function percentChange(cur: number, prev: number | undefined): number | null {
+  if (prev === undefined || prev === 0) return null
+  return Math.round(((cur - prev) / prev) * 100)
+}
+
 function addUnits(target: Record<string, number>, source: Record<string, number>) {
   for (const [id, n] of Object.entries(source)) {
     if (n) target[id] = (target[id] ?? 0) + n

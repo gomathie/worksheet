@@ -5,8 +5,10 @@ import { formatDayHeading, groupByDay } from '../dates'
 import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
 import DailyBarChart from '../components/DailyBarChart.vue'
+import TrendChart from '../components/TrendChart.vue'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
-import type { ExpenseVoucher, ReportPayload } from '../types'
+import { percentChange } from '../../shared/logic'
+import type { ExpenseVoucher, ReportPayload, TrendData } from '../types'
 
 const auth = useAuthStore()
 // The router normally loads the user before this view mounts, but a session
@@ -39,6 +41,22 @@ const visibleTypes = computed(() => {
 // Recent expense activity, scoped server-side to what this viewer may see.
 const recentExpenses = ref<ExpenseVoucher[]>([])
 
+// The viewer's own productivity over the last three months. Deliberately
+// independent of the month picker above: "last 3 months" is anchored to
+// today, not to whichever month is being browsed. The trends endpoint only
+// ever returns the caller's own data for a non-admin, so this can't leak a
+// colleague's figures.
+const trend = ref<TrendData | null>(null)
+
+async function loadTrend() {
+  try {
+    trend.value = await api<TrendData>('/api/trends?months=3')
+  } catch {
+    // Supplementary panel — a failure here must not blank the dashboard.
+    trend.value = null
+  }
+}
+
 async function load() {
   error.value = ''
   try {
@@ -70,7 +88,12 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+  void loadTrend()
+})
+// The trend window is fixed, so it is fetched once rather than on every
+// range change.
 watch([month, rangeMode, fromDate, toDate], load)
 
 const money = (n: number) =>
@@ -90,6 +113,55 @@ const dailyGroups = computed(() =>
 const myDays = computed(() => report.value?.my_days ?? [])
 const myDaysWorked = computed(() => report.value?.my_days_worked ?? 0)
 const myDaysMissed = computed(() => myDays.value.length - myDaysWorked.value)
+
+// --- the viewer's own three-month productivity
+const trendMonths = computed(() => trend.value?.months ?? [])
+
+// "2026-07" -> "Jul 26", matching the Trends page.
+const trendLabels = computed(() =>
+  trendMonths.value.map((m) => {
+    const [y, mo] = m.split('-').map(Number)
+    const name = new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString('en-US', {
+      month: 'short',
+      timeZone: 'UTC',
+    })
+    return `${name} ${String(y).slice(2)}`
+  }),
+)
+
+// Per-type series, scoped to the viewer's own assignments the same way the
+// columns below are. The endpoint returns whatever types this employee has
+// ever logged against, including ones they are no longer assigned.
+const trendSeries = computed(() => {
+  const t = trend.value
+  if (!t) return []
+  return t.work_types
+    .filter((wt) => auth.isAdmin || myTypeIds.value.has(wt.id))
+    .map((wt) => ({ label: wt.name, data: t.units[wt.id] ?? [] }))
+})
+
+const trendUnitTotals = computed(() =>
+  trendMonths.value.map((_, i) =>
+    trendSeries.value.reduce((sum, s) => sum + (s.data[i] ?? 0), 0),
+  ),
+)
+
+/** The month before `i`, or undefined for the first one — nothing to compare to. */
+function prevMonth(values: number[], i: number): number | undefined {
+  return i === 0 ? undefined : values[i - 1]
+}
+
+/** "+18%", "-12%", or a dash when there is no month to compare against. */
+function deltaText(cur: number, prev: number | undefined): string {
+  const pct = percentChange(cur, prev)
+  if (pct === null) return '—'
+  return `${pct > 0 ? '+' : ''}${pct}%`
+}
+
+// A decline is not an error, so it stays muted rather than red.
+function deltaClass(cur: number, prev: number | undefined): string {
+  return (percentChange(cur, prev) ?? 0) > 0 ? 'text-teal' : 'text-muted'
+}
 
 /** Day-of-month number, for the compact marker grid. */
 const dayNum = (date: string) => Number(date.slice(8, 10))
@@ -232,6 +304,62 @@ function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: bool
         <p class="mt-3 text-xs text-muted">
           A day counts as worked if you logged time or completed a task on it. Days still to
           come this month aren't shown.
+        </p>
+      </div>
+
+      <!-- The viewer's own three months, side by side. Sits with the personal
+           block above rather than among the team panels: it answers "how am I
+           doing?", not "how is everyone doing?". -->
+      <div v-if="trend && trendMonths.length" class="panel mb-6">
+        <div class="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <h3 class="display text-xl">Your productivity — last 3 months</h3>
+          <p class="text-sm text-muted">Units logged, by work type</p>
+        </div>
+
+        <TrendChart v-if="trendSeries.length" :labels="trendLabels" :series="trendSeries" />
+        <p v-else class="py-6 text-center text-muted">
+          No countable work logged in the last 3 months.
+        </p>
+
+        <div class="table-wrap mt-4">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="num">Units</th>
+                <th class="num">vs prior</th>
+                <th class="num">Hours</th>
+                <th class="num">vs prior</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(m, i) in trendMonths" :key="m">
+                <td class="mono whitespace-nowrap">
+                  {{ trendLabels[i] }}
+                  <span v-if="i === trendMonths.length - 1" class="ml-2 text-xs text-muted">
+                    month to date
+                  </span>
+                </td>
+                <td class="num">{{ trendUnitTotals[i] }}</td>
+                <td class="num">
+                  <span :class="deltaClass(trendUnitTotals[i], prevMonth(trendUnitTotals, i))">
+                    {{ deltaText(trendUnitTotals[i], prevMonth(trendUnitTotals, i)) }}
+                  </span>
+                </td>
+                <td class="num">{{ trend.hours[i].toFixed(2) }}</td>
+                <td class="num">
+                  <span :class="deltaClass(trend.hours[i], prevMonth(trend.hours, i))">
+                    {{ deltaText(trend.hours[i], prevMonth(trend.hours, i)) }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="mt-3 text-xs text-muted">
+          The current month is still in progress, so it reads low against the two completed
+          months beside it.
         </p>
       </div>
 

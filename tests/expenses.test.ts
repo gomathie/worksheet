@@ -455,9 +455,11 @@ describe('summarize', () => {
 // --------------------------------------------------------- roles & data scope
 
 describe('defaultRightsForRole', () => {
-  it('gives an employee no team visibility', () => {
+  it('gives an employee their own dashboard but no team visibility', () => {
     const r = defaultRightsForRole('employee')
-    expect(r.view_dashboard).toBe(false)
+    // view_dashboard only ever exposes the viewer's own figures unless their
+    // data_scope widens it — the team/report surfaces stay withheld.
+    expect(r.view_dashboard).toBe(true)
     expect(r.view_reports).toBe(false)
     expect(r.review_expenses).toBe(false)
   })

@@ -175,7 +175,11 @@ export const DEFAULT_RIGHTS: Rights = {
   add_entries: true,
   edit_entries: true,
   delete_entries: true,
-  view_dashboard: false,
+  // The dashboard is about the person reading it: their own attendance,
+  // productivity trend, and pay/points figures are theirs regardless of what
+  // else they may see. Team-wide rows are bounded by data_scope, which
+  // defaults to 'own'. See migration 0041 for the same grant to existing rows.
+  view_dashboard: true,
   view_reports: false,
   view_remuneration: false,
   view_payslip: false,

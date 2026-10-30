@@ -30,14 +30,14 @@ Decides **whose records a person can see**:
 | `Everyone` | All records |
 
 Administrators see everything regardless. Scope is enforced on the server, not
-just hidden in the interface. This scope also dictates what employees see on the **Dashboard** and **Monthly Reports** — they will only see statistics for the people within their scope.
+just hidden in the interface. This scope also dictates what employees see on the **Dashboard** and **Monthly Reports** — they will only see statistics for the people within their scope. Since **View dashboard** is now ticked for every account, scope is what keeps a standard employee's dashboard to their own figures — and even a wider scope never reveals a colleague's points or remuneration.
 
 ### The rights
 
 | Right | Grants |
 |---|---|
 | Add / Edit / Delete own entries | Three separate controls over their own time entries. Edit covers adding to or correcting an entry; taking recorded work away — removing a card, or lowering a typed count — needs Delete too, enforced server-side, since reducing what's logged destroys it just as surely as deleting the entry outright |
-| View dashboard | The team dashboard |
+| View dashboard | The dashboard, which includes the viewer's own attendance, their three-month productivity comparison, and the **team's** figures — limited to their data scope. Pre-ticked for every new account, and granted to existing accounts by migration 0041, since the dashboard is the first page after login |
 | View monthly reports | The monthly report **and Card Audit** |
 | View own remuneration / payslip | Their own pay figures |
 | View own points | Points as a score. Forced off if either pay right is held — points beside a cedi amount reveals the value per point |

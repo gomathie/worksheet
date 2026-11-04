@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import * as Sentry from '@sentry/vue'
 import App from './App.vue'
 import router from './router'
-import { isRouteChunkLoadError, recoverRouteChunkLoad } from './router/chunkRecovery'
+import { isRecoveredRouteChunkError, isRouteChunkLoadError, recoverRouteChunkLoad } from './router/chunkRecovery'
 import './style.css'
 
 // Vue Router reports lazy-route import failures through its own error hook,
@@ -57,6 +57,15 @@ if (import.meta.env.PROD && dsn) {
     // Light sampling: this is an internal team tool, not high-traffic —
     // enough to catch real problems without burning through the quota.
     tracesSampleRate: 0.2,
+    beforeSend(event, hint) {
+      // The vue-router integration reports every router.onError itself, and it
+      // does so with handled: false, so a stale route chunk that the recovery
+      // above is already reloading away from still arrives as an unhandled
+      // exception. Drop only that one: once no recovery can be scheduled the
+      // page really is stuck, and that failure stays reportable.
+      const reason = hint.originalException ?? event.exception?.values?.[0]?.value
+      return isRecoveredRouteChunkError(reason) ? null : event
+    },
   })
 }
 

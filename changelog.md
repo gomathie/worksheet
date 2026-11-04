@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- Fix: stale route chunks reported as unhandled Sentry errors
+  - A tab left open across a deployment already reloaded itself to fetch the current app shell, but
+    Sentry's vue-router integration captures every `router.onError` itself (with `handled: false`), so
+    every recovered stale chunk still arrived as an unhandled exception — the `NewsView-*.js` reports.
+  - Because that capture is an explicit `captureException` rather than a browser global handler,
+    `preventDefault()`/`stopImmediatePropagation()` could never suppress it.
+  - `Sentry.init` now uses a `beforeSend` hook that drops only the chunk failure the app is already
+    reloading away from. A chunk failure that survives the reload is still reported: the reload guard
+    stops retrying at that point, so the page really is stuck and silence would hide a real outage.
+
 ### Added
 - Feature: three-month productivity comparison on the Dashboard
   - Every user now sees **Your productivity — last 3 months**: one horizontal bar per month, split by

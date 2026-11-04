@@ -2284,3 +2284,46 @@ Testing performed
 Any remaining considerations
 
 - The 82px gutter is sized for "MMM YY" labels. If a 12-month window is ever shown horizontally with year-prefixed labels, the gutter would need to grow or the labels would clip again.
+
+November 4, 2026
+Fix: Stale Route Chunks Reported as Unhandled Sentry Errors
+
+Branch: main
+
+User Request
+
+Sentry issue 149582781: `TypeError: Failed to fetch dynamically imported module: https://qap.dubblestack.com/assets/NewsView-E9Y5AnTx.js`, reported as unhandled from the `news` transaction.
+
+Implementation
+
+Investigated first. The deployed shell (`index-BNhQCi7l.js`) already contained the route-chunk recovery guard from the earlier fixes, and the current build's NewsView chunk is `NewsView-gehY1VSZ.js`, so the reported asset belongs to an older deployment — the known stale-tab case, not a new failure mode. The recovery worked; the real question was why the error was still being reported.
+
+Reading `node_modules/@sentry/vue/build/esm/router.js` showed the cause: `browserTracingIntegration({ router })` registers its own `router.onError((error) => captureException(error, { mechanism: { handled: false } }))`. That is an explicit capture, not a browser global handler, so it can never be suppressed by `preventDefault()`/`stopImmediatePropagation()`. It also explains every field in the report: mechanism type absent (`generic`), `handled: false`, and the transaction named after the route (`news`).
+
+- `src/router/chunkRecovery.ts`: `recoverRouteChunkLoad` now records in memory that this document is reloading because of a chunk failure, exposed through `isRecoveredRouteChunkError(error)`. Kept separate from the session-storage reload guard on purpose: when that guard blocks a second reload the page really is stuck, so recovery is not scheduled and the failure stays reportable. Added `resetRouteChunkRecoveryState` for tests.
+- `src/main.ts`: added `beforeSend` to `Sentry.init` that drops an event only when it is a chunk failure this document has already scheduled recovery for, reading the message from `hint.originalException` (the router integration passes the real Error).
+- `tests/router.test.ts`: four new tests covering the recovered/not-recovered distinction, unrelated errors, and a chunk failure that survives the reload.
+
+Files changed
+
+- `src/router/chunkRecovery.ts`
+- `src/main.ts`
+- `tests/router.test.ts`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend and server type checks exited 0; `npm test` passed 12 files and 294 tests; production build passed.
+- Live A/B against `wrangler pages dev` with the production build in real Chrome, aborting the route chunk once. Sentry was pointed at a local envelope collector (`http://127.0.0.1:4999/1`) so no event left the machine:
+  - Recoverable stale chunk, with the fix: one reload, target page rendered, no page errors, and zero chunk-error events sent.
+  - Control with navigation suppressed and `beforeSend` removed: exactly one chunk-error event, `mechanism: {"type":"generic","handled":false}` — identical to the reported production issue, reproducing it locally.
+  - The same isolated control with the fix restored: zero events. This rules out the page unload, rather than the drop, as the reason the event disappeared.
+  - Persistent chunk failure (chunk never comes back), with the fix: one reload only (no loop) and the failure is still reported.
+- Diagnosed the harness itself once: `framenavigated` also fires for history-API navigations, so the first attempt never actually blocked the chunk. Switched to counting real `document` requests.
+- Removed the temporary harness and rebuilt `dist` without the fake DSN; `git status` clean.
+
+Any remaining considerations
+
+- Other `router.onError` failures are still reported as unhandled by Sentry's integration. That is pre-existing behavior and outside this issue, which is specifically about the self-healing stale-chunk case.
+- A deployment is required for the drop to take effect; production already has the recovery itself, so this only removes the false alarms.

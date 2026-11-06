@@ -544,6 +544,23 @@ table.data tr.group-head td {
   table.data.per-person-table tbody tr td:nth-last-child(-n + 2) {
     border-bottom: none;
   }
+
+  /* General two-column card: label/value cells pair up. Long or interactive
+     cells opt back into a full row with .card-full; colspan rows (group
+     headings, empty states) always span. */
+  table.data.cards-2col tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  table.data.cards-2col tbody tr td {
+    width: auto;
+  }
+
+  table.data.cards-2col tbody tr td.card-full,
+  table.data.cards-2col tbody tr td[colspan] {
+    grid-column: 1 / -1;
+  }
   
   /* The injected data-label pseudo-element */
   table.data td::before {

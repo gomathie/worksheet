@@ -356,7 +356,7 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
           <span class="mono text-base text-muted">({{ pendingRequests.length }} pending)</span>
         </h3>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Employee</th>
@@ -369,8 +369,8 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
               <tr v-for="a in pendingRequests" :key="a.id">
                 <td>{{ a.employee_name }}</td>
                 <td class="num">{{ money(a.amount) }}</td>
-                <td class="text-muted">{{ a.description }}</td>
-                <td class="whitespace-nowrap">
+                <td class="card-full text-muted">{{ a.description }}</td>
+                <td class="card-full whitespace-nowrap">
                   <button class="btn btn-sm mr-1" :disabled="busy" @click="decide(a, 'approved')">
                     Approve
                   </button>
@@ -387,7 +387,7 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
       <div v-if="report" class="panel mb-6">
         <h3 class="display mb-3 text-xl">Payouts for {{ month }}</h3>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Employee</th>
@@ -401,18 +401,18 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
             </thead>
             <tbody>
               <tr v-for="p in report.per_person" :key="p.employee_id">
-                <td>{{ p.name }}</td>
+                <td class="card-full">{{ p.name }}</td>
                 <td class="num">{{ money(p.remuneration ?? 0) }}</td>
                 <td class="num">{{ money(p.bonus ?? 0) }}</td>
                 <td class="num">{{ money(p.reimbursements ?? 0) }}</td>
                 <td class="num font-semibold">{{ money(p.total_due ?? 0) }}</td>
-                <td class="whitespace-nowrap text-xs">
+                <td class="card-full whitespace-nowrap text-xs">
                   <span :class="p.paid ? 'text-teal' : 'text-muted'">
                     {{ p.paid ? 'Paid' : 'Unpaid' }}
                   </span>
                   <span v-if="p.confirmed" class="text-teal"> · Confirmed</span>
                 </td>
-                <td class="whitespace-nowrap">
+                <td class="card-full whitespace-nowrap">
                   <RouterLink
                     class="btn btn-sm btn-view"
                     :to="{ name: 'finance-trail', query: { employee_id: p.employee_id, month } }"
@@ -442,7 +442,7 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
       <div v-if="adjustments.length" class="panel">
         <h3 class="display mb-3 text-xl">All bonuses &amp; reimbursements</h3>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Employee</th>
@@ -456,10 +456,10 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
             </thead>
             <tbody>
               <tr v-for="a in adjustments" :key="a.id">
-                <td>{{ a.employee_name }}</td>
+                <td class="card-full">{{ a.employee_name }}</td>
                 <td>{{ a.type === 'bonus' ? 'Bonus' : 'Reimbursement' }}</td>
                 <td class="num">{{ money(a.amount) }}</td>
-                <td class="text-muted">{{ a.description }}</td>
+                <td class="card-full text-muted">{{ a.description }}</td>
                 <td class="text-xs text-muted whitespace-nowrap">
                   {{ a.created_by_name ?? '—' }}<br />
                   {{ new Date(a.created_at).toLocaleDateString() }}

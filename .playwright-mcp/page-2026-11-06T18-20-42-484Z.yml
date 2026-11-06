@@ -1,0 +1,7 @@
+- banner [ref=f3e4]:
+  - link "OpenSignal Ledger — go to time entry" [ref=f3e5] [cursor=pointer]:
+    - /url: /entries
+    - generic [ref=f3e6]: LG
+    - generic [ref=f3e7]:
+      - heading "OPENSIGNAL Ledger" [level=1] [ref=f3e8]
+      - paragraph [ref=f3e9]: Team Timesheet & Tracker

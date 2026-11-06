@@ -1,0 +1,168 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e4]:
+    - link "OpenSignal Ledger — go to time entry" [ref=f3e5] [cursor=pointer]:
+      - /url: /entries
+      - generic [ref=f3e6]: LG
+      - generic [ref=f3e7]:
+        - heading "OPENSIGNAL Ledger" [level=1] [ref=f3e8]
+        - paragraph [ref=f3e9]: Team Timesheet & Tracker
+    - generic [ref=f3e10]:
+      - generic [ref=f3e11]:
+        - button "Notifications, 10 unread" [active] [ref=f3e12] [cursor=pointer]:
+          - generic [aria-hidden] [ref=f3e13]: 🔔
+          - generic [ref=f3e14]: "10"
+        - generic [ref=f3e119]:
+          - generic [ref=f3e120]:
+            - generic [ref=f3e121]: Notifications
+            - button "Mark all read" [ref=f3e122] [cursor=pointer]
+          - button [ref=f3e123]:
+            - paragraph [ref=f3e124]: Test notification
+            - paragraph [ref=f3e125]: verifying mobile popup fix
+            - paragraph [ref=f3e126]: 1m ago
+          - button [ref=f3e127]:
+            - paragraph [ref=f3e128]: Local opened a task to everyone
+            - paragraph [ref=f3e129]: "TASK-019: Batch wiring test task"
+            - paragraph [ref=f3e130]: 18d ago
+          - button [ref=f3e131]:
+            - paragraph [ref=f3e132]: "Announcement: Popup width retest"
+            - paragraph [ref=f3e133]: Checking the fixed modal width on desktop.
+            - paragraph [ref=f3e134]: 32d ago
+          - button [ref=f3e135]:
+            - paragraph [ref=f3e136]: "Announcement: Popup width test"
+            - paragraph [ref=f3e137]: This is a short test announcement to check modal width on desktop.
+            - paragraph [ref=f3e138]: 32d ago
+          - button [ref=f3e139]:
+            - paragraph [ref=f3e140]: Local assigned you a task
+            - paragraph [ref=f3e141]: "TASK-016: QAP card review"
+            - paragraph [ref=f3e142]: 32d ago
+          - button [ref=f3e143]:
+            - paragraph [ref=f3e144]: "Petty cash issued: $500.00"
+            - paragraph [ref=f3e145]: Local recorded a petty cash issue of $500.00 by Cash — initial float. You are now holding $500.00.
+            - paragraph [ref=f3e146]: 84d ago
+          - button [ref=f3e147]:
+            - paragraph [ref=f3e148]: "Announcement: Test popup masking"
+            - paragraph [ref=f3e149]: checking author is hidden
+            - paragraph [ref=f3e150]: 87d ago
+          - button [ref=f3e151]:
+            - paragraph [ref=f3e152]: "Announcement: Admin 30-day notice"
+            - paragraph [ref=f3e153]: 87d ago
+          - button [ref=f3e154]:
+            - paragraph [ref=f3e155]: Device type "RejectMe69400" rejected
+            - paragraph [ref=f3e156]: "\"RejectMe69400\" was rejected. Note: Not a real device, testing rejection."
+            - paragraph [ref=f3e157]: 89d ago
+          - button [ref=f3e158]:
+            - paragraph [ref=f3e159]: Device type "PlaywrightDevice64800" approved
+            - paragraph [ref=f3e160]: "\"PlaywrightDevice64800\" was approved and is now available on the entry form."
+            - paragraph [ref=f3e161]: 89d ago
+          - button "Turn on push notifications" [ref=f3e163] [cursor=pointer]
+      - button "Account ▾" [ref=f3e16] [cursor=pointer]:
+        - generic [ref=f3e17]: Account
+        - generic [ref=f3e18]: ▾
+  - navigation "Primary navigation" [ref=f3e19]:
+    - link "Dashboard" [ref=f3e20] [cursor=pointer]:
+      - /url: /
+    - link "Tasks" [ref=f3e21] [cursor=pointer]:
+      - /url: /tasks
+    - link "Time Entry" [ref=f3e22] [cursor=pointer]:
+      - /url: /entries
+    - link "News" [ref=f3e23] [cursor=pointer]:
+      - /url: /news
+    - link "Reports" [ref=f3e24] [cursor=pointer]:
+      - /url: /trends
+    - link "Finance" [ref=f3e25] [cursor=pointer]:
+      - /url: /payments
+  - generic [ref=f3e26]:
+    - generic [ref=f3e27]:
+      - heading "Dashboard" [level=2] [ref=f3e28]
+      - generic [ref=f3e29]:
+        - combobox "Dashboard date range" [ref=f3e30]:
+          - option "Month" [selected]
+          - option "Custom"
+        - generic [ref=f3e31]:
+          - button "Previous month" [ref=f3e32] [cursor=pointer]: ‹
+          - generic [ref=f3e33]: November 2026
+          - button "Next month" [ref=f3e34] [cursor=pointer]: ›
+          - textbox "Pick month" [ref=f3e35]: 2026-11
+    - generic [ref=f3e36]:
+      - generic [ref=f3e37]:
+        - generic [ref=f3e38]: "0.0"
+        - generic [ref=f3e39]: Hours
+      - generic [ref=f3e40]:
+        - generic [ref=f3e41]:
+          - paragraph [ref=f3e42]: Your days worked
+          - paragraph [ref=f3e43]: "0"
+          - paragraph [ref=f3e44]: of 6 so far
+        - generic [ref=f3e45]:
+          - paragraph [ref=f3e46]: Classification
+          - paragraph [ref=f3e47]: "0"
+        - generic [ref=f3e48]:
+          - paragraph [ref=f3e49]: QAP
+          - paragraph [ref=f3e50]: "0"
+        - generic [ref=f3e51]:
+          - paragraph [ref=f3e52]: Telematics Installation
+          - paragraph [ref=f3e53]: "0"
+    - generic [ref=f3e54]:
+      - generic [ref=f3e55]:
+        - heading "Your days this month" [level=3] [ref=f3e56]
+        - paragraph [ref=f3e57]: 0 worked · 6 with no work done
+      - generic [ref=f3e58]:
+        - generic "2026-11-01 — no work done" [ref=f3e59]: "1"
+        - generic "2026-11-02 — no work done" [ref=f3e60]: "2"
+        - generic "2026-11-03 — no work done" [ref=f3e61]: "3"
+        - generic "2026-11-04 — no work done" [ref=f3e62]: "4"
+        - generic "2026-11-05 — no work done" [ref=f3e63]: "5"
+        - generic "2026-11-06 — no work done" [ref=f3e64]: "6"
+      - paragraph [ref=f3e65]: A day counts as worked if you logged time or completed a task on it. Days still to come this month aren't shown.
+    - generic [ref=f3e66]:
+      - generic [ref=f3e67]:
+        - heading "Your productivity — last 3 months" [level=3] [ref=f3e68]
+        - paragraph [ref=f3e69]: Total units per month, by work type
+      - paragraph [ref=f3e70]: No countable work logged in the last 3 months.
+      - table [ref=f3e72]:
+        - rowgroup [ref=f3e73]:
+          - row [ref=f3e74]:
+            - cell "Month Sep 26" [ref=f3e75]
+            - cell "Units 0" [ref=f3e76]
+            - cell "vs prior —" [ref=f3e77]:
+              - text: vs prior
+              - generic [ref=f3e78]: —
+            - cell "Hours 0.00" [ref=f3e79]
+            - cell "vs prior —" [ref=f3e80]:
+              - text: vs prior
+              - generic [ref=f3e81]: —
+          - row [ref=f3e82]:
+            - cell "Month Oct 26" [ref=f3e83]
+            - cell "Units 0" [ref=f3e84]
+            - cell "vs prior —" [ref=f3e85]:
+              - text: vs prior
+              - generic [ref=f3e86]: —
+            - cell "Hours 0.00" [ref=f3e87]
+            - cell "vs prior —" [ref=f3e88]:
+              - text: vs prior
+              - generic [ref=f3e89]: —
+          - row [ref=f3e90]:
+            - cell "Month Nov 26 month to date" [ref=f3e91]:
+              - text: Month Nov 26
+              - generic [ref=f3e92]: month to date
+            - cell "Units 0" [ref=f3e93]
+            - cell "vs prior —" [ref=f3e94]:
+              - text: vs prior
+              - generic [ref=f3e95]: —
+            - cell "Hours 0.00" [ref=f3e96]
+            - cell "vs prior —" [ref=f3e97]:
+              - text: vs prior
+              - generic [ref=f3e98]: —
+      - paragraph [ref=f3e99]: The current month is still in progress, so it reads low against the two completed months beside it.
+    - generic [ref=f3e100]:
+      - heading "Per person" [level=3] [ref=f3e101]
+      - table [ref=f3e103]:
+        - rowgroup [ref=f3e104]:
+          - row [ref=f3e105]:
+            - cell "Employee No activity this month." [ref=f3e106]
+    - heading "Work by day" [level=3] [ref=f3e108]
+    - generic [ref=f3e111]:
+      - heading "Daily detail" [level=3] [ref=f3e112]
+      - table [ref=f3e114]:
+        - rowgroup [ref=f3e115]:
+          - row [ref=f3e116]:
+            - cell "Date No entries this month." [ref=f3e117]

@@ -2327,3 +2327,39 @@ Any remaining considerations
 
 - Other `router.onError` failures are still reported as unhandled by Sentry's integration. That is pre-existing behavior and outside this issue, which is specifically about the self-healing stale-chunk case.
 - A deployment is required for the drop to take effect; production already has the recovery itself, so this only removes the false alarms.
+
+November 6, 2026
+Fix: Notification Popup Stuck Open When Navigating on Mobile
+
+Branch: main
+
+User Request
+
+"sometims the ui breaks on mobile. i could click notificatiosn and the pop up would be stch when I go to other pages"
+
+Implementation
+
+Read `src/components/NotificationBell.vue` and `src/App.vue` to find where the bell is mounted. It is mounted once in `App.vue`, outside `<router-view>`, alongside the impersonation banner and the mobile section menu — so unlike every view component, it is never destroyed or recreated when the route changes. Its `open` ref (whether the dropdown panel is showing) is local component state with nothing that ever resets it on navigation, and its panel is positioned with `position: fixed` pixel coordinates computed once, at the moment it opens, from the bell's `getBoundingClientRect()` on the page the user was on at that instant (`positionPanel`, by design, per its own doc comment, to stay correct regardless of how the header wraps on a given page). Opening the bell and then tapping a nav link left the panel's `open` state untouched by the navigation, so it kept rendering — now pinned to a `top`/`left` captured for a page layout that no longer exists, reappearing "stuck" in whatever spot that math landed on for the new page's own content.
+
+- `src/components/NotificationBell.vue`: added `const route = useRoute()` and a `watch(() => route.fullPath, () => { open.value = false })`. Since this component is mounted exactly once for the whole authenticated session, this one watcher closes the panel on every route change for the lifetime of the app, matching how `App.vue`'s own mobile section menu already closes itself on link click (`closeMobileSectionMenu()` on each `RouterLink`) — the bell just had no equivalent because, unlike that menu, it does not live inside the per-page content being navigated away from.
+
+Files changed
+
+- `src/components/NotificationBell.vue`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- Frontend type check (`npx tsc --noEmit -p tsconfig.app.json`): exit code 0.
+- Production build (`npm run build`): completed successfully.
+- Unit tests (`npm test`): 12 files, 294 passed — unaffected, as expected for a change with no new pure logic.
+- Live verification against `wrangler pages dev` + local D1 via Playwright at a 390×844 mobile viewport, logged in as a seeded test employee (a manually-crafted local KV session, no password needed — local-only test infrastructure) with a seeded test notification:
+  - Opened the bell, confirmed the panel rendered (`.panel.fixed` present in the DOM).
+  - Triggered the existing primary-nav Tasks link's click handler directly (bypassing the panel's full-viewport backdrop overlay, which would otherwise intercept the tap and only close the panel without navigating — a separate, pre-existing quirk of tapping through an open overlay, not part of this fix) to land on `/tasks` via the SPA router, without a full page reload.
+  - Confirmed `.panel.fixed` was gone from the DOM immediately after navigating, with zero console errors.
+- Cleaned up the seeded test notification and the local KV session; confirmed via `netstat` that the local dev server had stopped afterward.
+
+Any remaining considerations
+
+- Tapping a nav link while the panel is still open and the tap lands on the panel's backdrop overlay (rather than directly on an element with its own click handler) closes the panel on that first tap without navigating, requiring a second tap to actually navigate — a separate, pre-existing UX wrinkle noticed while verifying this fix, not the "stuck open" behavior reported, and left alone to keep this change scoped to what was asked.

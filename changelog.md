@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Fix: notification popup stuck open when navigating on mobile
+  - `NotificationBell` lives in `App.vue`, outside `<router-view>`, so it never remounts between pages
+    — nothing ever reset its open/closed state on navigation.
+  - Opening the bell then tapping a nav link left the panel open, still pinned to the fixed pixel
+    position captured for the previous page, so it reappeared stuck in the wrong spot on the new page.
+  - The panel now closes automatically whenever the route changes.
 - Fix: stale route chunks reported as unhandled Sentry errors
   - A tab left open across a deployment already reloaded itself to fetch the current app shell, but
     Sentry's vue-router integration captures every `router.onError` itself (with `handled: false`), so

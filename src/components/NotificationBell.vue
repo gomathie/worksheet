@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 import {
@@ -13,6 +13,7 @@ import type { AppNotification } from '../types'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const open = ref(false)
 const items = ref<AppNotification[]>([])
@@ -64,6 +65,16 @@ async function togglePush() {
 onMounted(async () => {
   await load()
   await refreshPushState()
+})
+
+// This component lives in App.vue, outside <router-view>, so it is never
+// unmounted on navigation — nothing else resets `open`. Without this, the
+// panel's fixed pixel position (captured once in positionPanel, from the
+// bell's on-screen spot at the moment it opened) goes stale the instant the
+// new page's header reflows, and the still-open panel reappears pinned to
+// the wrong spot on whatever page the user navigated to.
+watch(() => route.fullPath, () => {
+  open.value = false
 })
 
 // Nominal panel width — clamped down to fit narrow viewports (see

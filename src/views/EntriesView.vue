@@ -685,8 +685,8 @@ const dayGroups = computed(() =>
       <h2 class="display mb-4 text-2xl">
         {{ editingId ? 'Edit entry' : 'Log time' }}
       </h2>
-      <form class="grid grid-cols-1 gap-4 lg:grid-cols-4" @submit.prevent="trySubmit">
-        <div class="lg:col-span-2">
+      <form class="grid grid-cols-2 gap-4 lg:grid-cols-4" @submit.prevent="trySubmit">
+        <div class="col-span-2">
           <label class="field-label" for="emp">Employee</label>
           <select
             id="emp"
@@ -739,7 +739,7 @@ const dayGroups = computed(() =>
             tabindex="-1"
           />
         </div>
-        <div class="grid grid-cols-1 gap-4 lg:col-span-4 lg:grid-cols-4">
+        <div class="col-span-2 grid grid-cols-2 gap-4 lg:col-span-4 lg:grid-cols-4">
           <div v-for="wt in numericTypes" :key="wt.id">
             <label class="field-label" :for="`wt-${wt.id}`">{{ wt.name }}</label>
             <input
@@ -764,13 +764,13 @@ const dayGroups = computed(() =>
              cards. Grouped under the module heading, so Classification and QAP
              read as one body of work rather than two unrelated types. -->
         <template v-for="mod in cardModules" :key="mod.name">
-          <p v-if="mod.name" class="mt-2 lg:col-span-4">
+          <p v-if="mod.name" class="col-span-2 mt-2 lg:col-span-4">
             <span class="field-label !mb-0 text-teal">{{ mod.name }}</span>
           </p>
           <div
             v-for="wt in mod.types"
             :key="wt.id"
-            class="rounded-lg border border-line p-3 lg:col-span-4"
+            class="col-span-2 rounded-lg border border-line p-3 lg:col-span-4"
           >
           <div class="mb-2 flex items-center justify-between">
             <span class="field-label">
@@ -1003,7 +1003,7 @@ const dayGroups = computed(() =>
           </template>
           </div>
         </template>
-        <div class="lg:col-span-4">
+        <div class="col-span-2 lg:col-span-4">
           <label class="field-label" for="notes">Notes (optional)</label>
           <input
             id="notes"
@@ -1012,7 +1012,7 @@ const dayGroups = computed(() =>
             placeholder="Anything worth remembering about this shift"
           />
         </div>
-        <div class="flex flex-wrap items-center gap-2 lg:col-span-4">
+        <div class="col-span-2 flex flex-wrap items-center gap-2 lg:col-span-4">
           <button class="btn btn-solid" :disabled="busy || limitReached">
             {{ busy ? 'Saving…' : editingId ? 'Save changes' : 'Add entry' }}
           </button>
@@ -1069,7 +1069,7 @@ const dayGroups = computed(() =>
       </div>
 
       <div class="table-wrap">
-        <table class="data">
+        <table class="data cards-2col">
           <thead>
             <tr>
               <th>Date</th>
@@ -1156,10 +1156,10 @@ const dayGroups = computed(() =>
                     >{{ cardNamesFor(e, wt.id) }}</span
                   >
                 </td>
-                <td class="max-w-56 break-words text-muted" :title="e.notes ?? ''">
+                <td class="card-full max-w-56 break-words text-muted" :title="e.notes ?? ''">
                   {{ e.notes }}
                 </td>
-                <td v-if="approvalOn" class="whitespace-nowrap">
+                <td v-if="approvalOn" class="card-full whitespace-nowrap">
                   <span
                     class="display rounded-full border px-2 py-0.5 text-xs tracking-wider"
                     :class="
@@ -1182,7 +1182,7 @@ const dayGroups = computed(() =>
                     </button>
                   </template>
                 </td>
-                <td v-if="showActions" class="whitespace-nowrap">
+                <td v-if="showActions" class="card-full whitespace-nowrap">
                   <button
                     v-if="auth.rights.edit_entries"
                     class="btn btn-sm mr-1"

@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import MonthPicker from '../components/MonthPicker.vue'
 import DailyBarChart from '../components/DailyBarChart.vue'
 import TrendChart from '../components/TrendChart.vue'
+import TrendsView from './TrendsView.vue'
 import ExpenseStatusChip from '../components/ExpenseStatusChip.vue'
 import { percentChange } from '../../shared/logic'
 import type { ExpenseVoucher, ReportPayload, TrendData } from '../types'
@@ -373,6 +374,10 @@ function dayTitle(d: { date: string; worked: boolean; entry: boolean; task: bool
           months beside it.
         </p>
       </div>
+
+      <!-- The Trends page itself, embedded so its range and (for admins)
+           employee selectors work here too. -->
+      <TrendsView embedded class="mb-6" />
 
       <div class="panel mb-6">
         <h3 class="display mb-3 text-xl">Per person</h3>

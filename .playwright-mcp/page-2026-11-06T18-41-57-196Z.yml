@@ -1,0 +1,135 @@
+- generic [ref=f1e3]:
+  - banner [ref=f1e4]:
+    - link "OpenSignal Ledger — go to time entry" [ref=f1e5] [cursor=pointer]:
+      - /url: /entries
+      - generic [ref=f1e6]: LG
+      - generic [ref=f1e7]:
+        - heading "OPENSIGNAL Ledger" [level=1] [ref=f1e8]
+        - paragraph [ref=f1e9]: Team Timesheet & Tracker
+    - generic [ref=f1e10]:
+      - button "Notifications, 9 unread" [ref=f1e12] [cursor=pointer]:
+        - generic [aria-hidden] [ref=f1e13]: 🔔
+        - generic [ref=f1e14]: "9"
+      - button "Account ▾" [ref=f1e16] [cursor=pointer]:
+        - generic [ref=f1e17]: Account
+        - generic [ref=f1e18]: ▾
+  - navigation "Primary navigation" [ref=f1e19]:
+    - link "Dashboard" [ref=f1e20] [cursor=pointer]:
+      - /url: /
+    - link "Tasks" [ref=f1e21] [cursor=pointer]:
+      - /url: /tasks
+    - link "Time Entry" [ref=f1e22] [cursor=pointer]:
+      - /url: /entries
+    - link "News" [ref=f1e23] [cursor=pointer]:
+      - /url: /news
+    - link "Reports" [ref=f1e24] [cursor=pointer]:
+      - /url: /trends
+    - link "Finance" [ref=f1e25] [cursor=pointer]:
+      - /url: /payments
+  - generic [ref=f1e26]:
+    - generic [ref=f1e27]:
+      - heading "Dashboard" [level=2] [ref=f1e28]
+      - generic [ref=f1e29]:
+        - combobox "Dashboard date range" [ref=f1e30]:
+          - option "Month" [selected]
+          - option "Custom"
+        - generic [ref=f1e31]:
+          - button "Previous month" [ref=f1e32] [cursor=pointer]: ‹
+          - generic [ref=f1e33]: November 2026
+          - button "Next month" [ref=f1e34] [cursor=pointer]: ›
+          - textbox "Pick month" [ref=f1e35]: 2026-11
+    - generic [ref=f1e36]:
+      - generic [ref=f1e37]:
+        - generic [ref=f1e38]: "0.0"
+        - generic [ref=f1e39]: Hours
+      - generic [ref=f1e40]:
+        - generic [ref=f1e41]:
+          - paragraph [ref=f1e42]: Your days worked
+          - paragraph [ref=f1e43]: "0"
+          - paragraph [ref=f1e44]: of 6 so far
+        - generic [ref=f1e45]:
+          - paragraph [ref=f1e46]: Classification
+          - paragraph [ref=f1e47]: "0"
+        - generic [ref=f1e48]:
+          - paragraph [ref=f1e49]: QAP
+          - paragraph [ref=f1e50]: "0"
+        - generic [ref=f1e51]:
+          - paragraph [ref=f1e52]: Telematics Installation
+          - paragraph [ref=f1e53]: "0"
+    - generic [ref=f1e54]:
+      - generic [ref=f1e55]:
+        - heading "Your days this month" [level=3] [ref=f1e56]
+        - paragraph [ref=f1e57]: 0 worked · 6 with no work done
+      - generic [ref=f1e58]:
+        - generic "2026-11-01 — no work done" [ref=f1e59]: "1"
+        - generic "2026-11-02 — no work done" [ref=f1e60]: "2"
+        - generic "2026-11-03 — no work done" [ref=f1e61]: "3"
+        - generic "2026-11-04 — no work done" [ref=f1e62]: "4"
+        - generic "2026-11-05 — no work done" [ref=f1e63]: "5"
+        - generic "2026-11-06 — no work done" [ref=f1e64]: "6"
+      - paragraph [ref=f1e65]: A day counts as worked if you logged time or completed a task on it. Days still to come this month aren't shown.
+    - generic [ref=f1e66]:
+      - generic [ref=f1e67]:
+        - heading "Your productivity — last 3 months" [level=3] [ref=f1e68]
+        - paragraph [ref=f1e69]: Total units per month, by work type
+      - paragraph [ref=f1e70]: No countable work logged in the last 3 months.
+      - table [ref=f1e72]:
+        - rowgroup [ref=f1e73]:
+          - row [ref=f1e74]:
+            - cell "Month Sep 26" [ref=f1e75]
+            - cell "Units 0" [ref=f1e76]
+            - cell "vs prior —" [ref=f1e77]:
+              - text: vs prior
+              - generic [ref=f1e78]: —
+            - cell "Hours 0.00" [ref=f1e79]
+            - cell "vs prior —" [ref=f1e80]:
+              - text: vs prior
+              - generic [ref=f1e81]: —
+          - row [ref=f1e82]:
+            - cell "Month Oct 26" [ref=f1e83]
+            - cell "Units 0" [ref=f1e84]
+            - cell "vs prior —" [ref=f1e85]:
+              - text: vs prior
+              - generic [ref=f1e86]: —
+            - cell "Hours 0.00" [ref=f1e87]
+            - cell "vs prior —" [ref=f1e88]:
+              - text: vs prior
+              - generic [ref=f1e89]: —
+          - row [ref=f1e90]:
+            - cell "Month Nov 26 month to date" [ref=f1e91]:
+              - text: Month Nov 26
+              - generic [ref=f1e92]: month to date
+            - cell "Units 0" [ref=f1e93]
+            - cell "vs prior —" [ref=f1e94]:
+              - text: vs prior
+              - generic [ref=f1e95]: —
+            - cell "Hours 0.00" [ref=f1e96]
+            - cell "vs prior —" [ref=f1e97]:
+              - text: vs prior
+              - generic [ref=f1e98]: —
+      - paragraph [ref=f1e99]: The current month is still in progress, so it reads low against the two completed months beside it.
+    - generic [ref=f1e100]:
+      - generic [ref=f1e101]:
+        - heading "Trends" [level=3] [ref=f1e102]
+        - combobox "Range" [ref=f1e104]:
+          - option "Last 3 months"
+          - option "Last 6 months"
+          - option "Last 12 months" [selected]
+      - paragraph [ref=f1e105]: Performance for Test Installer over the last 12 months.
+      - generic [ref=f1e106]:
+        - heading "Work output by month" [level=3] [ref=f1e107]
+        - paragraph [ref=f1e108]: No countable work logged in this period.
+      - heading "Hours by month" [level=3] [ref=f1e110]
+    - generic [ref=f1e113]:
+      - heading "Per person" [level=3] [ref=f1e114]
+      - table [ref=f1e116]:
+        - rowgroup [ref=f1e117]:
+          - row [ref=f1e118]:
+            - cell "Employee No activity this month." [ref=f1e119]
+    - heading "Work by day" [level=3] [ref=f1e121]
+    - generic [ref=f1e124]:
+      - heading "Daily detail" [level=3] [ref=f1e125]
+      - table [ref=f1e127]:
+        - rowgroup [ref=f1e128]:
+          - row [ref=f1e129]:
+            - cell "Date No entries this month." [ref=f1e130]

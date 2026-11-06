@@ -328,6 +328,9 @@ What you see here depends on your rights.
   percentage means there was nothing to compare against (the earliest month, or
   a month with no work). This panel always covers the last three months ending
   today; changing the month picker above doesn't move it.
+  Below it, the **Trends** charts from Reports → Trends also appear on the
+  Dashboard, with the same 3/6/12-month range selector (and, for admins, the
+  same employee picker).
 - **Monthly Report** — the fuller per-person report. Months that have ended are automatically locked by default to keep figures reliable. If adjustments are required for a past month, an administrator must unlock it.
 - **Trends** — your figures over the last 3, 6 or 12 months.
 - **Card Audit** — who classified or QAP'd a given card. Admin Guide has more.

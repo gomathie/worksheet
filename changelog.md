@@ -27,6 +27,11 @@ All notable changes to this project will be documented in this file.
     stops retrying at that point, so the page really is stuck and silence would hide a real outage.
 
 ### Added
+- Feature: Trends on the Dashboard
+  - The Reports → Trends charts (work output, hours, and, where the viewer's rights allow,
+    remuneration and points) now also appear on the Dashboard, below **Your productivity**, with the
+    same range selector and the admin employee picker. The Trends page itself is embedded rather than
+    copied, so the two stay identical. The Trends page is unchanged.
 - Feature: three-month productivity comparison on the Dashboard
   - Every user now sees **Your productivity — last 3 months**: one horizontal bar per month, split by
     work type, with the month's total printed at the end of the bar, plus a row per month with total

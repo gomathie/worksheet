@@ -5,12 +5,17 @@ import { useAuthStore } from '../stores/auth'
 import TrendChart from '../components/TrendChart.vue'
 import type { Employee, TrendData } from '../types'
 
+// `embedded` renders this page as a section of the Dashboard.
+const props = defineProps<{ embedded?: boolean }>()
+
 const auth = useAuthStore()
 const error = ref('')
 const data = ref<TrendData | null>(null)
 
 const employees = ref<Employee[]>([])
-const selectedId = ref(auth.user!.id)
+// auth.user can be briefly null while an expired session redirects to login;
+// an empty id makes the server fall back to the signed-in user.
+const selectedId = ref(auth.user?.id ?? '')
 const range = ref(6)
 
 async function load() {
@@ -59,7 +64,8 @@ const hasUnits = computed(() =>
 <template>
   <div>
     <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="display text-2xl">Trends</h2>
+      <h3 v-if="props.embedded" class="display text-xl">Trends</h3>
+      <h2 v-else class="display text-2xl">Trends</h2>
       <div class="flex flex-wrap items-center gap-3">
         <select
           v-if="auth.isAdmin"

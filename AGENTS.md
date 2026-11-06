@@ -2393,3 +2393,43 @@ Any remaining considerations
 
 - This needs a deployment to take effect.
 - During the same session, the pending production migration `0041_dashboard_default_right.sql` was not applied. The auto-mode permission classifier blocked the command, so the user must apply it. The production `ledger-db` is in Cloudflare account `9e1069f546a77c9ab4fe19d24ccf0a62`. `wrangler.toml` has no `account_id`, and more than one account is logged in, so a non-interactive `wrangler` command must receive `CLOUDFLARE_ACCOUNT_ID` set to that account.
+
+November 6, 2026
+Feature: Trends Embedded on the Dashboard
+
+Branch: main
+
+User Request
+
+"also duplicate trends to dashbaord so it can be seen"
+
+Implementation
+
+I embedded the Trends page component in the Dashboard instead of copying its code, so one implementation serves both places.
+
+- `src/views/TrendsView.vue`: added an optional `embedded` prop. When it is set, the page heading is an `h3`, as for other dashboard sections, instead of the page-level `h2`. The range and admin employee selectors are kept. `selectedId` now falls back to an empty string when `auth.user` is briefly null (the same session-expiry window fixed for `DashboardView` on October 27); with an empty id the server uses the signed-in user.
+- `src/views/DashboardView.vue`: renders `<TrendsView embedded />` after the **Your productivity — last 3 months** panel and before the team panels.
+
+Authorization is unchanged. `/api/trends` still rejects a non-admin who asks for another employee's trend. It also still adds remuneration and points only for viewers who hold those rights, so the Dashboard shows nothing the Trends page did not already show to the same user.
+
+Files changed
+
+- `src/views/TrendsView.vue`
+- `src/views/DashboardView.vue`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- `npm run build` (includes `vue-tsc`): passed. `npx vitest run`: 12 files, 295 tests passed.
+- Live check in the browser against `wrangler pages dev` at 390px, signed in as a seeded standard employee with a temporary local KV session:
+  - The Dashboard showed the Trends section with its range selector and both charts, and there was no horizontal overflow.
+  - Changing the range to 12 months sent `/api/trends?months=12` and updated the caption.
+  - `/trends` still rendered its own `h2` page.
+- The test session was deleted and the dev server was stopped afterwards.
+
+Any remaining considerations
+
+- The Dashboard now requests `/api/trends` twice: once for the 3-month productivity panel and once for the embedded Trends (6 months by default). The requests are small and self-scoped, so I did not share the data between them.
+- The admin employee picker also loads `/api/employees` on the Dashboard for admins.

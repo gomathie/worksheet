@@ -9,6 +9,7 @@ import TaskDeadlineAlert from './components/TaskDeadlineAlert.vue'
 import TaskAgeAlert from './components/TaskAgeAlert.vue'
 import NewsPopup from './components/NewsPopup.vue'
 import InstallAppButton from './components/InstallAppButton.vue'
+import { installed as appInstalled } from './pwaInstall'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -475,6 +476,13 @@ async function returnToAdmin() {
         >
           {{ profileError }}
         </p>
+        <div v-if="!appInstalled" class="mt-4 border-t border-line pt-4 md:hidden">
+          <p class="field-label">Install the app</p>
+          <p class="mb-3 text-sm text-muted">
+            Put Ledger on your home screen so it opens full screen, like a regular app.
+          </p>
+          <InstallAppButton block />
+        </div>
       </form>
     </div>
 

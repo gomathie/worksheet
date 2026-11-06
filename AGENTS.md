@@ -2494,3 +2494,47 @@ Any remaining considerations
   - `index.html`: the favicon, manifest and apple-touch-icon `<link>`s now have ids, and an inline head script points them at the festive files from 1 November to 9 January. It runs before the browser reads the manifest. Its date check repeats `shared/season.ts`. `tests/season.test.ts` runs that inline script with faked dates and asserts it agrees with `isFestiveSeason`, including on 9 and 10 January.
   - Platform limits: Android/Chrome updates an installed app's icon only when it re-checks the manifest, which is periodic and can lag by a day or more both into and out of the season. iOS fixes the home-screen icon at install time. The browser tab icon switches on the next page load.
 - Production migration `0041_dashboard_default_right.sql` was applied by the user later the same day (`wrangler d1 migrations apply ledger-db --remote` with `CLOUDFLARE_ACCOUNT_ID=9e1069f546a77c9ab4fe19d24ccf0a62`; status ✅). Production D1 is now current through `0041`.
+
+November 7, 2026
+Feature: Install-App Button in the Profile Panel on Phones
+
+Branch: main
+
+User Request
+
+"add a one click button in the profile section on mobile to add the app to homescreen as pwa"
+
+Implementation
+
+The header already had `InstallAppButton.vue`, but it kept its install state locally, and the browser's captured `beforeinstallprompt` event can only be prompted once. Two instances would each hold their own copy, so whichever one was tapped second would try to reuse an event that had already been used.
+
+- `src/pwaInstall.ts` (new): shared module-level state (`deferredPrompt`, `installed`, `installing`, `isIos`) and `promptInstall()`. The `beforeinstallprompt`/`appinstalled` listeners are registered when the module loads (it is imported by `App.vue`, before mount), so an early prompt event is no longer missed. `promptInstall()` returns false when there is no prompt, and the caller then shows manual steps.
+- `src/components/InstallAppButton.vue`: uses the shared state. A new `block` prop draws a full-width solid button and shows it even when the browser has offered no prompt; tapping it then opens a help dialog with Safari steps on iOS or browser-menu steps elsewhere. The header (non-block) variant behaves as before. It now shares state with the profile button, so both disappear once the app is installed.
+- `src/App.vue`: the **Edit profile** panel ends with an "Install the app" section (`md:hidden`, and only while `installed` is false) holding `<InstallAppButton block />`.
+
+A real one-tap install is only possible where the browser fires `beforeinstallprompt` (Chrome/Edge/Samsung on Android). iOS has no such API, so it always shows the Safari steps.
+
+Files changed
+
+- `src/pwaInstall.ts` (new)
+- `src/components/InstallAppButton.vue`
+- `src/App.vue`
+- `guideline-user.md`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- `npm run build` (includes `vue-tsc`): passed. `npx vitest run`: 14 files, 305 tests passed.
+- Live check in the browser against `wrangler pages dev` at 390px, signed in with a temporary local KV session:
+  - Chromium offered a real install prompt for the local app. Tapping the profile button called it straight away, and the header and profile buttons both changed to "Opening install…", which confirms they share state.
+  - With a synthetic `beforeinstallprompt`:
+    - Dismissed outcome: one tap prompted once. The next tap, with no prompt left, opened the menu-steps dialog with focus on "Done".
+    - Accepted outcome: the profile block and the header button both disappeared.
+  - The profile button was 302px wide, and there was no horizontal overflow.
+  - At 1280px the profile install block was `display: none`.
+- The test session was deleted, the dev server was stopped, and the browser logs were removed.
+
+Any remaining considerations
+
+- The iOS help dialog is the same one the header button already showed before this change; I did not re-test it with an iOS user agent.

@@ -23,6 +23,13 @@ number current — email and phone are what notifications go to (email, and SMS
 if an admin has that turned on). Your role and rights are still set by an
 administrator.
 
+**Install the app (phones):** at the bottom of **Edit profile** there is an
+**Install app** button (**Add to Home Screen** on iPhone) until the app is
+installed. On Android/Chrome one tap opens the install prompt. iPhones don't
+allow one-tap installs, so you'll see the three Safari steps instead. If your
+browser doesn't offer the prompt, you'll see where to find the install option
+in its menu.
+
 Tap the **OpenSignal Ledger** masthead at any time to get back to Time Entry.
 
 The **🔔 bell** shows unread notifications — expense decisions, tasks assigned to

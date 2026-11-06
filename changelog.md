@@ -27,6 +27,12 @@ All notable changes to this project will be documented in this file.
     stops retrying at that point, so the page really is stuck and silence would hide a real outage.
 
 ### Added
+- Feature: install button in the profile panel on phones
+  - **Edit profile** now ends with a full-width **Install app** button on phones until the app is
+    installed. On Android/Chrome it opens the install prompt in one tap. iPhones show the Safari steps,
+    and browsers without a prompt show the menu steps.
+  - The install state is now shared, so the header button and the profile button stay in sync, and
+    the browser's install offer is captured as soon as the app loads.
 - Feature: two-column cards on phones
   - On phones, Payments (payouts, reimbursement requests, bonuses & reimbursements), the Report
     per-person summary, all three Petty Cash tables and Time Entry's recent entries now pair their

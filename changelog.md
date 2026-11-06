@@ -44,6 +44,11 @@ All notable changes to this project will be documented in this file.
 - Feature: festive logo
   - From 1 November to 9 January the "LG" mark wears a Santa hat with twinkling confetti. It returns
     to the standard logo on 10 January.
+  - The browser-tab icon, the PWA/home-screen icons and the iPhone icon have festive versions for the
+    same dates. These are the existing icons with a hat and confetti added, so the logo itself is
+    unchanged. A phone that already has the app installed only picks up a new icon when its browser
+    re-reads the app manifest, which can take a day or more. iPhones never update an icon that is
+    already on the home screen.
 - Feature: Trends on the Dashboard
   - The Reports → Trends charts (work output, hours, and, where the viewer's rights allow,
     remuneration and points) now also appear on the Dashboard, below **Your productivity**, with the

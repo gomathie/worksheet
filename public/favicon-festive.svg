@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <circle cx="32" cy="34" r="27" fill="#F5F1E6" stroke="#1E2124" stroke-width="4"/>
+  <text x="32" y="43" text-anchor="middle" font-family="Georgia, serif" font-weight="bold" font-size="23" fill="#128F72" transform="rotate(-8 32 34)">LG</text>
+  <g transform="translate(43 12) rotate(22) scale(0.16)">
+    <path d="M -72 22 C -60 -38 -14 -88 52 -84 C 34 -52 28 -22 34 22 Z" fill="#b23a2e"/>
+    <rect x="-84" y="8" width="132" height="34" rx="17" fill="#ffffff" stroke="#1E2124" stroke-width="8"/>
+    <circle cx="56" cy="-84" r="21" fill="#ffffff" stroke="#1E2124" stroke-width="8"/>
+  </g>
+</svg>

@@ -8,10 +8,21 @@
       name="description"
       content="OpenSignal Ledger: log team hours and work output, track points-based remuneration, bonuses and payouts."
     />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link id="manifest" rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#128F72" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      // Festive icons 1 Nov – 9 Jan; same window as shared/season.ts (keep in
+      // sync). Runs before the browser reads the manifest.
+      ;(function () {
+        var d = new Date(), m = d.getMonth()
+        if (!(m === 10 || m === 11 || (m === 0 && d.getDate() < 10))) return
+        document.getElementById('favicon').href = '/favicon-festive.svg'
+        document.getElementById('manifest').href = '/manifest-festive.webmanifest'
+        document.getElementById('apple-touch-icon').href = '/apple-touch-icon-festive.png'
+      })()
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Ledger" />
     <!-- Link previews (WhatsApp, Slack, social) -->

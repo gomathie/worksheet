@@ -527,7 +527,7 @@ const signed = (e: { type: string; amount: number }) =>
           </p>
         </div>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Employee</th>
@@ -539,7 +539,7 @@ const signed = (e: { type: string; amount: number }) =>
             </thead>
             <tbody>
               <tr v-for="h in data.holders" :key="h.employee_id">
-                <td>
+                <td class="card-full">
                   {{ h.employee_name }}
                   <span v-if="h.employee_code" class="mono text-xs text-muted">
                     {{ h.employee_code }}
@@ -562,7 +562,7 @@ const signed = (e: { type: string; amount: number }) =>
               <!-- What the organisation has out there in total — the figure
                    that has to be reconciled against physical cash. -->
               <tr class="totals">
-                <td>Total</td>
+                <td class="card-full">Total</td>
                 <td class="num">{{ money(holderTotals.issued) }}</td>
                 <td class="num">{{ money(holderTotals.spent) }}</td>
                 <td class="num" :class="holderTotals.balance < 0 ? 'text-red' : ''">
@@ -579,7 +579,7 @@ const signed = (e: { type: string; amount: number }) =>
       <div v-if="data.ledger.length" class="panel mb-6">
         <h3 class="display mb-3 text-xl">Your cash movements</h3>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Date</th>
@@ -605,7 +605,7 @@ const signed = (e: { type: string; amount: number }) =>
                     e.reference
                   }}</span>
                 </td>
-                <td class="text-muted">{{ e.note ?? '—' }}</td>
+                <td class="card-full text-muted">{{ e.note ?? '—' }}</td>
                 <td class="text-xs">{{ e.created_by_name ?? '—' }}</td>
               </tr>
             </tbody>
@@ -621,7 +621,7 @@ const signed = (e: { type: string; amount: number }) =>
           balance.
         </p>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Voucher</th>

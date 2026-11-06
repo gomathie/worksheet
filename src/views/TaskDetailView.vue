@@ -10,6 +10,7 @@ import {
   type TaskStatus,
 } from '../../shared/tasks'
 import type { Task, TaskAssignee, TaskComment } from '../types'
+import { shareTask, taskShortPath, taskShortUrl } from '../taskLink'
 
 // A single task, Jira-issue-style: the code, its state, everything about
 // it, and a comment thread underneath for activity/progress updates.
@@ -36,6 +37,17 @@ const id = computed(() => route.params.id as string)
 const canManage = computed(() => auth.isAdmin || auth.rights.manage_tasks)
 const can = (a: 'edit' | 'delete' | 'set_status' | 'accept') =>
   task.value?.actions.includes(a) ?? false
+
+async function share() {
+  if (!task.value) return
+  error.value = ''
+  try {
+    const result = await shareTask(task.value)
+    if (result === 'copied') notice.value = `Link copied: ${taskShortUrl(task.value)}`
+  } catch {
+    error.value = `Could not share. The link is ${taskShortUrl(task.value)}`
+  }
+}
 
 async function load() {
   error.value = ''
@@ -203,6 +215,7 @@ async function postComment() {
       <RouterLink :to="{ name: 'tasks' }" class="text-sm text-muted underline"
         >&larr; Back to tasks</RouterLink
       >
+      <button v-if="task" type="button" class="btn btn-sm" @click="share">Share</button>
     </div>
 
     <p v-if="error" class="panel mb-6 border-red bg-red-soft text-red">{{ error }}</p>
@@ -210,7 +223,13 @@ async function postComment() {
 
     <div v-if="task" class="panel">
       <div class="mb-1 flex flex-wrap items-center gap-2">
-        <span class="mono text-sm text-muted">{{ task.task_code }}</span>
+        <RouterLink
+          v-if="task.task_code"
+          :to="taskShortPath(task)"
+          class="mono text-sm text-muted underline"
+          :title="taskShortUrl(task)"
+          >{{ task.task_code }}</RouterLink
+        >
         <span
           class="display rounded-full border px-2 py-0.5 text-xs tracking-wider"
           :class="statusTone[task.status]"

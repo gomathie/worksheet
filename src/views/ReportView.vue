@@ -288,7 +288,7 @@ const rateNote = computed(() => {
       <section class="print-block mb-8">
         <h3 class="display mb-3 text-xl">Per-person summary</h3>
         <div class="table-wrap">
-          <table class="data">
+          <table class="data cards-2col">
             <thead>
               <tr>
                 <th>Employee</th>
@@ -308,7 +308,7 @@ const rateNote = computed(() => {
             </thead>
             <tbody>
               <tr v-for="p in report.per_person" :key="p.employee_id">
-                <td>{{ p.name }}</td>
+                <td class="card-full">{{ p.name }}</td>
                 <td class="num">{{ p.days_worked }}</td>
                 <td class="num">{{ p.hours.toFixed(2) }}</td>
                 <td v-for="wt in visibleTypes" :key="wt.id" class="num">
@@ -323,7 +323,7 @@ const rateNote = computed(() => {
                 </template>
               </tr>
               <tr class="totals">
-                <td>Total</td>
+                <td class="card-full">Total</td>
                 <td class="num">{{ report.totals.days_worked }}</td>
                 <td class="num">{{ report.totals.hours.toFixed(2) }}</td>
                 <td v-for="wt in visibleTypes" :key="wt.id" class="num">

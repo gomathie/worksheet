@@ -275,11 +275,14 @@ async function nextTaskCode(env: Env): Promise<string> {
 export async function getTask(request: Request, env: Env, id: string): Promise<Response> {
   const user = await requireUser(request, env)
   const actor = actorFor(user)
+  // Also accepts a task code (e.g. TASK-007) so short links resolve; the same
+  // canViewTask check below applies either way.
+  const code = id.toUpperCase()
   let task: TaskRow | null = null
   try {
-    task = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ?`).bind(id).first<TaskRow>()
+    task = await env.DB.prepare(`${SELECT_TASK} WHERE t.id = ? OR t.task_code = ?`).bind(id, code).first<TaskRow>()
   } catch {
-    task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ?').bind(id).first<TaskRow>()
+    task = await env.DB.prepare('SELECT * FROM tasks WHERE id = ? OR task_code = ?').bind(id, code).first<TaskRow>()
   }
   if (!task) throw new ApiError(404, 'Task not found')
   if (!canViewTask(taskLike(task), actor)) throw new ApiError(403, 'You cannot see this task')

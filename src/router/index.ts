@@ -161,6 +161,13 @@ const router = createRouter({
       meta: { auth: true },
     },
     {
+      // Short, shareable link by task code, e.g. /t/TASK-007.
+      path: '/t/:code',
+      name: 'task-short',
+      component: () => import('../views/TaskShortLinkView.vue'),
+      meta: { auth: true },
+    },
+    {
       path: '/news',
       name: 'news',
       component: () => import('../views/NewsView.vue'),
@@ -214,7 +221,10 @@ router.beforeEach(async (to) => {
       auth.loaded = true
     }
   }
-  if (to.meta.auth && !auth.user) return { name: 'login' }
+  if (to.meta.auth && !auth.user) {
+    // Keep deep links (e.g. a shared task) so login can return to them.
+    return to.fullPath === '/' ? { name: 'login' } : { name: 'login', query: { redirect: to.fullPath } }
+  }
   if (to.meta.admin && !auth.isAdmin) return { name: 'entries' }
   if (
     to.meta.right &&

@@ -14,6 +14,7 @@ import {
   type TaskStatus,
 } from '../../shared/tasks'
 import type { Task, TaskAssignee } from '../types'
+import { shareTask, taskShortPath, taskShortUrl } from '../taskLink'
 
 // A standalone to-do list. Deliberately unconnected to entries, cards or pay:
 // a task records intent, and nothing here feeds a points or money figure.
@@ -26,6 +27,16 @@ const tasks = ref<Task[]>([])
 const employees = ref<TaskAssignee[]>([])
 const error = ref('')
 const notice = ref('')
+
+async function share(t: Task) {
+  error.value = ''
+  try {
+    const result = await shareTask(t)
+    if (result === 'copied') notice.value = `Link copied: ${taskShortUrl(t)}`
+  } catch {
+    error.value = `Could not share. The link is ${taskShortUrl(t)}`
+  }
+}
 const busy = ref('')
 const showDone = ref(false)
 
@@ -477,7 +488,13 @@ const statusTone: Record<TaskStatus, string> = {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <div class="flex flex-wrap items-center gap-2">
-            <span v-if="t.task_code" class="mono text-xs text-muted">{{ t.task_code }}</span>
+            <RouterLink
+              v-if="t.task_code"
+              :to="taskShortPath(t)"
+              class="mono text-xs text-muted underline"
+              :title="taskShortUrl(t)"
+              >{{ t.task_code }}</RouterLink
+            >
             <h3 class="text-lg font-medium" :class="{ 'line-through text-muted': t.status === 'done' || t.status === 'cancelled' }">
               {{ t.title }}
             </h3>
@@ -523,6 +540,7 @@ const statusTone: Record<TaskStatus, string> = {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3C5 3 1.7 7.1 1 10c.7 2.9 4 7 9 7s8.3-4.1 9-7c-.7-2.9-4-7-9-7Zm0 11.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg>
             View
           </RouterLink>
+          <button type="button" class="btn btn-sm" @click="share(t)">Share</button>
           <button
             v-if="can(t, 'accept')"
             class="btn btn-sm btn-solid"

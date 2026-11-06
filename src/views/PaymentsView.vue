@@ -470,7 +470,7 @@ const statusLabel = (a: Adjustment) => ADJUSTMENT_STATUS_LABELS[a.status] ?? a.s
                 >
                   {{ statusLabel(a) }}
                 </td>
-                <td>
+                <td class="card-full">
                   <button class="btn btn-sm btn-danger" :disabled="busy" @click="removeAdjustment(a)">
                     Remove
                   </button>

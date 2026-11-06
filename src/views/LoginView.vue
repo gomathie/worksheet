@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import PasswordField from '../components/PasswordField.vue'
 
@@ -8,6 +8,13 @@ const REMEMBER_KEY = 'ledger_remember'
 
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
+
+// Only same-app paths: "//host" or a full URL would turn login into an open redirect.
+function safeRedirect(): string | null {
+  const r = route.query.redirect
+  return typeof r === 'string' && /^\/(?![/\\])/.test(r) ? r : null
+}
 
 const username = ref('')
 const password = ref('')
@@ -45,7 +52,8 @@ async function signIn() {
       localStorage.removeItem(REMEMBER_KEY)
     }
 
-    router.push({ name: 'dashboard' })
+    const redirect = safeRedirect()
+    router.push(redirect ?? { name: 'dashboard' })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Something went wrong'
   } finally {

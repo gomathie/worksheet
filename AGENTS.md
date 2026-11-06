@@ -2433,3 +2433,60 @@ Any remaining considerations
 
 - The Dashboard now requests `/api/trends` twice: once for the 3-month productivity panel and once for the embedded Trends (6 months by default). The requests are small and self-scoped, so I did not share the data between them.
 - The admin employee picker also loads `/api/employees` on the Dashboard for admins.
+
+November 6, 2026
+Feature: Mobile Two-Column Cards, Task Sharing and Short Links, Festive Logo
+
+Branch: main
+
+User Request
+
+"on the payments page, I think the payout cards can be in two colum ... same as per person summuray in report. also petty cash page. also check yhe same for the time entry page to log time and recent entries. tasks - provie a button to share a task out side. like a link. also add short link in a task so it can be clceiked and gone to directly. all these changes are for mobile". Follow-up: "add some christmas hats and confetti designs to the logos since we are approaching christmas. now if the date is 10 january, fally back on our standard logo."
+
+Implementation
+
+Two-column cards:
+- `src/style.css`: added a general `table.data.cards-2col` mobile rule (below 768px, inside the existing mobile-table media query), modelled on the Dashboard's `per-person-table`. Cells pair two per row. `td.card-full` and any `td[colspan]` (group headings, empty states) span the whole row. The Dashboard rule was left as it was.
+- Applied it to the three Payments tables (`PaymentsView.vue`), the Report per-person summary (`ReportView.vue`), the three Petty Cash tables (`PettyCashView.vue`) and Time Entry's recent entries (`EntriesView.vue`). Names, descriptions, notes, statuses and action buttons are marked `card-full`.
+- `src/main.ts`: `totals` rows now receive `data-label`s, except their first "Total" cell. Before this, totals figures had no labels on phones, which was harder to read in two columns. `group-head` rows are still skipped.
+- `EntriesView.vue` Log time form: `grid-cols-1` became `grid-cols-2` below `lg`. Employee, the inner work-type grid (now two columns), the card blocks, notes and the button row are `col-span-2`. The `lg:` four-column layout is unchanged.
+
+Task sharing and short links:
+- `server/tasks.ts` `getTask`: also matches `task_code` (upper-cased), so `/api/tasks/TASK-007` resolves. The same `canViewTask` check applies. PATCH/DELETE still match on `id` only, so a code can only be used for reading.
+- `src/views/TaskShortLinkView.vue` and route `/t/:code` (`task-short`, auth required): look up the task through the API and `router.replace` to `task-detail`. Any API error (404, or 403 when the viewer may not see the task) is shown with a link back to Tasks.
+- `src/taskLink.ts`: `taskShortPath`/`taskShortUrl` (with an id fallback for tasks that have no code) and `shareTask`. `shareTask` uses `navigator.share` where available, treats `AbortError` as a cancel and not a failure, and otherwise copies the link to the clipboard. A **Share** button and a linked task code were added to `TasksView.vue` cards and `TaskDetailView.vue`.
+- Deep links when signed out: the router guard now sends `{ name: 'login', query: { redirect: to.fullPath } }` (not for `/`). After login, `LoginView.vue` returns to it only when it matches `^\/(?![/\\])`, so `//host` or `/\host` cannot turn login into an open redirect.
+
+Festive logo:
+- `shared/season.ts` `isFestiveSeason(date)`: true from 1 November through 9 January. On 10 January it returns false, so the standard logo comes back.
+- `src/components/BrandMark.vue`: the header "LG" mark, moved out of `App.vue`. During the season it adds an SVG Santa hat and five small confetti pieces with a gentle twinkle; the global reduced-motion rule already stops that animation. The date is checked once per page load.
+
+Also added `.playwright-mcp/` to `.gitignore`. The browser tool writes its logs and page snapshots there, and the external auto-commit tool had already committed earlier ones from today.
+
+Files changed
+
+- `src/style.css`, `src/main.ts`
+- `src/views/PaymentsView.vue`, `src/views/ReportView.vue`, `src/views/PettyCashView.vue`, `src/views/EntriesView.vue`
+- `server/tasks.ts`, `src/router/index.ts`, `src/views/LoginView.vue`, `src/views/TaskShortLinkView.vue` (new), `src/taskLink.ts` (new), `src/views/TasksView.vue`, `src/views/TaskDetailView.vue`
+- `shared/season.ts` (new), `src/components/BrandMark.vue` (new), `src/App.vue`
+- `tests/taskLink.test.ts` (new), `tests/season.test.ts` (new)
+- `.gitignore`, `guideline-user.md`, `changelog.md`, `AGENTS.md`
+
+Testing performed
+
+- `npm run build` (includes `vue-tsc`): passed. `npx tsc --noEmit -p tsconfig.server.json`: passed. `npx vitest run`: 14 files, 305 tests passed (10 new: short-link paths and the season boundaries, including 9 and 10 January).
+- Live check in the browser against `wrangler pages dev` + local D1 at 390x844, signed in with a temporary local admin KV session:
+  - Signed out, `/t/TASK-001` went to `/login?redirect=/t/TASK-001`.
+  - Signed in, `/t/task-001` (lower case) replaced itself with `/tasks/<uuid>` for TASK-001. The task code linked to `/t/TASK-001`, and the Share button, Santa hat and 5 confetti pieces were present.
+  - Share used `navigator.share` where the browser had it. With `navigator.share` removed, it copied `http://127.0.0.1:8788/t/TASK-001` and showed "Link copied: ...".
+  - Payments (August 2026): the payout card was the name across 300px, then Base | Bonus and Reimb. | Total due at 150px each, then status and actions across 300px. The Report per-person card went from 11 stacked rows to 6, and the Total row's figures were labelled.
+  - Time Entry form: Employee across 302px, then Date | Time start and Time end | Hours at 143px each, then Notes across 302px. There was no horizontal overflow on any page.
+  - At 1280px, the Time Entry fields stayed on one row and the tables kept their normal table display.
+- The test session was deleted, the dev server was stopped, and this round's untracked browser logs were removed.
+
+Any remaining considerations
+
+- Petty Cash and Time Entry's recent entries had no local rows to look at. They use the same CSS that was checked on Payments and Report.
+- The festive mark covers the header logo only. The favicon and PWA home-screen icons are image files and are unchanged.
+- The browser logs and snapshots in `.playwright-mcp/` that were committed earlier today are still tracked. They contain only local test data and local session tokens that have since been deleted. Remove them with `git rm -r --cached .playwright-mcp` if wanted.
+- Production migration `0041_dashboard_default_right.sql` is still unapplied (see the earlier entry today).

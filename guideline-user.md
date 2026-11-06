@@ -122,6 +122,13 @@ as plain text instead.
 - Each task gets a short code (**TASK-001**) and a **View** button that opens its
   own page — where status changes, reassignment, and accepting an Everyone task
   all happen directly, with no detour through Edit.
+- **Share a task:** tap the task's code (e.g. **TASK-001**) to open it through
+  its short link, or tap **Share** to send the link. On a phone, Share opens
+  the share sheet (WhatsApp, email and so on). Where there is no share sheet,
+  the link is copied for you to paste. The link looks like
+  `…/t/TASK-001`. Anyone who opens it still has to sign in and be allowed to
+  see the task. If they aren't signed in, they go to the task straight after
+  logging in.
 - A task moves **To do → In progress → Done**, or **Cancelled** if it's dropped.
 - **Reopen.** A Done or Cancelled task has a **Reopen** button (next to Edit/Delete,
   on both the task list and its own page) that puts it back to **To do** — for

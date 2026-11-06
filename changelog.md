@@ -27,6 +27,23 @@ All notable changes to this project will be documented in this file.
     stops retrying at that point, so the page really is stuck and silence would hide a real outage.
 
 ### Added
+- Feature: two-column cards on phones
+  - On phones, Payments (payouts, reimbursement requests, bonuses & reimbursements), the Report
+    per-person summary, all three Petty Cash tables and Time Entry's recent entries now pair their
+    figures two per row instead of one long column. Names, notes, statuses and buttons stay full
+    width. Totals rows now show a label above each figure.
+  - The Time Entry **Log time** form is two columns below desktop width: Date | Start, End | Hours, and
+    the work-type counts in pairs.
+  - Desktop layouts are unchanged.
+- Feature: share tasks and short links
+  - Every task shows its code (e.g. TASK-001) as a link to `/t/TASK-001`, which opens the task.
+  - A **Share** button on task cards and the task page opens the phone's share sheet, or copies the
+    link where there is none.
+  - The server applies the normal task visibility check to these links. Signed-out visitors return to
+    the link after logging in; only in-app paths are accepted for that return.
+- Feature: festive logo
+  - From 1 November to 9 January the "LG" mark wears a Santa hat with twinkling confetti. It returns
+    to the standard logo on 10 January.
 - Feature: Trends on the Dashboard
   - The Reports → Trends charts (work output, hours, and, where the viewer's rights allow,
     remuneration and points) now also appear on the Dashboard, below **Your productivity**, with the

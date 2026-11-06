@@ -87,10 +87,13 @@ const observeTables = () => {
   document.querySelectorAll('table.data').forEach(table => {
     const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent?.trim() || '')
     table.querySelectorAll('tbody tr').forEach(tr => {
-      // Don't apply to total or group head rows
-      if (tr.classList.contains('totals') || tr.classList.contains('group-head')) return
-      
+      // Group heads are a single spanning cell. Totals rows get labels too, so
+      // their figures read on a phone card, but not on the "Total" cell itself.
+      if (tr.classList.contains('group-head')) return
+      const totals = tr.classList.contains('totals')
+
       tr.querySelectorAll('td').forEach((td, i) => {
+        if (totals && i === 0) return
         if (headers[i] && !td.hasAttribute('data-label')) {
           td.setAttribute('data-label', headers[i])
         }

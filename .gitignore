@@ -6,3 +6,6 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Playwright MCP browser logs and snapshots
+.playwright-mcp/

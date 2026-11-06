@@ -19,7 +19,9 @@ export function isRouteChunkLoadError(error: unknown): boolean {
     /Loading chunk [\w-]+ failed/i.test(message) ||
     /Failed to fetch dynamically imported module/i.test(message) ||
     /Importing a module script failed/i.test(message) ||
-    /error loading dynamically imported module/i.test(message)
+    /error loading dynamically imported module/i.test(message) ||
+    // Safari, when a stale chunk URL gets the SPA's index.html fallback.
+    /is not a valid JavaScript MIME type/i.test(message)
   )
 }
 

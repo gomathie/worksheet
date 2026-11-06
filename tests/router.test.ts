@@ -25,6 +25,7 @@ describe('route chunk recovery', () => {
     'ChunkLoadError: Loading chunk 42 failed',
     'Failed to fetch dynamically imported module: /assets/PaymentsView-old.js',
     'Importing a module script failed.',
+    "'text/html' is not a valid JavaScript MIME type.",
   ])('recognizes browser chunk errors: %s', (message) => {
     expect(isRouteChunkLoadError(new TypeError(message))).toBe(true)
   })

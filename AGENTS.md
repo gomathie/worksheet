@@ -2363,3 +2363,33 @@ Testing performed
 Any remaining considerations
 
 - Tapping a nav link while the panel is still open and the tap lands on the panel's backdrop overlay (rather than directly on an element with its own click handler) closes the panel on that first tap without navigating, requiring a second tap to actually navigate — a separate, pre-existing UX wrinkle noticed while verifying this fix, not the "stuck open" behavior reported, and left alone to keep this change scoped to what was asked.
+
+November 6, 2026
+Fix: Safari Stale-Chunk MIME Error Not Recovered
+
+Branch: main
+
+User Request
+
+Sentry issue 159193765: `TypeError: 'text/html' is not a valid JavaScript MIME type.`, unhandled, Mobile Safari on iOS, transaction `report`.
+
+Implementation
+
+The breadcrumbs show a tab opening the Report route. Its lazy-loaded chunk name belonged to an earlier deployment, and Cloudflare Pages answers an unknown path with the SPA's `index.html` (HTTP 200, `text/html`). Safari words that failure as "is not a valid JavaScript MIME type", which `isRouteChunkLoadError` in `src/router/chunkRecovery.ts` did not match. Because of this, the one-time reload did not run and the `beforeSend` drop did not apply. I added that message pattern. The reload guard and the Sentry drop now apply to it in the same way as for the other browsers' wording.
+
+Files changed
+
+- `src/router/chunkRecovery.ts`
+- `tests/router.test.ts`
+- `changelog.md`
+- `AGENTS.md`
+
+Testing performed
+
+- `npx vitest run`: 12 files, 295 tests passed (one new case for the Safari message).
+- `npm run build`: passed.
+
+Any remaining considerations
+
+- This needs a deployment to take effect.
+- During the same session, the pending production migration `0041_dashboard_default_right.sql` was not applied. The auto-mode permission classifier blocked the command, so the user must apply it. The production `ledger-db` is in Cloudflare account `9e1069f546a77c9ab4fe19d24ccf0a62`. `wrangler.toml` has no `account_id`, and more than one account is logged in, so a non-interactive `wrangler` command must receive `CLOUDFLARE_ACCOUNT_ID` set to that account.

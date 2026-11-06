@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Fix: Safari stale-chunk errors (`'text/html' is not a valid JavaScript MIME type`)
+  - When an old tab asks for a route chunk from a previous deployment, Cloudflare Pages answers with
+    the app's `index.html`, and Safari reports that with this message. The stale-chunk recovery did not
+    recognise this wording, so the page did not reload and Sentry logged it (issue 159193765). The
+    page now reloads once, the same as for the other browsers' messages.
 - Fix: notification popup stuck open when navigating on mobile
   - `NotificationBell` lives in `App.vue`, outside `<router-view>`, so it never remounts between pages
     — nothing ever reset its open/closed state on navigation.

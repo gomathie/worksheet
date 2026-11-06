@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from './api'
 import { useAuthStore } from './stores/auth'
 import NotificationBell from './components/NotificationBell.vue'
+import BrandMark from './components/BrandMark.vue'
 import TaskDeadlineAlert from './components/TaskDeadlineAlert.vue'
 import TaskAgeAlert from './components/TaskAgeAlert.vue'
 import NewsPopup from './components/NewsPopup.vue'
@@ -325,11 +326,7 @@ async function returnToAdmin() {
         class="flex min-w-0 items-center gap-3 hover:opacity-80"
         aria-label="OpenSignal Ledger — go to time entry"
       >
-        <div
-          class="display flex h-10 w-10 -rotate-6 items-center justify-center rounded-full border-2 border-ink text-[15px]"
-        >
-          LG
-        </div>
+        <BrandMark />
         <div class="min-w-0">
           <h1 class="display text-2xl leading-none sm:text-3xl">OPENSIGNAL Ledger</h1>
           <p class="mt-0.5 text-[11px] tracking-[0.08em] text-muted uppercase sm:text-xs sm:tracking-[0.12em]">

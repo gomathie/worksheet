@@ -2489,4 +2489,4 @@ Any remaining considerations
 - Petty Cash and Time Entry's recent entries had no local rows to look at. They use the same CSS that was checked on Payments and Report.
 - The festive mark covers the header logo only. The favicon and PWA home-screen icons are image files and are unchanged.
 - The browser logs and snapshots in `.playwright-mcp/` that were committed earlier today are still tracked. They contain only local test data and local session tokens that have since been deleted. Remove them with `git rm -r --cached .playwright-mcp` if wanted.
-- Production migration `0041_dashboard_default_right.sql` is still unapplied (see the earlier entry today).
+- Production migration `0041_dashboard_default_right.sql` was applied by the user later the same day (`wrangler d1 migrations apply ledger-db --remote` with `CLOUDFLARE_ACCOUNT_ID=9e1069f546a77c9ab4fe19d24ccf0a62`; status ✅). Production D1 is now current through `0041`.
